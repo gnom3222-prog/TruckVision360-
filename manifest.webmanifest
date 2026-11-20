@@ -1,0 +1,9 @@
+{
+  "name": "TruckVision 360",
+  "short_name": "TruckVision",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#081321",
+  "theme_color": "#091522",
+  "description": "Помощник водителя грузового автопоезда"
+}
