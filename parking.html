@@ -206,10 +206,50 @@ function update(dt){
   }
  }
 }
-function loop(time){
- let dt=Math.min((time-lastTime)/16.67||1,2);
- lastTime=time;
- update(dt);
+function  update(dt){
+  if(speed !== 0){
+    const distance = speed * dt * 0.10;
+
+    // Геометрия модели — предварительные параметры симулятора
+    const wheelbase = 115;
+    const trailerLength = 235;
+
+    // Поворот тягача с учётом направления движения
+    const steeringAngle = steer * Math.PI / 180;
+    const yawRate = distance * Math.tan(steeringAngle) / wheelbase;
+
+    // Перемещение тягача
+    truck.a += yawRate;
+    truck.x += Math.cos(truck.a) * distance;
+    truck.y += Math.sin(truck.a) * distance;
+
+    // Динамика прицепа относительно точки сцепки
+    const articulation = angleDiff(truck.a, trailerAngle);
+
+    trailerAngle +=
+      (distance / trailerLength) * Math.sin(articulation);
+
+    // Ограничение угла для демонстрационной модели
+    const maxAngle = 70 * Math.PI / 180;
+    const actualAngle = angleDiff(truck.a, trailerAngle);
+
+    if(Math.abs(actualAngle) > maxAngle){
+      trailerAngle = truck.a -
+        Math.sign(actualAngle) * maxAngle;
+    }
+
+    // Запись траектории
+    trail.push({
+      x: truck.x,
+      y: truck.y
+    });
+
+    if(trail.length > 500){
+      trail.shift();
+    }
+  }
+}
+;
  draw();
  requestAnimationFrame(loop);
 }
