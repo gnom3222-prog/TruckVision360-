@@ -1,48 +1,252 @@
+
 <!DOCTYPE html>
 <html lang="ru">
-
 <head>
-
 <meta charset="UTF-8">
-
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<title>TruckVision 360 — Парковка</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TruckVision 360 — Parking Simulator</title>
 <style>
+*{box-sizing:border-box}
+body{margin:0;background:#101820;color:#fff;font-family:Arial,sans-serif}
+header{padding:16px;background:#182633;text-align:center}
+h1{font-size:22px;margin:0 0 5px;color:#62d6ff}
+header p{margin:0;color:#aebdca;font-size:13px}
+main{max-width:850px;margin:auto;padding:12px}
+.panel{background:#1b2a37;border:1px solid #344958;border-radius:12px;padding:12px;margin-bottom:12px}
+canvas{display:block;width:100%;height:auto;background:#263b39;border-radius:10px;touch-action:none}
+.status{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;color:#b9cbd5}
+.status strong{color:#fff}
+.controls{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+button{border:0;border-radius:10px;padding:15px 8px;background:#176b91;color:white;font-size:15px;font-weight:bold}
+button:active{background:#259bc8}
+button.stop{background:#a43b3b}
+button.wide{grid-column:span 3;background:#435665}
+label{display:block;font-size:13px;color:#c4d2dc;margin:12px 0 6px}
+input{width:100%;accent-color:#42c8ff}
+.note{font-size:12px;color:#aebdca;line-height:1.5}
+</style>
+</head>
+<body>
+<header>
+<h1>TruckVision 360</h1>
+<p>Интерактивный симулятор парковки автопоезда</p>
+</header>
+<main>
+<div class="panel">
+<div class="status">
+<span>Профиль: <strong>Volvo FH 4×2</strong></span>
+<span>Прицеп: <strong>3 оси</strong></span>
+<span id="mode">Режим: остановка</span>
+</div>
+</div>
 
-body {
+<div class="panel">
+<canvas id="view" width="900" height="600"></canvas>
+</div>
 
-  margin: 0;
+<div class="panel">
+<div class="status">
+<span>Угол сцепки: <strong id="angle">0°</strong></span>
+<span>Руль: <strong id="steerValue">0°</strong></span>
+<span>Скорость симуляции: <strong id="speed">0</strong></span>
+</div>
+<label>Угол рулевого управления</label>
+<input id="steering" type="range" min="-35" max="35" value="0">
+<label>Угол прицепа (ручная настройка)</label>
+<input id="trailerAngle" type="range" min="-65" max="65" value="0">
+</div>
 
-  padding: 20px;
+<div class="panel">
+<div class="controls">
+<button id="left">↶ Влево</button>
+<button id="forward">▲ Вперёд</button>
+<button id="right">Вправо ↷</button>
+<button id="reverse">▼ Назад</button>
+<button id="brake" class="stop">■ Стоп</button>
+<button id="reset">↻ Сброс</button>
+<button id="clear" class="wide">Очистить след траектории</button>
+</div>
+</div>
 
-  background: #101923;
+<div class="panel">
+<p class="note">
+<strong>Важно:</strong> это демонстрационная кинематическая модель.
+Она не использует реальные размеры конкретного Volvo, датчики или камеры.
+Результаты нельзя использовать для оценки безопасности настоящего манёвра.
+</p>
+</div>
+</main>
 
-  color: white;
+<script>
+const canvas=document.getElementById("view");
+const ctx=canvas.getContext("2d");
+const steering=document.getElementById("steering");
+const trailerInput=document.getElementById("trailerAngle");
+let truck={x:450,y:280,a:-Math.PI/2};
+let trailerAngle=truck.a;
+let speed=0,steer=0;
+let trail=[];
+let lastTime=0;
 
-  font-family: Arial, sans-serif;
-
+function angleDiff(a,b){
+ return Math.atan2(Math.sin(a-b),Math.cos(a-b));
 }
-
-h1 { font-size: 24px; }
-
-canvas {
-
-  width: 100%;
-
-  background: #354a3d;
-
-  border-radius: 10px;
-
+function drawTruck(x,y,a){
+ ctx.save();
+ ctx.translate(x,y);
+ ctx.rotate(a);
+ ctx.fillStyle="#dce5e9";
+ ctx.fillRect(-48,-25,96,50);
+ ctx.fillStyle="#168fc1";
+ ctx.fillRect(12,-25,36,50);
+ ctx.fillStyle="#17232d";
+ ctx.fillRect(28,-19,13,38);
+ ctx.fillStyle="#8edfff";
+ ctx.fillRect(35,-17,9,34);
+ ctx.fillStyle="#111";
+ ctx.fillRect(-33,-31,20,7);
+ ctx.fillRect(-33,24,20,7);
+ ctx.fillRect(28,-31,14,7);
+ ctx.fillRect(28,24,14,7);
+ ctx.restore();
 }
-
-button {
-
-  padding: 14px;
-
-  margin: 5px;
-
-  border: 0;
-
-  border-radius: 8px;
+function drawTrailer(){
+ const hitch={x:truck.x-Math.cos(truck.a)*48,y:truck.y-Math.sin(truck.a)*48};
+ const length=235;
+ const center={
+ x:hitch.x-Math.cos(trailerAngle)*length/2,
+ y:hitch.y-Math.sin(trailerAngle)*length/2
+ };
+ ctx.save();
+ ctx.translate(center.x,center.y);
+ ctx.rotate(trailerAngle);
+ ctx.fillStyle="#d6dce0";
+ ctx.fillRect(-length/2,-37,length,74);
+ ctx.strokeStyle="#697984";
+ ctx.lineWidth=3;
+ ctx.strokeRect(-length/2,-37,length,74);
+ ctx.fillStyle="#202a30";
+ [-55,0,55].forEach(p=>{
+  ctx.fillRect(p-8,-44,17,9);
+  ctx.fillRect(p-8,35,17,9);
+ });
+ ctx.fillStyle="#9caeb8";
+ ctx.fillRect(-length/2+8,-27,8,54);
+ ctx.restore();
+ ctx.beginPath();
+ ctx.moveTo(hitch.x,hitch.y);
+ ctx.lineTo(hitch.x-Math.cos(trailerAngle)*20,hitch.y-Math.sin(trailerAngle)*20);
+ ctx.strokeStyle="#ffcf59";
+ ctx.lineWidth=5;
+ ctx.stroke();
+}
+function draw(){
+ ctx.clearRect(0,0,900,600);
+ ctx.fillStyle="#314944";
+ ctx.fillRect(0,0,900,600);
+ ctx.strokeStyle="rgba(255,255,255,.10)";
+ ctx.lineWidth=1;
+ for(let x=0;x<900;x+=40){
+  ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,600);ctx.stroke();
+ }
+ for(let y=0;y<600;y+=40){
+  ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(900,y);ctx.stroke();
+ }
+ // Парковочное место
+ ctx.strokeStyle="#ffe16a";
+ ctx.lineWidth=5;
+ ctx.setLineDash([15,10]);
+ ctx.strokeRect(590,80,240,400);
+ ctx.setLineDash([]);
+ ctx.fillStyle="#ffe16a";
+ ctx.font="20px Arial";
+ ctx.fillText("ПАРКОВОЧНОЕ МЕСТО",605,65);
+ // Траектория
+ if(trail.length>1){
+  ctx.beginPath();
+  ctx.moveTo(trail[0].x,trail[0].y);
+  trail.forEach(p=>ctx.lineTo(p.x,p.y));
+  ctx.strokeStyle="#39d5ff";
+  ctx.lineWidth=3;
+  ctx.stroke();
+ }
+ drawTrailer();
+ drawTruck(truck.x,truck.y,truck.a);
+ // направление движения
+ ctx.beginPath();
+ ctx.moveTo(truck.x,truck.y);
+ ctx.lineTo(truck.x+Math.cos(truck.a)*75,truck.y+Math.sin(truck.a)*75);
+ ctx.strokeStyle="#65f3a7";
+ ctx.lineWidth=4;
+ ctx.stroke();
+ ctx.fillStyle="#fff";
+ ctx.font="15px Arial";
+ ctx.fillText("VOLVO FH",truck.x-38,truck.y+48);
+ let articulation=angleDiff(truck.a,trailerAngle)*180/Math.PI;
+ document.getElementById("angle").textContent=Math.round(articulation)+"°";
+ document.getElementById("steerValue").textContent=steer+"°";
+ document.getElementById("speed").textContent=speed.toFixed(1);
+}
+function update(dt){
+ if(speed!==0){
+  const oldX=truck.x,oldY=truck.y;
+  const direction=speed;
+  truck.a+=direction*Math.tan(steer*Math.PI/180)*dt/115;
+  truck.x+=Math.cos(truck.a)*direction*dt*0.10;
+  truck.y+=Math.sin(truck.a)*direction*dt*0.10;
+  const hitchX=truck.x-Math.cos(truck.a)*48;
+  const hitchY=truck.y-Math.sin(truck.a)*48;
+  const dx=hitchX-(truck.x-Math.cos(trailerAngle)*48);
+  const dy=hitchY-(truck.y-Math.sin(trailerAngle)*48);
+  trailerAngle+=angleDiff(truck.a,trailerAngle)*direction*dt/1800;
+  trailerAngle+=Math.atan2(dy,dx)*0.00001;
+  if(Math.hypot(truck.x-oldX,truck.y-oldY)>1){
+   trail.push({x:truck.x,y:truck.y});
+   if(trail.length>500)trail.shift();
+  }
+ }
+}
+function loop(time){
+ let dt=Math.min((time-lastTime)/16.67||1,2);
+ lastTime=time;
+ update(dt);
+ draw();
+ requestAnimationFrame(loop);
+}
+function setSpeed(v){
+ speed=v;
+ document.getElementById("mode").textContent=
+ "Режим: "+(v>0?"вперёд":v<0?"назад":"остановка");
+}
+function setSteer(v){
+ steer=v;
+ steering.value=v;
+}
+document.getElementById("forward").onpointerdown=()=>setSpeed(2);
+document.getElementById("reverse").onpointerdown=()=>setSpeed(-2);
+["forward","reverse"].forEach(id=>{
+ document.getElementById(id).onpointerup=()=>setSpeed(0);
+ document.getElementById(id).onpointerleave=()=>setSpeed(0);
+});
+document.getElementById("brake").onclick=()=>setSpeed(0);
+document.getElementById("left").onpointerdown=()=>setSteer(-25);
+document.getElementById("right").onpointerdown=()=>setSteer(25);
+["left","right"].forEach(id=>{
+ document.getElementById(id).onpointerup=()=>setSteer(0);
+ document.getElementById(id).onpointerleave=()=>setSteer(0);
+});
+steering.oninput=()=>setSteer(Number(steering.value));
+trailerInput.oninput=()=>{
+ trailerAngle=truck.a+Number(trailerInput.value)*Math.PI/180;
+};
+document.getElementById("reset").onclick=()=>{
+ truck={x:450,y:280,a:-Math.PI/2};
+ trailerAngle=truck.a;
+ speed=0;setSteer(0);trail=[];
+ trailerInput.value=0;
+};
+document.getElementById("clear").onclick=()=>trail=[];
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
