@@ -5,92 +5,127 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="theme-color" content="#081321">
-<title>TruckVision 360 — полный расчётный модуль v3</title>
+<title>TruckVision 360 — ALL-IN-ONE v4.1</title>
 <style>
-:root{color-scheme:dark;--bg:#081321;--panel:#13283d;--line:#29445e;--cyan:#35c8ef;--muted:#a9bacb;--warn:#ffd18b}
+:root{color-scheme:dark;--bg:#081321;--panel:#13283d;--line:#29445e;--cyan:#35c8ef;--muted:#a9bacb;--amber:#ffd18b;--red:#ff8585;--green:#83d6a8}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:#f3f7fb;font:15px system-ui,-apple-system,sans-serif}
-header{padding:16px 14px 8px;max-width:1100px;margin:auto}
+body{margin:0;background:var(--bg);color:#f3f7fb;font:14px system-ui,-apple-system,sans-serif}
+header{max-width:1200px;margin:auto;padding:16px 14px 8px}
 h1{font-size:22px;margin:0 0 4px}
 header p{margin:0;color:var(--muted);font-size:13px}
-main{max-width:1100px;margin:auto;padding:8px 12px 24px;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(270px,1fr);gap:12px}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px;min-width:0}
-canvas{display:block;width:100%;height:auto;border:1px solid #36516a;border-radius:11px;background:#102235;touch-action:pan-y}
-.controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:9px}
-button{background:#1c3b55;color:white;border:1px solid #45627c;border-radius:10px;padding:11px 7px;font:inherit;font-weight:650;touch-action:manipulation}
+main{max-width:1200px;margin:auto;padding:8px 12px 28px;display:grid;grid-template-columns:minmax(0,1.45fr) minmax(290px,1fr);gap:12px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:12px;min-width:0}
+canvas{display:block;width:100%;height:auto;background:#102235;border:1px solid #36516a;border-radius:10px;touch-action:pan-y}
+.row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.row>*{flex:1}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.metric{background:#0e2031;border:1px solid var(--line);border-radius:9px;padding:8px}
+.metric span{display:block;color:var(--muted);font-size:11px}
+.metric strong{display:block;color:var(--cyan);font-size:18px;font-variant-numeric:tabular-nums}
+button,input,select{font:inherit}
+button{background:#1c3b55;color:#fff;border:1px solid #45627c;border-radius:9px;padding:10px 7px;font-weight:650;touch-action:manipulation}
 button.primary{background:#087fa5;border-color:#21b9e4}
 button.stop{background:#853b42}
-.statgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}
-.metric{background:#0e2031;border:1px solid #29445e;border-radius:10px;padding:9px}
-.metric span{display:block;color:var(--muted);font-size:12px}
-.metric strong{display:block;color:var(--cyan);font-size:19px;margin-top:3px;font-variant-numeric:tabular-nums}
-label{display:block;color:var(--muted);font-size:13px;margin:12px 0 5px}
+label{display:block;color:var(--muted);font-size:12px;margin:10px 0 4px}
 input[type=range]{width:100%;accent-color:var(--cyan)}
-.note{font-size:12px;line-height:1.45;color:var(--warn)}
-.row{display:flex;justify-content:space-between;gap:10px;align-items:center}
-.small{font-size:12px;color:var(--muted)}
-@media(max-width:760px){main{grid-template-columns:1fr}header{padding-top:12px}}
+input[type=number],select{width:100%;background:#0e2031;color:#fff;border:1px solid #45627c;border-radius:7px;padding:8px}
+.section{font-weight:700;margin:13px 0 5px}
+.small{font-size:11px;color:var(--muted);line-height:1.45}
+.notice{font-size:12px;line-height:1.45;color:var(--amber);padding:9px;background:#30291c;border-radius:8px;margin-top:10px}
+.status{font-weight:700;color:var(--green)}
+@media(max-width:800px){main{grid-template-columns:1fr}header{padding-top:12px}}
 </style>
 </head>
 <body>
-
 <header>
-<h1>🚛 TruckVision 360 · Полный модуль v3</h1>
-<p>Volvo FH 4×2 · седельно-сцепное устройство · трёхосный полуприцеп · вид сверху</p>
+<h1>🚛 TruckVision 360 · ALL-IN-ONE v4.1</h1>
+<p>Volvo FH 4×2 · седельный трёхосный полуприцеп · учебный симулятор маневрирования</p>
 </header>
 
 <main>
 <section class="panel">
-<div class="row">
-<b>Модель автопоезда</b>
-<span class="small" id="mode">Остановлен</span>
-</div>
-
-<canvas id="view" width="960" height="620" aria-label="Расчётная модель автопоезда сверху"></canvas>
-
-<div class="controls">
+<div class="row"><b>Вид сверху · автопоезд</b><span id="mode" class="status">Остановлен</span></div>
+<canvas id="view" width="1000" height="650" aria-label="Вид сверху на автопоезд"></canvas>
+<div class="row" style="margin-top:8px">
 <button id="left">↶ Руль влево</button>
 <button id="straight">Прямо</button>
 <button id="right">Руль вправо ↷</button>
+</div>
+<div class="row" style="margin-top:7px">
 <button class="primary" id="forward">▲ Вперёд</button>
 <button class="stop" id="brake">■ Тормоз</button>
 <button class="primary" id="reverse">▼ Назад</button>
+</div>
+<div class="row" style="margin-top:7px">
 <button id="reset">↺ Сброс</button>
 <button id="trace">Траектория: вкл.</button>
 <button id="center">Центрировать</button>
 </div>
-
-<p class="small">На компьютере можно использовать клавиши ← / → для руля, ↑ / ↓ для движения, пробел для остановки.</p>
+<p class="small">Удерживай кнопку движения. Клавиатура: ←/→ — руль, ↑/↓ — движение, пробел — тормоз.</p>
 </section>
 
 <section class="panel">
-<b>Показания расчёта</b>
-
-<div class="statgrid">
-<div class="metric"><span>Угол сочленения</span><strong id="beta">0,0°</strong></div>
-<div class="metric"><span>Угол рулевых колёс</span><strong id="steerOut">0,0°</strong></div>
-<div class="metric"><span>Скорость</span><strong id="speedOut">0,0 м/с</strong></div>
-<div class="metric"><span>Путь</span><strong id="distanceOut">0,0 м</strong></div>
-<div class="metric"><span>Курс тягача</span><strong id="yawOut">0,0°</strong></div>
-<div class="metric"><span>Курс полуприцепа</span><strong id="trailerYawOut">0,0°</strong></div>
-</div>
-
-<label for="speed">Скорость движения: <b id="speedLabel">1,0 м/с</b></label>
-<input id="speed" type="range" min="0.2" max="3.0" step="0.1" value="1.0">
-
-<label for="steer">Рулевое управление: <b id="steerLabel">0°</b></label>
+<b>Настройки модели</b>
+<div class="section">Режим</div>
+<label for="model">Тип расчёта</label>
+<select id="model">
+<option value="hybrid">Кинематика + упрощённая продольная динамика</option>
+<option value="kinematic">Кинематика с заданной скоростью</option>
+</select>
+<label for="speedSet">Заданная скорость: <b id="speedLabel">2,0 м/с</b></label>
+<input id="speedSet" type="range" min="0.2" max="8" step="0.1" value="2">
+<label for="steer">Угол управляемых колёс: <b id="steerLabel">0°</b></label>
 <input id="steer" type="range" min="-35" max="35" step="1" value="0">
 
-<label for="wheelbase">Колёсная база тягача: <b>3,80 м (профиль)</b></label>
-<label for="hitch">Седло за задней осью: <b>0,575 м (профиль)</b></label>
-<label for="trailerD">Шкворень — центр группы осей: <b>8,00 м*</b></label>
-<label for="trailerLen">Длина полуприцепа: <b>13,60 м*</b></label>
+<div class="section">Тягач и сцепка</div>
+<div class="grid">
+<div><label for="wheelbase">Колёсная база, м</label><input id="wheelbase" type="number" value="3.80" step="0.05"></div>
+<div><label for="hitchOffset">Седло за задней осью, м</label><input id="hitchOffset" type="number" value="0.575" step="0.025"></div>
+<div><label for="tractorMass">Масса тягача, кг</label><input id="tractorMass" type="number" value="8500" step="100"></div>
+<div><label for="engineForce">Предельная тяга, Н</label><input id="engineForce" type="number" value="24000" step="500"></div>
+</div>
 
-<p class="note" id="warning">Учебная кинематическая модель. Углы складывания выше 45° отмечаются как предупреждение; выше 60° — критический уровень модели.</p>
+<div class="section">Полуприцеп</div>
+<div class="grid">
+<div><label for="trailerLength">Длина, м</label><input id="trailerLength" type="number" value="13.60" step="0.1"></div>
+<div><label for="trailerWidth">Ширина, м</label><input id="trailerWidth" type="number" value="2.55" step="0.05"></div>
+<div><label for="kingpinAxles">Шкворень — центр осей, м</label><input id="kingpinAxles" type="number" value="8.00" step="0.1"></div>
+<div><label for="trailerMass">Масса с грузом, кг</label><input id="trailerMass" type="number" value="30000" step="500"></div>
+</div>
 
-<p class="small">* Предварительные значения, не подтверждённые для конкретного VIN и полуприцепа. Колёсная база 3,80 м и положение седла 0,575 м — параметры выбранного расчётного профиля, которые также необходимо сверить с заводской спецификацией конкретного шасси.</p>
+<div class="section">Шины, сцепление и тормоза</div>
+<div class="grid">
+<div><label for="mu">Коэффициент сцепления μ</label><input id="mu" type="number" value="0.70" min="0.1" max="1.2" step="0.05"></div>
+<div><label for="crr">Сопротивление качению Crr</label><input id="crr" type="number" value="0.008" step="0.001"></div>
+<div><label for="brakeDecel">Предельное замедление, м/с²</label><input id="brakeDecel" type="number" value="4.5" step="0.1"></div>
+<div><label for="maxAccel">Предельное ускорение, м/с²</label><input id="maxAccel" type="number" value="0.8" step="0.1"></div>
+</div>
 
-<p class="note">Версия v3: исправлена отрисовка продольных габаритов тягача и полуприцепа. Это не динамическая модель шин, сцепления, массы, подвески, ABS/EBS или тормозных сил. Нет сертифицированного обнаружения столкновений. Не использовать для управления реальным грузовиком или принятия решения о безопасности манёвра.</p>
+<div class="section">Ворота</div>
+<div class="grid">
+<div><label for="gateWidth">Ширина проёма, м</label><input id="gateWidth" type="number" value="3.50" step="0.05"></div>
+<div><label for="margin">Запас с каждой стороны, м</label><input id="margin" type="number" value="0.20" step="0.05"></div>
+</div>
+<div class="row" style="margin-top:8px">
+<button id="apply">Применить параметры</button>
+<button id="assess" class="primary">Оценить проём</button>
+</div>
+
+<div class="section">Показания</div>
+<div class="grid">
+<div class="metric"><span>Скорость</span><strong id="vOut">0,0 м/с</strong></div>
+<div class="metric"><span>Угол сочленения</span><strong id="betaOut">0,0°</strong></div>
+<div class="metric"><span>Угол руля</span><strong id="steerOut">0°</strong></div>
+<div class="metric"><span>Продольное ускорение</span><strong id="accelOut">0,00 м/с²</strong></div>
+<div class="metric"><span>Боковое ускорение</span><strong id="latOut">0,00 м/с²</strong></div>
+<div class="metric"><span>Тормозной путь (оценка)</span><strong id="stopOut">0,0 м</strong></div>
+<div class="metric"><span>Запас сцепления</span><strong id="gripOut">—</strong></div>
+<div class="metric"><span>Пройденный путь</span><strong id="distanceOut">0,0 м</strong></div>
+</div>
+<div id="gateResult" class="notice">Задай ширину ворот и нажми «Оценить проём». Сейчас это только сравнение ширины, а не проверка всей траектории.</div>
+<div class="notice">
+<strong>Ограничения модели.</strong> Здесь реализованы кинематическое движение сочленённого автопоезда и упрощённая продольная динамика. Нет полной динамики шин, подвески, переноса нагрузки, крена, реальных характеристик двигателя и пневматических тормозов ABS/EBS. Значения по умолчанию предварительные, а не спецификация конкретного VIN. Программа не предназначена для управления реальным грузовиком или подтверждения безопасности манёвра.
+</div>
 </section>
 </main>
 
@@ -98,437 +133,450 @@ input[type=range]{width:100%;accent-color:var(--cyan)}
 (()=>{
 'use strict';
 
-// Все размеры — метры; углы — радианы;
-// скорость имеет знак: минус означает задний ход.
-
-const CFG={
-  wheelbase:3.80,
-  hitchBehindRearAxle:0.575,
-  kingpinToAxleGroup:8.00,
-  trailerLength:13.60,
-  trailerWidth:2.55,
-  tractorWidth:2.55,
-  tractorRear:-1.20,
-  tractorFront:5.00,
-  kingpinToFront:1.50,
-  maxSteerDeg:35
-};
-
 const $=id=>document.getElementById(id);
 const canvas=$('view');
 const ctx=canvas.getContext('2d');
+const G=9.81;
+const SCALE=22;
 
-const S=20;
-let state,steer=0,speedAbs=1,drive=0;
-let showTrace=true,trace=[],distance=0,lastTime=0,raf=0;
+const cfg={
+ wheelbase:3.8,
+ hitchOffset:0.575,
+ tractorMass:8500,
+ engineForce:24000,
+ trailerLength:13.6,
+ trailerWidth:2.55,
+ kingpinAxles:8,
+ trailerMass:30000,
+ mu:0.7,
+ crr:0.008,
+ brakeDecel:4.5,
+ maxAccel:0.8,
+ gateWidth:3.5,
+ margin:0.2
+};
 
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+let state,steer=0,targetSpeed=2,speed=0,drive=0;
+let braking=false,distance=0,trace=[],showTrace=true;
+let camera={x:0,y:0},lastTime=0;
+
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const norm=a=>Math.atan2(Math.sin(a),Math.cos(a));
 
-function initial(){
-  return{x:0,y:0,psi:0,psiT:0};
+function readSettings(){
+ for(const key of Object.keys(cfg)){
+  const input=$(key);
+  if(input)cfg[key]=Number(input.value);
+ }
 }
 
-function hitch(s){
-  return{
-    x:s.x-CFG.hitchBehindRearAxle*Math.cos(s.psi),
-    y:s.y-CFG.hitchBehindRearAxle*Math.sin(s.psi)
-  };
+function resetState(){
+ state={x:0,y:0,psi:0,psiT:0};
+ speed=0;
+ drive=0;
+ braking=false;
+ distance=0;
+ trace=[];
+ camera={x:0,y:0};
 }
 
-function trailerAxle(s){
-  const h=hitch(s);
-  return{
-    x:h.x-CFG.kingpinToAxleGroup*Math.cos(s.psiT),
-    y:h.y-CFG.kingpinToAxleGroup*Math.sin(s.psiT)
-  };
+function hitchPoint(q){
+ return{
+  x:q.x-cfg.hitchOffset*Math.cos(q.psi),
+  y:q.y-cfg.hitchOffset*Math.sin(q.psi)
+ };
+}
+
+function axlePoint(q){
+ const h=hitchPoint(q);
+ return{
+  x:h.x-cfg.kingpinAxles*Math.cos(q.psiT),
+  y:h.y-cfg.kingpinAxles*Math.sin(q.psiT)
+ };
 }
 
 // Кинематические уравнения тягача и полуприцепа.
-function deriv(s,v,delta){
-  const r=v/CFG.wheelbase*Math.tan(delta);
-  const beta=norm(s.psi-s.psiT);
+// Отрицательная скорость соответствует движению задним ходом.
+function derivative(q,v,delta){
+ const yawRate=v/cfg.wheelbase*Math.tan(delta);
+ const beta=norm(q.psi-q.psiT);
+ const trailerYawRate=(
+  v*Math.sin(beta)
+  -cfg.hitchOffset*yawRate*Math.cos(beta)
+ )/cfg.kingpinAxles;
 
-  const rt=(
-    v*Math.sin(beta)
-    -CFG.hitchBehindRearAxle*r*Math.cos(beta)
-  )/CFG.kingpinToAxleGroup;
-
-  return{
-    x:v*Math.cos(s.psi),
-    y:v*Math.sin(s.psi),
-    psi:r,
-    psiT:rt
-  };
+ return{
+  x:v*Math.cos(q.psi),
+  y:v*Math.sin(q.psi),
+  psi:yawRate,
+  psiT:trailerYawRate
+ };
 }
 
-function add(s,k,f){
-  return{
-    x:s.x+k.x*f,
-    y:s.y+k.y*f,
-    psi:s.psi+k.psi*f,
-    psiT:s.psiT+k.psiT*f
-  };
+function addState(q,k,f){
+ return{
+  x:q.x+k.x*f,
+  y:q.y+k.y*f,
+  psi:q.psi+k.psi*f,
+  psiT:q.psiT+k.psiT*f
+ };
 }
 
 // Интегрирование Рунге — Кутты четвёртого порядка.
-function rk4(s,v,delta,dt){
-  const k1=deriv(s,v,delta);
-  const k2=deriv(add(s,k1,dt/2),v,delta);
-  const k3=deriv(add(s,k2,dt/2),v,delta);
-  const k4=deriv(add(s,k3,dt),v,delta);
+function rk4(q,v,delta,dt){
+ const k1=derivative(q,v,delta);
+ const k2=derivative(addState(q,k1,dt/2),v,delta);
+ const k3=derivative(addState(q,k2,dt/2),v,delta);
+ const k4=derivative(addState(q,k3,dt),v,delta);
 
-  return{
-    x:s.x+dt*(k1.x+2*k2.x+2*k3.x+k4.x)/6,
-    y:s.y+dt*(k1.y+2*k2.y+2*k3.y+k4.y)/6,
-    psi:norm(s.psi+dt*(k1.psi+2*k2.psi+2*k3.psi+k4.psi)/6),
-    psiT:norm(s.psiT+dt*(k1.psiT+2*k2.psiT+2*k3.psiT+k4.psiT)/6)
-  };
+ return{
+  x:q.x+dt*(k1.x+2*k2.x+2*k3.x+k4.x)/6,
+  y:q.y+dt*(k1.y+2*k2.y+2*k3.y+k4.y)/6,
+  psi:norm(q.psi+dt*(k1.psi+2*k2.psi+2*k3.psi+k4.psi)/6),
+  psiT:norm(q.psiT+dt*(k1.psiT+2*k2.psiT+2*k3.psiT+k4.psiT)/6)
+ };
 }
 
-function worldToScreen(p,camera){
-  return{
-    x:canvas.width/2+(p.x-camera.x)*S,
-    y:canvas.height/2+(p.y-camera.y)*S
-  };
-}
-
-let camera={x:0,y:0};
-
-function line(points,color,width=2,dash=[]){
-  ctx.beginPath();
-
-  points.forEach((p,i)=>{
-    const q=worldToScreen(p,camera);
-    i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);
-  });
-
-  ctx.strokeStyle=color;
-  ctx.lineWidth=width;
-  ctx.setLineDash(dash);
-  ctx.stroke();
-  ctx.setLineDash([]);
+function toScreen(p){
+ return{
+  x:canvas.width/2+(p.x-camera.x)*SCALE,
+  y:canvas.height/2+(p.y-camera.y)*SCALE
+ };
 }
 
 function localPoint(origin,angle,longitudinal,lateral=0){
-  return{
-    x:origin.x+longitudinal*Math.cos(angle)-lateral*Math.sin(angle),
-    y:origin.y+longitudinal*Math.sin(angle)+lateral*Math.cos(angle)
-  };
+ return{
+  x:origin.x+longitudinal*Math.cos(angle)-lateral*Math.sin(angle),
+  y:origin.y+longitudinal*Math.sin(angle)+lateral*Math.cos(angle)
+ };
 }
 
-function bodyCorners(origin,angle,front,rear,width){
-  return[
-    localPoint(origin,angle,front,width/2),
-    localPoint(origin,angle,rear,width/2),
-    localPoint(origin,angle,rear,-width/2),
-    localPoint(origin,angle,front,-width/2)
-  ];
+function drawLine(points,color,width=2,dash=[]){
+ ctx.beginPath();
+ points.forEach((p,i)=>{
+  const z=toScreen(p);
+  if(i===0)ctx.moveTo(z.x,z.y);
+  else ctx.lineTo(z.x,z.y);
+ });
+ ctx.strokeStyle=color;
+ ctx.lineWidth=width;
+ ctx.setLineDash(dash);
+ ctx.stroke();
+ ctx.setLineDash([]);
 }
 
-function polygonWorld(points,fill,stroke='#dceaf5'){
-  const ps=points.map(p=>worldToScreen(p,camera));
+function drawPolygon(points,fill){
+ const p=points.map(toScreen);
+ ctx.beginPath();
+ p.forEach((z,i)=>{
+  if(i===0)ctx.moveTo(z.x,z.y);
+  else ctx.lineTo(z.x,z.y);
+ });
+ ctx.closePath();
+ ctx.fillStyle=fill;
+ ctx.fill();
+ ctx.strokeStyle='#dceaf5';
+ ctx.lineWidth=2;
+ ctx.stroke();
+}
 
-  ctx.beginPath();
-  ps.forEach((p,i)=>{
-    i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);
-  });
-
-  ctx.closePath();
-  ctx.fillStyle=fill;
-  ctx.fill();
-  ctx.strokeStyle=stroke;
-  ctx.lineWidth=2;
-  ctx.stroke();
+function drawBody(origin,angle,front,rear,width,fill){
+ drawPolygon([
+  localPoint(origin,angle,front,width/2),
+  localPoint(origin,angle,rear,width/2),
+  localPoint(origin,angle,rear,-width/2),
+  localPoint(origin,angle,front,-width/2)
+ ],fill);
 }
 
 function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle='#102235';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
+ ctx.clearRect(0,0,canvas.width,canvas.height);
+ ctx.fillStyle='#102235';
+ ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  // Сетка с шагом 5 метров.
-  const left=camera.x-canvas.width/(2*S);
-  const top=camera.y-canvas.height/(2*S);
+ const left=camera.x-canvas.width/(2*SCALE);
+ const top=camera.y-canvas.height/(2*SCALE);
+ ctx.strokeStyle='#20394e';
+ ctx.lineWidth=1;
 
-  ctx.strokeStyle='#20394e';
-  ctx.lineWidth=1;
-
-  for(let x=Math.floor(left/5)*5;x<left+canvas.width/S;x+=5){
-    const p=worldToScreen({x,y:camera.y},camera);
-    ctx.beginPath();
-    ctx.moveTo(p.x,0);
-    ctx.lineTo(p.x,canvas.height);
-    ctx.stroke();
-  }
-
-  for(let y=Math.floor(top/5)*5;y<top+canvas.height/S;y+=5){
-    const p=worldToScreen({x:camera.x,y},camera);
-    ctx.beginPath();
-    ctx.moveTo(0,p.y);
-    ctx.lineTo(canvas.width,p.y);
-    ctx.stroke();
-  }
-
-  // Траектории тягача и группы осей полуприцепа.
-  if(showTrace&&trace.length>1){
-    line(trace.map(t=>({x:t.x,y:t.y})),'#35c8ef',2);
-    line(trace.map(t=>({x:t.ax,y:t.ay})),'#f6bd60',2,[6,4]);
-  }
-
-  const h=hitch(state);
-  const a=trailerAxle(state);
-
-  // Корпус полуприцепа.
-  polygonWorld(
-    bodyCorners(
-      h,
-      state.psiT,
-      CFG.kingpinToFront,
-      -(CFG.trailerLength-CFG.kingpinToFront),
-      CFG.trailerWidth
-    ),
-    '#315b78'
-  );
-
-  // Три оси полуприцепа.
-  for(const offset of [-0.65,0,0.65]){
-    const axle=localPoint(a,state.psiT,offset);
-    const l=localPoint(axle,state.psiT,0,CFG.trailerWidth/2+0.12);
-    const r=localPoint(axle,state.psiT,0,-CFG.trailerWidth/2-0.12);
-    line([l,r],'#101820',7);
-  }
-
-  // Корпус тягача.
-  polygonWorld(
-    bodyCorners(
-      state,
-      state.psi,
-      CFG.tractorFront,
-      CFG.tractorRear,
-      CFG.tractorWidth
-    ),
-    '#087fa5'
-  );
-
-  // Кабина.
-  polygonWorld(
-    bodyCorners(
-      localPoint(state,state.psi,2.1),
-      state.psi,
-      1.35,
-      -0.9,
-      2.25
-    ),
-    '#35c8ef'
-  );
-
-  // Седло и задняя ось тягача.
-  const hp=worldToScreen(h,camera);
+ for(let x=Math.floor(left/5)*5;x<left+canvas.width/SCALE;x+=5){
+  const p=toScreen({x,y:camera.y});
   ctx.beginPath();
-  ctx.arc(hp.x,hp.y,5,0,Math.PI*2);
-  ctx.fillStyle='#ffd166';
-  ctx.fill();
-
-  const rp=worldToScreen(state,camera);
+  ctx.moveTo(p.x,0);
+  ctx.lineTo(p.x,canvas.height);
+  ctx.stroke();
+ }
+ for(let y=Math.floor(top/5)*5;y<top+canvas.height/SCALE;y+=5){
+  const p=toScreen({x:camera.x,y});
   ctx.beginPath();
-  ctx.arc(rp.x,rp.y,4,0,Math.PI*2);
-  ctx.fillStyle='#fff';
-  ctx.fill();
+  ctx.moveTo(0,p.y);
+  ctx.lineTo(canvas.width,p.y);
+  ctx.stroke();
+ }
 
-  ctx.fillStyle='#dceaf5';
-  ctx.font='14px system-ui';
-  ctx.fillText('Volvo FH 4×2',rp.x+10,rp.y-18);
-  ctx.fillText('Полуприцеп · 3 оси',hp.x-15,hp.y+35);
+ if(showTrace&&trace.length>1){
+  drawLine(trace.map(p=>({x:p.x,y:p.y})),'#35c8ef',2);
+  drawLine(trace.map(p=>({x:p.ax,y:p.ay})),'#f6bd60',2,[6,4]);
+ }
 
-  updateMetrics();
+ const h=hitchPoint(state);
+ const axle=axlePoint(state);
+
+ // Полуприцеп и его три оси.
+ drawBody(h,state.psiT,1.5,-(cfg.trailerLength-1.5),cfg.trailerWidth,'#315b78');
+
+ for(const offset of [-0.65,0,0.65]){
+  const p=localPoint(axle,state.psiT,offset);
+  drawLine([
+   localPoint(p,state.psiT,0,cfg.trailerWidth/2+0.13),
+   localPoint(p,state.psiT,0,-cfg.trailerWidth/2-0.13)
+  ],'#101820',7);
+ }
+
+ // Тягач и кабина.
+ drawBody(state,state.psi,5,-1.2,2.55,'#087fa5');
+ drawBody(localPoint(state,state.psi,2.1),state.psi,1.35,-0.9,2.25,'#35c8ef');
+
+ const hp=toScreen(h);
+ ctx.beginPath();
+ ctx.arc(hp.x,hp.y,5,0,Math.PI*2);
+ ctx.fillStyle='#ffd166';
+ ctx.fill();
+
+ const rp=toScreen(state);
+ ctx.beginPath();
+ ctx.arc(rp.x,rp.y,4,0,Math.PI*2);
+ ctx.fillStyle='#fff';
+ ctx.fill();
+
+ ctx.fillStyle='#dceaf5';
+ ctx.font='14px system-ui';
+ ctx.fillText('Volvo FH 4×2',rp.x+10,rp.y-16);
+ ctx.fillText('Полуприцеп · 3 оси',hp.x-10,hp.y+32);
+
+ updateReadouts();
 }
 
-function updateMetrics(){
-  const beta=norm(state.psi-state.psiT)*180/Math.PI;
-  const v=drive*speedAbs;
+function updateReadouts(){
+ const beta=norm(state.psi-state.psiT);
+ const lateral=Math.abs(speed*speed/cfg.wheelbase*Math.tan(steer));
+ const gripLimit=cfg.mu*G;
+ const brakeLimit=Math.max(0.1,Math.min(cfg.brakeDecel,gripLimit));
+ const brakeDistance=speed*speed/(2*brakeLimit);
 
-  $('beta').textContent=beta.toFixed(1)+'°';
-  $('steerOut').textContent=(steer*180/Math.PI).toFixed(1)+'°';
-  $('speedOut').textContent=Math.abs(v).toFixed(1)+' м/с';
-  $('distanceOut').textContent=distance.toFixed(1)+' м';
-  $('yawOut').textContent=(state.psi*180/Math.PI).toFixed(1)+'°';
-  $('trailerYawOut').textContent=(state.psiT*180/Math.PI).toFixed(1)+'°';
+ $('vOut').textContent=Math.abs(speed).toFixed(2)+' м/с';
+ $('betaOut').textContent=(beta*180/Math.PI).toFixed(1)+'°';
+ $('steerOut').textContent=(steer*180/Math.PI).toFixed(0)+'°';
+ $('accelOut').textContent=(braking?-brakeLimit:(drive?cfg.maxAccel:0)).toFixed(2)+' м/с²';
+ $('latOut').textContent=lateral.toFixed(2)+' м/с²';
+ $('stopOut').textContent=brakeDistance.toFixed(1)+' м';
+ $('gripOut').textContent=lateral>gripLimit?'Предел превышен':'В пределах заданного μ';
+ $('distanceOut').textContent=distance.toFixed(1)+' м';
 
-  $('speedLabel').textContent=speedAbs.toFixed(1)+' м/с';
-  $('steerLabel').textContent=Math.round(steer*180/Math.PI)+'°';
+ $('mode').textContent=braking?'Торможение':
+  drive>0?'Движение вперёд':
+  drive<0?'Движение задним ходом':'Остановлен';
 
-  const abs=Math.abs(beta);
-  const w=$('warning');
+ $('speedLabel').textContent=targetSpeed.toFixed(1)+' м/с';
+ $('steerLabel').textContent=(steer*180/Math.PI).toFixed(0)+'°';
 
-  if(abs>60){
-    w.textContent='КРИТИЧЕСКИЙ УГОЛ СОЧЛЕНЕНИЯ (>60°). В реальном автопоезде возможен риск складывания. Это только геометрическое предупреждение модели.';
-    w.style.color='#ff8585';
-  }else if(abs>45){
-    w.textContent='ПРЕДУПРЕЖДЕНИЕ: угол сочленения превышает 45°. Продолжение манёвра требует особого внимания.';
-    w.style.color='#ffd18b';
-  }else{
-    w.textContent='Угол сочленения в пределах учебного диапазона модели. Это не подтверждение безопасного манёвра.';
-    w.style.color='#9ee5b8';
-  }
-
-  $('mode').textContent=
-    drive===0?'Остановлен':
-    drive>0?'Движение вперёд':
-    'Движение задним ходом';
+ const angle=Math.abs(beta*180/Math.PI);
+ if(angle>60){
+  $('mode').textContent='ВНИМАНИЕ: большой угол сочленения';
+  $('mode').style.color='#ff8585';
+ }else if(angle>45){
+  $('mode').textContent='Предупреждение: угол сочленения';
+  $('mode').style.color='#ffd18b';
+ }else{
+  $('mode').style.color='#83d6a8';
+ }
 }
 
-function step(dt){
-  if(!drive)return;
+function updateSpeed(dt){
+ if($('model').value==='kinematic'){
+  speed=drive*targetSpeed;
+  if(braking)speed=0;
+  return;
+ }
 
-  const v=drive*speedAbs;
+ const totalMass=cfg.tractorMass+cfg.trailerMass;
+ const rolling=cfg.crr*G;
+ const brakeLimit=Math.min(cfg.brakeDecel,cfg.mu*G);
+ const driveLimit=Math.min(cfg.maxAccel,cfg.engineForce/Math.max(1000,totalMass));
 
-  state=rk4(state,v,steer,dt);
-  distance+=Math.abs(v)*dt;
+ if(braking){
+  const amount=Math.min(Math.abs(speed),brakeLimit*dt);
+  speed-=Math.sign(speed)*amount;
+  if(Math.abs(speed)<0.01)speed=0;
+  return;
+ }
 
-  const a=trailerAxle(state);
+ if(drive!==0){
+  const desired=drive*targetSpeed;
+  const error=desired-speed;
+  const accel=clamp(error*1.5,-brakeLimit,driveLimit);
 
-  trace.push({
-    x:state.x,
-    y:state.y,
-    ax:a.x,
-    ay:a.y
-  });
+  const lateral=Math.abs(speed*speed/cfg.wheelbase*Math.tan(steer));
+  const available=Math.sqrt(Math.max(0,(cfg.mu*G)**2-lateral*lateral));
+  speed+=clamp(accel,-available,available)*dt;
+ }else{
+  const coast=Math.min(Math.abs(speed),rolling*dt);
+  speed-=Math.sign(speed)*coast;
+ }
 
-  if(trace.length>3000)trace.shift();
-
-  camera={x:state.x,y:state.y};
+ if(Math.abs(speed)<0.005)speed=0;
 }
 
-function loop(ts){
-  if(!lastTime)lastTime=ts;
+function simulationStep(dt){
+ updateSpeed(dt);
 
-  let dt=Math.min((ts-lastTime)/1000,0.04);
-  lastTime=ts;
+ const oldX=state.x;
+ const oldY=state.y;
+ const steps=Math.max(1,Math.ceil(dt/0.01));
+ const h=dt/steps;
 
-  if(drive){
-    let remaining=dt;
+ for(let i=0;i<steps;i++){
+  state=rk4(state,speed,steer,h);
+ }
 
-    while(remaining>0){
-      const sub=Math.min(remaining,0.01);
-      step(sub);
-      remaining-=sub;
-    }
-  }
+ distance+=Math.hypot(state.x-oldX,state.y-oldY);
 
-  draw();
-  raf=requestAnimationFrame(loop);
+ const a=axlePoint(state);
+ trace.push({x:state.x,y:state.y,ax:a.x,ay:a.y});
+ if(trace.length>2500)trace.shift();
+
+ camera={x:state.x,y:state.y};
 }
 
-function stop(){
-  drive=0;
-  lastTime=0;
-  draw();
+function frame(timestamp){
+ if(!lastTime)lastTime=timestamp;
+ const dt=Math.min((timestamp-lastTime)/1000,0.04);
+ lastTime=timestamp;
+
+ if(drive!==0||braking)simulationStep(dt);
+
+ draw();
+ requestAnimationFrame(frame);
 }
 
-function start(dir){
-  drive=dir;
-  lastTime=0;
+function setSteer(){
+ steer=Number($('steer').value)*Math.PI/180;
+ draw();
 }
 
-// Управление рулём.
+function startDrive(direction){
+ drive=direction;
+ braking=false;
+}
+
+function applySettings(){
+ readSettings();
+ draw();
+}
+
+$('forward').onpointerdown=()=>startDrive(1);
+$('reverse').onpointerdown=()=>startDrive(-1);
+
+['forward','reverse'].forEach(id=>{
+ const button=$(id);
+ button.onpointerup=()=>{drive=0};
+ button.onpointerleave=()=>{drive=0};
+ button.onpointercancel=()=>{drive=0};
+});
+
+$('brake').onclick=()=>{
+ drive=0;
+ braking=true;
+};
+
 $('left').onclick=()=>{
-  $('steer').value=clamp(Number($('steer').value)-3,-35,35);
-  setSteer();
+ $('steer').value=clamp(Number($('steer').value)-3,-35,35);
+ setSteer();
 };
 
 $('right').onclick=()=>{
-  $('steer').value=clamp(Number($('steer').value)+3,-35,35);
-  setSteer();
+ $('steer').value=clamp(Number($('steer').value)+3,-35,35);
+ setSteer();
 };
 
 $('straight').onclick=()=>{
-  $('steer').value=0;
-  setSteer();
+ $('steer').value=0;
+ setSteer();
 };
-
-// Движение вперёд и назад.
-$('forward').onpointerdown=()=>start(1);
-$('reverse').onpointerdown=()=>start(-1);
-
-['forward','reverse'].forEach(id=>{
-  const b=$(id);
-  b.onpointerup=stop;
-  b.onpointerleave=stop;
-  b.onpointercancel=stop;
-});
-
-$('brake').onclick=stop;
-
-// Изменение угла руля.
-function setSteer(){
-  steer=Number($('steer').value)*Math.PI/180;
-  draw();
-}
 
 $('steer').oninput=setSteer;
 
-$('speed').oninput=()=>{
-  speedAbs=Number($('speed').value);
-  draw();
+$('speedSet').oninput=()=>{
+ targetSpeed=Number($('speedSet').value);
+ draw();
 };
 
-// Сброс модели.
 $('reset').onclick=()=>{
-  stop();
-  state=initial();
-  steer=0;
-  $('steer').value=0;
-  distance=0;
-  trace=[];
-  camera={x:0,y:0};
-  draw();
+ resetState();
+ draw();
 };
 
-// Отображение траектории.
-$('trace').onclick=()=>{
-  showTrace=!showTrace;
-  $('trace').textContent='Траектория: '+(showTrace?'вкл.':'выкл.');
-  draw();
-};
-
-// Центрирование камеры.
 $('center').onclick=()=>{
-  camera={x:state.x,y:state.y};
-  draw();
+ camera={x:state.x,y:state.y};
+ draw();
 };
 
-// Клавиатурное управление.
-window.addEventListener('keydown',e=>{
-  if(e.key==='ArrowLeft'){
-    $('steer').value=clamp(Number($('steer').value)-1,-35,35);
-    setSteer();
-  }
+$('trace').onclick=()=>{
+ showTrace=!showTrace;
+ $('trace').textContent='Траектория: '+(showTrace?'вкл.':'выкл.');
+ draw();
+};
 
-  if(e.key==='ArrowRight'){
-    $('steer').value=clamp(Number($('steer').value)+1,-35,35);
-    setSteer();
-  }
+$('apply').onclick=applySettings;
 
-  if(e.key==='ArrowUp')start(1);
-  if(e.key==='ArrowDown')start(-1);
+$('assess').onclick=()=>{
+ readSettings();
 
-  if(e.code==='Space'){
-    e.preventDefault();
-    stop();
-  }
+ const usable=cfg.gateWidth-2*cfg.margin;
+ const difference=usable-cfg.trailerWidth;
+
+ let result;
+ if(difference<0)result='Проём уже ширины полуприцепа';
+ else if(difference<0.3)result='Очень малый боковой запас';
+ else if(difference<0.8)result='Ограниченный запас: нужен точный манёвр';
+ else result='По ширине имеется предварительный запас';
+
+ $('gateResult').textContent=
+  result+'. Полезная ширина: '+usable.toFixed(2)+
+  ' м; ширина полуприцепа: '+cfg.trailerWidth.toFixed(2)+
+  ' м; суммарный запас: '+difference.toFixed(2)+
+  ' м. Это только сравнение ширины, не анализ траектории и не гарантия проезда.';
+};
+
+$('model').onchange=draw;
+
+window.addEventListener('keydown',event=>{
+ if(event.key==='ArrowLeft'){
+  $('steer').value=clamp(Number($('steer').value)-1,-35,35);
+  setSteer();
+ }
+ if(event.key==='ArrowRight'){
+  $('steer').value=clamp(Number($('steer').value)+1,-35,35);
+  setSteer();
+ }
+ if(event.key==='ArrowUp')startDrive(1);
+ if(event.key==='ArrowDown')startDrive(-1);
+ if(event.code==='Space'){
+  event.preventDefault();
+  drive=0;
+  braking=true;
+ }
 });
 
-window.addEventListener('keyup',e=>{
-  if(['ArrowUp','ArrowDown'].includes(e.key))stop();
+window.addEventListener('keyup',event=>{
+ if(event.key==='ArrowUp'||event.key==='ArrowDown')drive=0;
 });
 
-// Запуск программы.
-state=initial();
-speedAbs=Number($('speed').value);
-setSteer();
+readSettings();
+targetSpeed=Number($('speedSet').value);
+resetState();
 draw();
-raf=requestAnimationFrame(loop);
+requestAnimationFrame(frame);
 
 })();
 </script>
