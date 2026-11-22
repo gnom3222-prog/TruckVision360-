@@ -1,406 +1,582 @@
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<meta name="theme-color" content="#101923">
-<title>TruckVision 360</title>
+<meta name="theme-color" content="#071426">
+<title>TruckVision 360 — кинематика автопоезда</title>
 <style>
+:root{color-scheme:dark;--bg:#071426;--panel:#10243b;--line:#294661;--cyan:#39c9ee;--muted:#a9bacb;--warn:#ffca69;--danger:#ff7777}
 *{box-sizing:border-box}
-body{margin:0;background:#101923;color:#edf4fa;font-family:Arial,sans-serif}
-header{padding:15px;background:#172532;border-bottom:1px solid #344653}
-h1{font-size:21px;margin:0}
-header small{color:#9eb1bf}
-nav{display:flex;gap:7px;padding:10px;background:#172532}
-button{border:0;border-radius:9px;padding:12px;background:#294052;color:white;font-weight:bold}
-button.active{background:#13865d}
-main{padding:12px;max-width:1000px;margin:auto}
-.panel{background:#1a2a38;padding:12px;border-radius:12px;margin-bottom:12px}
-canvas{width:100%;height:auto;background:#303b40;border-radius:10px;display:block}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-.stat{background:#263b4b;padding:10px;border-radius:9px}
-.stat small{display:block;color:#a9bdca;margin-bottom:5px}
-.stat strong{font-size:19px}
-.controls{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.controls button{min-height:55px;font-size:17px}
-input[type=range]{width:100%}
-label{display:block;margin:12px 0 5px;color:#c4d4df}
-.row{display:flex;justify-content:space-between;gap:10px;align-items:center}
-.hidden{display:none}
-.note{font-size:12px;color:#a9bdca;line-height:1.5}
-.good{color:#5ee0a5}
-.warning{color:#ffd078}
+body{margin:0;background:linear-gradient(160deg,#071426,#0a1d31);color:#f3f7fb;font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{padding:16px 14px 8px;max-width:1100px;margin:auto}
+h1{font-size:clamp(21px,4vw,29px);margin:0}
+.sub{font-size:12px;color:var(--muted);margin-top:5px}
+main{max-width:1100px;margin:auto;padding:8px 12px 24px;display:grid;gap:12px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:13px}
+.status{display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap;color:var(--muted);font-size:13px}
+.status strong{color:#fff}
+canvas{display:block;width:100%;height:auto;background:#122b40;border:1px solid #36536c;border-radius:12px;touch-action:pan-y}
+.layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(270px,1fr);gap:12px;align-items:start}
+label{display:block;color:var(--muted);font-size:13px;margin:12px 0 5px}
+input[type=range]{width:100%;accent-color:var(--cyan)}
+.value{float:right;color:var(--cyan);font-weight:700;font-variant-numeric:tabular-nums}
+.controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:13px}
+button{border:1px solid #42617b;border-radius:10px;padding:12px 8px;background:#183a56;color:#fff;font:600 14px system-ui,-apple-system,sans-serif;touch-action:manipulation}
+button:active{background:#246486}
+button.primary{background:#087fa5;border-color:#20b9df}
+button.stop{background:#873b45;border-color:#b75b65}
+.metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.metric{background:#091a2b;border:1px solid #29435d;border-radius:10px;padding:9px;color:var(--muted);font-size:12px}
+.metric strong{display:block;color:var(--cyan);font-size:18px;margin-top:4px;font-variant-numeric:tabular-nums}
+.note{font-size:12px;line-height:1.5;color:#f0cf8a;margin:10px 2px 2px}
+.small{font-size:11px;color:var(--muted);line-height:1.5}
+@media(max-width:760px){.layout{grid-template-columns:1fr}.controls{grid-template-columns:repeat(2,minmax(0,1fr))}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
 <header>
-<h1>TruckVision 360</h1>
-<small>Volvo FH 4×2 · Полуприцеп 3 оси · Демонстрационная модель</small>
+  <h1>🚛 TruckVision 360</h1>
+  <div class="sub">Кинематическая модель тягача с трёхосным полуприцепом · вид сверху</div>
 </header>
-
-<nav>
-<button class="active" onclick="showTab('drive',this)">Движение</button>
-<button onclick="showTab('physics',this)">Физика</button>
-<button onclick="showTab('parking',this)">Парковка</button>
-</nav>
-
 <main>
-<section id="drive">
-<div class="panel">
-<div class="row">
-<strong>Виртуальная дорога</strong>
-<span id="direction">Стоим</span>
-</div>
-<canvas id="scene" width="900" height="580"></canvas>
-</div>
+  <section class="panel status">
+    <span>Профиль: <strong>Volvo FH 4×2 · учебная конфигурация</strong></span>
+    <span>Полуприцеп: <strong>3 оси</strong></span>
+    <span id="mode">Остановка</span>
+  </section>
 
-<div class="panel grid">
-<div class="stat"><small>Скорость</small><strong id="speed">0 км/ч</strong></div>
-<div class="stat"><small>Угол руля</small><strong id="steerValue">0°</strong></div>
-<div class="stat"><small>Угол тягача</small><strong id="tractorAngle">0°</strong></div>
-<div class="stat"><small>Угол прицепа</small><strong id="trailerAngle">0°</strong></div>
-<div class="stat"><small>Угол сочленения</small><strong id="articulation">0°</strong></div>
-<div class="stat"><small>Состояние</small><strong id="status">Норма</strong></div>
-</div>
+  <div class="layout">
+    <section class="panel">
+      <canvas id="scene" width="1000" height="650" aria-label="Вид сверху на тягач и полуприцеп"></canvas>
+      <div class="metrics">
+        <div class="metric">Угол сочленения β<strong id="articulation">0.0°</strong></div>
+        <div class="metric">Скорость<strong id="speedOut">0.0 м/с</strong></div>
+        <div class="metric">Радиус тягача<strong id="radiusOut">—</strong></div>
+        <div class="metric">Скорость вращения<strong id="yawOut">0.0°/с</strong></div>
+        <div class="metric">Путь<strong id="distanceOut">0.0 м</strong></div>
+        <div class="metric">Положение осей прицепа<strong id="axleOut">—</strong></div>
+      </div>
+    </section>
 
-<div class="panel">
-<div class="controls">
-<button onclick="changeSteer(-1)">◀ Влево</button>
-<button onclick="changeSteer(0)">Прямо</button>
-<button onclick="changeSteer(1)">Вправо ▶</button>
-<button onclick="setDrive(1)">▲ Вперёд</button>
-<button onclick="brake()">■ Тормоз</button>
-<button onclick="setDrive(-1)">▼ Назад</button>
-</div>
-<label>Скорость движения: <span id="speedSet">5</span> км/ч</label>
-<input id="speedRange" type="range" min="1" max="40" value="5"
-oninput="targetSpeed=Number(this.value);speedSet.textContent=this.value">
-<button style="width:100%;margin-top:10px" onclick="resetTruck()">Сбросить положение</button>
-</div>
-</section>
+    <section class="panel">
+      <label for="steering">Угол передних колёс <b class="value" id="steerValue">0°</b></label>
+      <input id="steering" type="range" min="-35" max="35" step="1" value="0">
 
-<section id="physics" class="hidden">
-<div class="panel">
-<h3>Параметры автопоезда</h3>
-<label>Колёсная база тягача: 3,8 м</label>
-<label>Расстояние от задней оси до сцепки: 0,5 м</label>
-<label>Расстояние от сцепки до осей прицепа: 8,0 м</label>
-<label>Максимальный угол управляемых колёс: 35°</label>
-<p class="note">Это демонстрационные параметры. Для инженерной модели Volvo FH необходимо уточнить конфигурацию автомобиля и реальные размеры конкретного полуприцепа.</p>
-</div>
-<div class="panel">
-<h3>Физическая модель</h3>
-<p>• Кинематика управляемых колёс тягача.</p>
-<p>• Расчёт скорости точки сцепки.</p>
-<p>• Отдельный расчёт угловой скорости прицепа.</p>
-<p>• Учет направления движения вперёд и назад.</p>
-<p>• Контроль угла складывания автопоезда.</p>
-</div>
-</section>
+      <label for="speedControl">Заданная скорость <b class="value" id="speedValue">2.0 м/с</b></label>
+      <input id="speedControl" type="range" min="0.2" max="8" step="0.1" value="2">
 
-<section id="parking" class="hidden">
-<div class="panel">
-<h3>Проверка проезда через ворота</h3>
-<label>Ширина ворот: <span id="gateWidthText">4,0</span> м</label>
-<input id="gateWidth" type="range" min="2.5" max="6" step="0.1" value="4"
-oninput="gateWidthText.textContent=Number(this.value).toFixed(1);checkGate()">
-<label>Ширина автопоезда: 2,55 м</label>
-<div class="stat">
-<strong id="gateResult">Можно проехать</strong>
-<p id="gateExplanation" class="note">Предварительная оценка по ширине.</p>
-</div>
-<p class="note">Пока здесь проверяется только ширина. Полная оценка траектории, углового положения и погрешности измерения ещё требует разработки.</p>
-</div>
-</section>
+      <div class="controls">
+        <button id="left">↶ Руль влево</button>
+        <button id="straight">Прямо</button>
+        <button id="right">Руль вправо ↷</button>
+        <button class="primary" id="forward">▲ Вперёд · удерживать</button>
+        <button class="primary" id="reverse">▼ Назад · удерживать</button>
+        <button class="stop" id="brake">■ Стоп</button>
+        <button id="reset">↻ Сброс</button>
+        <button id="clear">Очистить след</button>
+        <button id="slow">Медленный режим</button>
+      </div>
+      <p class="note" id="warning">Модель готова. Угол сочленения рассчитывается из движения тягача и положения седла — он больше не задаётся отдельным ползунком.</p>
+      <p class="small">Важно: это низкоскоростная кинематика без проскальзывания шин. Масса, инерция, подвеска, реальные характеристики шин, ABS/EBS, тормозные контуры и столкновения пока не моделируются. Числа геометрии ниже — стартовые допущения, а не подтверждённые заводские данные конкретного VIN или полуприцепа.</p>
+    </section>
+  </div>
+
+  <section class="panel small">
+    <strong>Параметры модели (метры и радианы)</strong><br>
+    Колёсная база тягача: 3.8 м · седло позади задней оси: 0.5 м · седло до центра группы осей полуприцепа: 8.0 м · длина тягача: 7.4 м · длина полуприцепа: 13.6 м · ширина: 2.55 м.
+    Эти значения вынесены в объект CONFIG в коде, чтобы их можно было заменить после получения точной спецификации и измерений.
+  </section>
 </main>
 
 <script>
-const canvas=document.getElementById("scene");
-const ctx=canvas.getContext("2d");
+"use strict";
 
-const P={
- wheelbase:3.8,
- hitchOffset:0.5,
- trailerLength:8.0,
- tractorWidth:2.55,
- trailerWidth:2.55,
- maxSteer:35*Math.PI/180
+/*
+ * TruckVision 360 — articulated-vehicle kinematic prototype.
+ * Coordinates: metres, world Y points upward, heading is radians.
+ * Tractor reference point: centre of rear axle.
+ * Trailer reference: centre of its axle group.
+ *
+ * This is a low-speed no-slip kinematic model, NOT a validated vehicle
+ * dynamics, braking, tyre, ABS/EBS or safety model.
+ */
+
+const CONFIG = {
+  wheelbase: 3.8,
+  hitchBehindRearAxle: 0.5,
+  kingpinToAxleGroup: 8.0,
+  tractorLength: 7.4,
+  tractorWidth: 2.55,
+  trailerLength: 13.6,
+  trailerWidth: 2.55,
+  kingpinFromTrailerFront: 1.6,
+  maxSteerDeg: 35,
+  acceleration: 1.0,
+  serviceDeceleration: 2.0,
+  articulationWarningDeg: 35,
+  articulationCriticalDeg: 50
 };
 
-let S={
- x:0,y:0,
- theta:0,
- trailerTheta:0,
- speed:0,
- target:0,
- steer:0,
- direction:1
+const canvas = document.getElementById("scene");
+const ctx = canvas.getContext("2d");
+const $ = id => document.getElementById(id);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
+const toRad = d => d * Math.PI / 180;
+const toDeg = r => r * 180 / Math.PI;
+
+const state = {
+  x: 0, y: 0, psi: 0, theta: 0,
+  speed: 0, steering: 0, drive: 0,
+  distance: 0, traceTractor: [], traceTrailer: [],
+  slowMode: false, lastFrame: 0
 };
 
-let targetSpeed=5;
-let lastTime=0;
-
-const rad=d=>d*Math.PI/180;
-const deg=r=>r*180/Math.PI;
-
-function wrap(a){
- while(a>Math.PI)a-=2*Math.PI;
- while(a<-Math.PI)a+=2*Math.PI;
- return a;
+function hitchPosition(s = state) {
+  return {
+    x: s.x - CONFIG.hitchBehindRearAxle * Math.cos(s.psi),
+    y: s.y - CONFIG.hitchBehindRearAxle * Math.sin(s.psi)
+  };
 }
 
-function forward(a){
- return {x:Math.cos(a),y:Math.sin(a)};
-}
-function left(a){
- return {x:-Math.sin(a),y:Math.cos(a)};
-}
-
-function hitchPosition(){
- const f=forward(S.theta);
- return {
-  x:S.x-P.hitchOffset*f.x,
-  y:S.y-P.hitchOffset*f.y
- };
+function trailerAxlePosition(s = state) {
+  const h = hitchPosition(s);
+  return {
+    x: h.x - CONFIG.kingpinToAxleGroup * Math.cos(s.theta),
+    y: h.y - CONFIG.kingpinToAxleGroup * Math.sin(s.theta)
+  };
 }
 
-function physicsStep(dt){
- const acceleration=2.0;
- const desired=S.target;
-
- if(S.speed<desired)
-  S.speed=Math.min(desired,S.speed+acceleration*dt);
- else if(S.speed>desired)
-  S.speed=Math.max(desired,S.speed-acceleration*dt);
-
- const v=S.speed;
- const omega=v*Math.tan(S.steer)/P.wheelbase;
-
- const oldTheta=S.theta;
- const f=forward(oldTheta);
- const l=left(oldTheta);
-
- S.x+=v*f.x*dt;
- S.y+=v*f.y*dt;
- S.theta=wrap(S.theta+omega*dt);
-
- const hitchVx=v*f.x-P.hitchOffset*omega*l.x;
- const hitchVy=v*f.y-P.hitchOffset*omega*l.y;
-
- const trailerLeft=left(S.trailerTheta);
-
- const trailerOmega=(
-  hitchVx*trailerLeft.x+
-  hitchVy*trailerLeft.y
- )/P.trailerLength;
-
- S.trailerTheta=wrap(S.trailerTheta+trailerOmega*dt);
+function articulation(s = state) {
+  return wrapAngle(s.psi - s.theta);
 }
 
-function drawRoad(){
- const w=canvas.width,h=canvas.height;
- ctx.fillStyle="#3b4547";
- ctx.fillRect(0,0,w,h);
+/*
+ * Производные движения автопоезда.
+ * Учитывается боковая скорость седла при повороте тягача.
+ */
+function derivative(s, signedVelocity, steerRad) {
+  const omega = signedVelocity / CONFIG.wheelbase * Math.tan(steerRad);
 
- ctx.save();
- ctx.translate(w/2,h/2);
- ctx.rotate(-S.theta);
+  const hitchVx = signedVelocity * Math.cos(s.psi)
+    + CONFIG.hitchBehindRearAxle * omega * Math.sin(s.psi);
 
- ctx.fillStyle="#555e60";
- ctx.fillRect(-1300,-145,2600,290);
+  const hitchVy = signedVelocity * Math.sin(s.psi)
+    - CONFIG.hitchBehindRearAxle * omega * Math.cos(s.psi);
 
- ctx.strokeStyle="#d9d5a6";
- ctx.lineWidth=4;
- ctx.setLineDash([35,30]);
- ctx.beginPath();
- ctx.moveTo(-1300,0);
- ctx.lineTo(1300,0);
- ctx.stroke();
- ctx.setLineDash([]);
+  const thetaDot = (
+    -hitchVx * Math.sin(s.theta) + hitchVy * Math.cos(s.theta)
+  ) / CONFIG.kingpinToAxleGroup;
 
- ctx.strokeStyle="#aeb8b4";
- ctx.lineWidth=4;
- ctx.beginPath();
- ctx.moveTo(-1300,-145);
- ctx.lineTo(1300,-145);
- ctx.moveTo(-1300,145);
- ctx.lineTo(1300,145);
- ctx.stroke();
- ctx.restore();
+  return {
+    x: signedVelocity * Math.cos(s.psi),
+    y: signedVelocity * Math.sin(s.psi),
+    psi: omega,
+    theta: thetaDot
+  };
 }
 
-function drawVehicle(x,y,heading,length,width,color,label){
- const scale=25;
- ctx.save();
- ctx.translate(canvas.width/2+(x-S.x)*scale,
-               canvas.height/2+(y-S.y)*scale);
- ctx.rotate(heading-S.theta);
-
- ctx.fillStyle=color;
- ctx.strokeStyle="#e8f1f5";
- ctx.lineWidth=2;
- ctx.beginPath();
- ctx.roundRect(-length*scale/2,-width*scale/2,
-               length*scale,width*scale,10);
- ctx.fill();
- ctx.stroke();
-
- ctx.fillStyle="#c7d9e4";
- ctx.fillRect(length*scale/2-20,-width*scale/2+5,12,width*scale-10);
-
- ctx.fillStyle="#101418";
- const positions=[
-  [-length*scale*.3,-width*scale*.58],
-  [-length*scale*.3,width*scale*.42],
-  [length*scale*.3,-width*scale*.58],
-  [length*scale*.3,width*scale*.42]
- ];
- for(const p of positions)
-  ctx.fillRect(p[0]-9,p[1]-5,18,10);
-
- ctx.fillStyle="white";
- ctx.font="bold 13px Arial";
- ctx.textAlign="center";
- ctx.fillText(label,0,5);
- ctx.restore();
+function addState(s, k, factor) {
+  return {
+    x:s.x+k.x*factor,
+    y:s.y+k.y*factor,
+    psi:s.psi+k.psi*factor,
+    theta:s.theta+k.theta*factor
+  };
 }
 
-function drawHitch(){
- const h=hitchPosition();
- const scale=25;
- const x=canvas.width/2+(h.x-S.x)*scale;
- const y=canvas.height/2+(h.y-S.y)*scale;
- ctx.fillStyle="#ffd166";
- ctx.beginPath();
- ctx.arc(x,y,7,0,Math.PI*2);
- ctx.fill();
+/* Численное интегрирование методом Рунге — Кутты четвёртого порядка. */
+function integrate(dt, signedVelocity) {
+  const delta = toRad(state.steering);
+
+  const k1 = derivative(state, signedVelocity, delta);
+  const k2 = derivative(addState(state,k1,dt/2), signedVelocity, delta);
+  const k3 = derivative(addState(state,k2,dt/2), signedVelocity, delta);
+  const k4 = derivative(addState(state,k3,dt), signedVelocity, delta);
+
+  const oldX=state.x, oldY=state.y;
+
+  state.x += dt/6*(k1.x+2*k2.x+2*k3.x+k4.x);
+  state.y += dt/6*(k1.y+2*k2.y+2*k3.y+k4.y);
+  state.psi += dt/6*(k1.psi+2*k2.psi+2*k3.psi+k4.psi);
+  state.theta += dt/6*(k1.theta+2*k2.theta+2*k3.theta+k4.theta);
+
+  state.distance += Math.hypot(state.x-oldX,state.y-oldY);
+
+  if (state.traceTractor.length===0 ||
+      Math.hypot(state.x-state.traceTractor.at(-1).x,
+                 state.y-state.traceTractor.at(-1).y)>0.12) {
+
+    state.traceTractor.push({x:state.x,y:state.y});
+    const a=trailerAxlePosition();
+    state.traceTrailer.push(a);
+
+    if(state.traceTractor.length>1600){
+      state.traceTractor.shift();
+      state.traceTrailer.shift();
+    }
+  }
+}
+
+function update(dt) {
+  const target = state.drive * Number($("speedControl").value)
+    * (state.slowMode ? 0.35 : 1);
+
+  if (state.drive===0) {
+    const drop=CONFIG.serviceDeceleration*dt;
+    state.speed=Math.sign(state.speed)*Math.max(0,Math.abs(state.speed)-drop);
+  } else {
+    const change=clamp(target-state.speed,
+      -CONFIG.acceleration*dt,CONFIG.acceleration*dt);
+    state.speed += change;
+  }
+
+  if (Math.abs(state.speed)>0.0001) integrate(dt,state.speed);
+}
+
+const view = {
+  scale:25,
+  originX:canvas.width/2,
+  originY:canvas.height/2+20
+};
+
+function screen(p){
+  return {
+    x:view.originX+p.x*view.scale,
+    y:view.originY-p.y*view.scale
+  };
+}
+
+function worldPoint(x,y,heading,forward,lateral=0){
+  return {
+    x:x+forward*Math.cos(heading)-lateral*Math.sin(heading),
+    y:y+forward*Math.sin(heading)+lateral*Math.cos(heading)
+  };
+}
+
+function drawPolyline(points,color,width=2,dash=[]){
+  if(points.length<2)return;
+
+  ctx.beginPath();
+
+  points.forEach((p,i)=>{
+    const q=screen(p);
+    if(i===0)ctx.moveTo(q.x,q.y);
+    else ctx.lineTo(q.x,q.y);
+  });
+
+  ctx.strokeStyle=color;
+  ctx.lineWidth=width;
+  ctx.setLineDash(dash);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawRotatedRect(cx,cy,heading,length,width,fill,stroke){
+  const corners=[
+    worldPoint(cx,cy,heading,length/2,width/2),
+    worldPoint(cx,cy,heading,length/2,-width/2),
+    worldPoint(cx,cy,heading,-length/2,-width/2),
+    worldPoint(cx,cy,heading,-length/2,width/2)
+  ].map(screen);
+
+  ctx.beginPath();
+  ctx.moveTo(corners[0].x,corners[0].y);
+  corners.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));
+  ctx.closePath();
+
+  ctx.fillStyle=fill;
+  ctx.fill();
+  ctx.strokeStyle=stroke;
+  ctx.lineWidth=2;
+  ctx.stroke();
+}
+
+function drawAxleLine(cx,cy,heading,width){
+  const a=screen(worldPoint(cx,cy,heading,0,width/2+0.16));
+  const b=screen(worldPoint(cx,cy,heading,0,-width/2-0.16));
+
+  ctx.beginPath();
+  ctx.moveTo(a.x,a.y);
+  ctx.lineTo(b.x,b.y);
+  ctx.strokeStyle="#111820";
+  ctx.lineWidth=5;
+  ctx.stroke();
+}
+
+function drawGrid(){
+  ctx.fillStyle="#122b40";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  ctx.strokeStyle="rgba(180,210,230,.10)";
+  ctx.lineWidth=1;
+
+  const step=view.scale;
+
+  for(let x=view.originX%step;x<canvas.width;x+=step){
+    ctx.beginPath();
+    ctx.moveTo(x,0);
+    ctx.lineTo(x,canvas.height);
+    ctx.stroke();
+  }
+
+  for(let y=view.originY%step;y<canvas.height;y+=step){
+    ctx.beginPath();
+    ctx.moveTo(0,y);
+    ctx.lineTo(canvas.width,y);
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle="#d8e6ef";
+  ctx.lineWidth=3;
+  ctx.beginPath();
+  ctx.moveTo(24,canvas.height-26);
+  ctx.lineTo(24+5*view.scale,canvas.height-26);
+  ctx.stroke();
+
+  ctx.fillStyle="#d8e6ef";
+  ctx.font="12px system-ui";
+  ctx.fillText("5 м",26,canvas.height-34);
 }
 
 function draw(){
- drawRoad();
+  drawGrid();
 
- const h=hitchPosition();
- const axleX=h.x-P.trailerLength*Math.cos(S.trailerTheta);
- const axleY=h.y-P.trailerLength*Math.sin(S.trailerTheta);
+  drawPolyline(state.traceTrailer,"rgba(255,202,105,.8)",2,[6,5]);
+  drawPolyline(state.traceTractor,"rgba(57,201,238,.9)",2,[6,5]);
 
- drawVehicle(
-  (h.x+axleX)/2,
-  (h.y+axleY)/2,
-  S.trailerTheta,
-  P.trailerLength,
-  P.trailerWidth,
-  "#287bba",
-  "ПРИЦЕП"
- );
+  const h=hitchPosition();
+  const axle=trailerAxlePosition();
 
- drawVehicle(
-  S.x,S.y,S.theta,
-  5.8,2.5,
-  "#168a62",
-  "VOLVO FH"
- );
+  const trailerCentre=worldPoint(
+    h.x,h.y,state.theta,
+    CONFIG.kingpinFromTrailerFront-CONFIG.trailerLength/2,0
+  );
 
- drawHitch();
+  [-0.62,0,0.62].forEach(offset=>{
+    const p=worldPoint(axle.x,axle.y,state.theta,offset,0);
+    drawAxleLine(p.x,p.y,state.theta,CONFIG.trailerWidth);
+  });
 
- const scale=25;
- ctx.strokeStyle="#ffd166";
- ctx.lineWidth=4;
- ctx.beginPath();
- ctx.moveTo(canvas.width/2+(h.x-S.x)*scale,
-            canvas.height/2+(h.y-S.y)*scale);
- ctx.lineTo(canvas.width/2+(axleX-S.x)*scale,
-            canvas.height/2+(axleY-S.y)*scale);
- ctx.stroke();
+  const tractorCentre=worldPoint(
+    state.x,state.y,state.psi,
+    CONFIG.tractorLength/2-0.45,0
+  );
+
+  drawRotatedRect(
+    trailerCentre.x,trailerCentre.y,state.theta,
+    CONFIG.trailerLength,CONFIG.trailerWidth,
+    "#d8e2e9","#657f92"
+  );
+
+  drawRotatedRect(
+    tractorCentre.x,tractorCentre.y,state.psi,
+    CONFIG.tractorLength,CONFIG.tractorWidth,
+    "#168fc1","#75dfff"
+  );
+
+  drawAxleLine(state.x,state.y,state.psi,CONFIG.tractorWidth);
+
+  const frontAxle=worldPoint(
+    state.x,state.y,state.psi,CONFIG.wheelbase,0
+  );
+
+  drawAxleLine(
+    frontAxle.x,frontAxle.y,state.psi,CONFIG.tractorWidth
+  );
+
+  [-1,1].forEach(side=>{
+    const wheel=worldPoint(
+      frontAxle.x,frontAxle.y,state.psi,
+      0,side*CONFIG.tractorWidth/2
+    );
+
+    drawRotatedRect(
+      wheel.x,wheel.y,
+      state.psi+toRad(state.steering),
+      0.72,0.25,
+      "#111820","#aab8c4"
+    );
+  });
+
+  const hs=screen(h);
+  const as=screen(axle);
+
+  ctx.beginPath();
+  ctx.moveTo(hs.x,hs.y);
+  ctx.lineTo(as.x,as.y);
+  ctx.strokeStyle="#ffca69";
+  ctx.lineWidth=2;
+  ctx.setLineDash([5,5]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.beginPath();
+  ctx.arc(hs.x,hs.y,5,0,Math.PI*2);
+  ctx.fillStyle="#ffca69";
+  ctx.fill();
+
+  const cab=screen(tractorCentre);
+  const tr=screen(trailerCentre);
+
+  ctx.fillStyle="#fff";
+  ctx.font="bold 14px system-ui";
+  ctx.fillText("ТЯГАЧ",cab.x-25,cab.y-30);
+  ctx.fillText("ПОЛУПРИЦЕП",tr.x-48,tr.y-30);
+
+  ctx.fillStyle="#ffca69";
+  ctx.font="12px system-ui";
+  ctx.fillText("Седло",hs.x+8,hs.y-8);
+
+  updateUI();
 }
 
-function updateDisplay(){
- document.getElementById("speed").textContent=
-  (Math.abs(S.speed)*3.6).toFixed(1)+" км/ч";
+function updateUI(){
+  const beta=toDeg(articulation());
 
- document.getElementById("steerValue").textContent=
-  deg(S.steer).toFixed(1)+"°";
+  $("articulation").textContent=beta.toFixed(1)+"°";
+  $("speedOut").textContent=Math.abs(state.speed).toFixed(1)+" м/с";
+  $("steerValue").textContent=Math.round(state.steering)+"°";
+  $("speedValue").textContent=Number($("speedControl").value).toFixed(1)+" м/с";
 
- document.getElementById("tractorAngle").textContent=
-  deg(S.theta).toFixed(1)+"°";
+  const steer=toRad(state.steering);
 
- document.getElementById("trailerAngle").textContent=
-  deg(S.trailerTheta).toFixed(1)+"°";
+  $("radiusOut").textContent=Math.abs(steer)<0.001
+    ?"Прямо"
+    :(CONFIG.wheelbase/Math.abs(Math.tan(steer))).toFixed(1)+" м";
 
- const articulation=wrap(S.theta-S.trailerTheta);
- document.getElementById("articulation").textContent=
-  Math.abs(deg(articulation)).toFixed(1)+"°";
+  const yaw=state.speed/CONFIG.wheelbase*Math.tan(steer);
 
- document.getElementById("direction").textContent=
-  S.target===0?"Стоим":S.target>0?"Вперёд":"Назад";
+  $("yawOut").textContent=toDeg(yaw).toFixed(1)+"°/с";
+  $("distanceOut").textContent=state.distance.toFixed(1)+" м";
 
- const status=Math.abs(deg(articulation));
- document.getElementById("status").textContent=
-  status>45?"Большой угол":status>30?"Внимание":"Норма";
- document.getElementById("status").className=
-  status>45?"warning":"good";
+  const axle=trailerAxlePosition();
+
+  $("axleOut").textContent=
+    axle.x.toFixed(1)+" / "+axle.y.toFixed(1)+" м";
+
+  const abs=Math.abs(beta);
+
+  let message="Угол сочленения в пределах демонстрационного диапазона.";
+
+  if(abs>=CONFIG.articulationCriticalDeg)
+    message="Критически большой угол сочленения в учебной модели. Останови симуляцию и сбрось положение.";
+  else if(abs>=CONFIG.articulationWarningDeg)
+    message="Большой угол сочленения: повышается риск складывания в модели. Это предупреждение не является реальным пределом безопасности.";
+
+  $("warning").textContent=message;
+
+  $("warning").style.color=
+    abs>=CONFIG.articulationCriticalDeg
+      ?"#ff8d8d"
+      :abs>=CONFIG.articulationWarningDeg
+        ?"#ffca69"
+        :"#d6e7f2";
+
+  $("mode").textContent=
+    state.drive===1
+      ?"Движение вперёд"
+      :state.drive===-1
+        ?"Движение назад"
+        :Math.abs(state.speed)>.03
+          ?"Замедление"
+          :"Остановка";
 }
 
-function loop(time){
- if(!lastTime)lastTime=time;
- let dt=Math.min((time-lastTime)/1000,0.04);
- lastTime=time;
-
- const steps=4;
- for(let i=0;i<steps;i++)physicsStep(dt/steps);
-
- draw();
- updateDisplay();
- requestAnimationFrame(loop);
+function setSteering(v){
+  state.steering=clamp(v,-CONFIG.maxSteerDeg,CONFIG.maxSteerDeg);
+  $("steering").value=state.steering;
+  draw();
 }
 
-function changeSteer(direction){
- S.steer=direction*P.maxSteer;
-}
-function setDrive(direction){
- S.direction=direction;
- S.target=direction*targetSpeed/3.6;
-}
-function brake(){
- S.target=0;
-}
-function resetTruck(){
- S.x=0;S.y=0;
- S.theta=0;
- S.trailerTheta=0;
- S.speed=0;
- S.target=0;
- S.steer=0;
-}
-function showTab(id,button){
- document.querySelectorAll("main section").forEach(s=>s.classList.add("hidden"));
- document.getElementById(id).classList.remove("hidden");
- document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
- button.classList.add("active");
-}
-function checkGate(){
- const width=Number(document.getElementById("gateWidth").value);
- const result=document.getElementById("gateResult");
- const explanation=document.getElementById("gateExplanation");
- const margin=width-P.tractorWidth;
-
- if(margin<0){
-  result.textContent="Не проходит";
-  result.className="warning";
-  explanation.textContent="Ширина ворот меньше ширины автопоезда.";
- }else if(margin<0.5){
-  result.textContent="Очень сложно";
-  result.className="warning";
-  explanation.textContent="Малый запас по ширине. Нужна точная оценка траектории.";
- }else{
-  result.textContent="По ширине проходит";
-  result.className="good";
-  explanation.textContent="Есть запас по ширине, но траектория поворота пока не проверена.";
- }
+function setDrive(v){
+  state.drive=v;
+  updateUI();
 }
 
-requestAnimationFrame(loop);
-checkGate();
+function reset(){
+  state.x=0;
+  state.y=0;
+  state.psi=0;
+  state.theta=0;
+  state.speed=0;
+  state.steering=0;
+  state.drive=0;
+  state.distance=0;
+  state.traceTractor=[];
+  state.traceTrailer=[];
+  $("steering").value=0;
+  draw();
+}
+
+function frame(ts){
+  const dt=state.lastFrame
+    ?Math.min((ts-state.lastFrame)/1000,0.04)
+    :0;
+
+  state.lastFrame=ts;
+  update(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+
+$("steering").addEventListener("input",e=>{
+  state.steering=Number(e.target.value);
+  updateUI();
+});
+
+$("speedControl").addEventListener("input",updateUI);
+
+$("left").addEventListener("click",()=>{
+  setSteering(state.steering-5);
+});
+
+$("right").addEventListener("click",()=>{
+  setSteering(state.steering+5);
+});
+
+$("straight").addEventListener("click",()=>{
+  setSteering(0);
+});
+
+$("forward").addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  setDrive(1);
+});
+
+$("reverse").addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  setDrive(-1);
+});
+
+["forward","reverse"].forEach(id=>{
+  const b=$(id);
+
+  ["pointerup","pointerleave","pointercancel"].forEach(ev=>{
+    b.addEventListener(ev,()=>setDrive(0));
+  });
+});
+
+$("brake").addEventListener("click",()=>setDrive(0));
+$("reset").addEventListener("click",reset);
+
+$("clear").addEventListener("click",()=>{
+  state.traceTractor=[];
+  state.traceTrailer=[];
+  draw();
+});
+
+$("slow").addEventListener("click",()=>{
+  state.slowMode=!state.slowMode;
+  $("slow").textContent=
+    state.slowMode?"Обычный режим":"Медленный режим";
+});
+
+window.addEventListener("blur",()=>setDrive(0));
+
+draw();
+requestAnimationFrame(frame);
 </script>
 </body>
 </html>
