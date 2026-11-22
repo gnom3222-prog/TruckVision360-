@@ -1,0 +1,773 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#101820">
+<title>TruckVision 360</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg:#101820;
+  --panel:#1c2934;
+  --text:#f2f5f7;
+  --muted:#a9bac7;
+  --blue:#168bd0;
+  --green:#24a875;
+  --red:#c84c4c;
+  --orange:#d99435;
+}
+* { box-sizing:border-box; }
+body {
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+header {
+  padding:16px;
+  background:#17232d;
+  border-bottom:1px solid #344451;
+}
+h1 { font-size:21px; margin:0; }
+.sub { color:var(--muted); font-size:12px; margin-top:5px; }
+main { padding:12px; max-width:900px; margin:auto; }
+.panel {
+  background:var(--panel);
+  border:1px solid #344451;
+  border-radius:14px;
+  padding:13px;
+  margin-bottom:12px;
+}
+.panel h2 { font-size:15px; margin:0 0 10px; }
+canvas {
+  display:block;
+  width:100%;
+  height:auto;
+  aspect-ratio:4/5;
+  background:#17232d;
+  border-radius:10px;
+}
+.status {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-top:10px;
+}
+.metric {
+  background:#111b23;
+  padding:10px;
+  border-radius:9px;
+}
+.metric span {
+  display:block;
+  color:var(--muted);
+  font-size:11px;
+}
+.metric strong {
+  display:block;
+  margin-top:4px;
+  font-size:17px;
+}
+label { display:block; font-size:13px; margin:12px 0 5px; }
+input[type="number"] {
+  width:100%;
+  padding:11px;
+  border:1px solid #526575;
+  border-radius:8px;
+  background:#111b23;
+  color:white;
+  font-size:16px;
+}
+input[type="range"] { width:100%; accent-color:var(--blue); }
+button {
+  border:0;
+  border-radius:9px;
+  padding:12px 10px;
+  background:#2b4050;
+  color:white;
+  font-size:14px;
+  font-weight:600;
+  min-height:44px;
+  touch-action:manipulation;
+}
+button:active { opacity:.7; }
+.primary { background:var(--blue); }
+.green { background:#147e5a; }
+.danger { background:#a43d42; }
+.controls {
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
+}
+.drive {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-top:8px;
+}
+.note {
+  font-size:12px;
+  color:var(--muted);
+  line-height:1.5;
+}
+.result { font-size:14px; line-height:1.5; }
+#cameraBox { display:none; margin-top:10px; }
+video {
+  width:100%;
+  border-radius:10px;
+  background:#000;
+}
+#cameraMessage {
+  font-size:12px;
+  color:var(--muted);
+  margin-top:7px;
+}
+.warning {
+  color:#ffc36b;
+  background:#342a1b;
+  border-radius:9px;
+  padding:10px;
+  font-size:12px;
+  line-height:1.5;
+}
+</style>
+</head>
+
+<body>
+<header>
+  <h1>🚛 TruckVision 360</h1>
+  <div class="sub">Помощник манёвра автопоезда · версия прототипа</div>
+</header>
+
+<main>
+
+<section class="panel">
+  <h2>Автопоезд — вид сверху</h2>
+  <canvas id="scene" width="800" height="1000"></canvas>
+
+  <div class="status">
+    <div class="metric">
+      <span>Угол сочленения</span>
+      <strong id="angle">0°</strong>
+    </div>
+    <div class="metric">
+      <span>Скорость модели</span>
+      <strong id="speed">0 км/ч</strong>
+    </div>
+    <div class="metric">
+      <span>Руление</span>
+      <strong id="steerValue">0°</strong>
+    </div>
+    <div class="metric">
+      <span>Состояние</span>
+      <strong id="state">Стоянка</strong>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Управление</h2>
+
+  <div class="controls">
+    <button id="left">↶ Влево</button>
+    <button id="center">Руль прямо</button>
+    <button id="right">Вправо ↷</button>
+  </div>
+
+  <label>
+    Угол рулевого управления:
+    <span id="steerText">0°</span>
+  </label>
+  <input id="steering" type="range" min="-35" max="35" value="0">
+
+  <div class="drive">
+    <button class="primary" id="forward">▲ Вперёд</button>
+    <button class="primary" id="reverse">▼ Назад</button>
+    <button class="danger" id="brake">■ Тормоз</button>
+    <button id="reset">↺ Сбросить</button>
+  </div>
+
+  <p class="note">
+    Удерживай кнопку движения. При отпускании кнопки тяга отключается.
+    Модель показывает упрощённое поведение автопоезда.
+  </p>
+</section>
+
+<section class="panel">
+  <h2>Размеры автопоезда и ворот</h2>
+
+  <label>Ширина полуприцепа, м</label>
+  <input id="trailerWidth" type="number" min="2" max="3.5" step="0.01" value="2.55">
+
+  <label>Длина полуприцепа, м</label>
+  <input id="trailerLength" type="number" min="8" max="18" step="0.1" value="13.6">
+
+  <label>Расстояние от шкворня до группы осей, м</label>
+  <input id="trailerAxle" type="number" min="4" max="12" step="0.1" value="8">
+
+  <label>Колёсная база тягача, м</label>
+  <input id="wheelbase" type="number" min="3" max="5" step="0.01" value="3.8">
+
+  <label>Ширина ворот, м</label>
+  <input id="gateWidth" type="number" min="2" max="10" step="0.01" value="3.2">
+
+  <button class="green" id="checkGate" style="width:100%;margin-top:12px">
+    Проверить ширину проезда
+  </button>
+
+  <div id="gateResult" class="result" style="margin-top:10px">
+    Введи ширину ворот и нажми кнопку проверки.
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Камера iPhone</h2>
+
+  <button class="primary" id="cameraButton" style="width:100%">
+    Включить камеру
+  </button>
+
+  <div id="cameraBox">
+    <video id="video" autoplay playsinline muted></video>
+    <div id="cameraMessage">
+      Камера включена. Автоматическое измерение пока не реализовано.
+    </div>
+    <button id="cameraOff" class="danger" style="width:100%;margin-top:8px">
+      Выключить камеру
+    </button>
+  </div>
+
+  <p class="note">
+    Для работы камеры открой страницу в Safari через HTTPS
+    и разреши доступ к камере.
+  </p>
+</section>
+
+<section class="panel">
+  <h2>Профиль испытаний</h2>
+  <p class="note">
+    Тягач: Volvo FH 4×2, предварительный период 2015–2019.
+    Полуприцеп: три оси.
+  </p>
+  <p class="note">
+    Начальные размеры полуприцепа — 13,6 × 2,55 м.
+    Это предварительные значения, которые необходимо сверить
+    с фактическим автомобилем и полуприцепом.
+  </p>
+  <div class="warning">
+    Важно: это прототип кинематики и интерфейса.
+    Он не является сертифицированной системой помощи водителю.
+    ABS, EBS, полноценная динамика шин, сцепление с дорогой
+    и автоматическое LiDAR-измерение ещё не реализованы.
+    Не используй расчёты прототипа для принятия решения
+    о безопасности реального манёвра.
+  </div>
+</section>
+
+</main>
+
+<script>
+"use strict";
+
+const canvas = document.getElementById("scene");
+const ctx = canvas.getContext("2d");
+
+const ui = {
+  angle: document.getElementById("angle"),
+  speed: document.getElementById("speed"),
+  steerValue: document.getElementById("steerValue"),
+  steerText: document.getElementById("steerText"),
+  state: document.getElementById("state"),
+  steering: document.getElementById("steering"),
+  wheelbase: document.getElementById("wheelbase"),
+  trailerWidth: document.getElementById("trailerWidth"),
+  trailerLength: document.getElementById("trailerLength"),
+  trailerAxle: document.getElementById("trailerAxle"),
+  gateWidth: document.getElementById("gateWidth"),
+  gateResult: document.getElementById("gateResult")
+};
+
+const model = {
+  x:0,
+  y:0,
+  heading:0,
+  trailerHeading:0,
+  speed:0,
+  steering:0,
+  actualSteering:0,
+  throttle:0,
+  brake:false,
+  history:[],
+  lastTime:0
+};
+
+const MAX_SPEED = 5.0;
+const HITCH_OFFSET = 1.2;
+const SCALE = 24;
+
+function getNumber(input, fallback, min, max) {
+  const n = Number(input.value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+function dimensions() {
+  return {
+    width:getNumber(ui.trailerWidth,2.55,2,3.5),
+    length:getNumber(ui.trailerLength,13.6,8,18),
+    axle:getNumber(ui.trailerAxle,8,4,12),
+    wheelbase:getNumber(ui.wheelbase,3.8,3,5),
+    gate:getNumber(ui.gateWidth,3.2,2,10)
+  };
+}
+
+function normalizeAngle(a) {
+  while (a > Math.PI) a -= 2*Math.PI;
+  while (a < -Math.PI) a += 2*Math.PI;
+  return a;
+}
+
+function hitchPosition() {
+  return {
+    x:model.x-HITCH_OFFSET*Math.cos(model.heading),
+    y:model.y-HITCH_OFFSET*Math.sin(model.heading)
+  };
+}
+
+function trailerAxlePosition() {
+  const h=hitchPosition();
+  const d=dimensions();
+  return {
+    x:h.x-d.axle*Math.cos(model.trailerHeading),
+    y:h.y-d.axle*Math.sin(model.trailerHeading)
+  };
+}
+
+function update(dt) {
+  dt=Math.min(dt,0.04);
+
+  const d=dimensions();
+
+  const steeringRate=1.8;
+  const diff=model.steering-model.actualSteering;
+  model.actualSteering+=Math.max(
+    -steeringRate*dt,
+    Math.min(steeringRate*dt,diff)
+  );
+
+  if(model.brake) {
+    model.speed*=Math.max(0,1-8*dt);
+  } else {
+    model.speed+=model.throttle*1.6*dt;
+
+    if(model.throttle===0) {
+      model.speed*=Math.max(0,1-0.45*dt);
+    }
+  }
+
+  model.speed=Math.max(-MAX_SPEED,Math.min(MAX_SPEED,model.speed));
+
+  const v=model.speed;
+  const theta=model.heading;
+  const yawRate=v/d.wheelbase*Math.tan(model.actualSteering);
+
+  const vx=v*Math.cos(theta);
+  const vy=v*Math.sin(theta);
+
+  const hitchVx=vx+yawRate*HITCH_OFFSET*Math.sin(theta);
+  const hitchVy=vy-yawRate*HITCH_OFFSET*Math.cos(theta);
+
+  const phi=model.trailerHeading;
+
+  const trailerYawRate=(
+    -Math.sin(phi)*hitchVx+
+    Math.cos(phi)*hitchVy
+  )/d.axle;
+
+  model.x+=vx*dt;
+  model.y+=vy*dt;
+
+  model.heading=normalizeAngle(model.heading+yawRate*dt);
+  model.trailerHeading=normalizeAngle(
+    model.trailerHeading+trailerYawRate*dt
+  );
+
+  if(Math.abs(v)>0.03) {
+    const a=trailerAxlePosition();
+    model.history.push({x:a.x,y:a.y});
+    if(model.history.length>500) model.history.shift();
+  }
+}
+
+function worldToScreen(x,y) {
+  return {
+    x:canvas.width/2+y*SCALE,
+    y:canvas.height*0.70-x*SCALE
+  };
+}
+
+function drawWorldLine(x1,y1,x2,y2,color,width=3,dash=[]) {
+  const a=worldToScreen(x1,y1);
+  const b=worldToScreen(x2,y2);
+
+  ctx.beginPath();
+  ctx.setLineDash(dash);
+  ctx.strokeStyle=color;
+  ctx.lineWidth=width;
+  ctx.moveTo(a.x,a.y);
+  ctx.lineTo(b.x,b.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawPolygon(cx,cy,heading,front,rear,halfWidth,fill,stroke) {
+  const corners=[
+    [front,-halfWidth],
+    [front,halfWidth],
+    [rear,halfWidth],
+    [rear,-halfWidth]
+  ];
+
+  ctx.beginPath();
+
+  corners.forEach(([s,l],i)=>{
+    const wx=cx+s*Math.cos(heading)-l*Math.sin(heading);
+    const wy=cy+s*Math.sin(heading)+l*Math.cos(heading);
+    const p=worldToScreen(wx,wy);
+
+    if(i===0) ctx.moveTo(p.x,p.y);
+    else ctx.lineTo(p.x,p.y);
+  });
+
+  ctx.closePath();
+  ctx.fillStyle=fill;
+  ctx.fill();
+  ctx.strokeStyle=stroke;
+  ctx.lineWidth=3;
+  ctx.stroke();
+}
+
+function drawGrid() {
+  ctx.fillStyle="#17232d";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  const center=worldToScreen(0,0);
+  ctx.strokeStyle="#263744";
+  ctx.lineWidth=1;
+
+  for(let i=-15;i<=15;i++) {
+    const x=center.x+i*SCALE;
+    ctx.beginPath();
+    ctx.moveTo(x,0);
+    ctx.lineTo(x,canvas.height);
+    ctx.stroke();
+
+    const y=center.y-i*SCALE;
+    ctx.beginPath();
+    ctx.moveTo(0,y);
+    ctx.lineTo(canvas.width,y);
+    ctx.stroke();
+  }
+
+  const gate=dimensions().gate;
+
+  drawWorldLine(12,-gate/2,12,gate/2,"#ffbd59",6);
+
+  const gp=worldToScreen(12,0);
+  ctx.fillStyle="#ffbd59";
+  ctx.font="bold 20px sans-serif";
+  ctx.fillText("ВОРОТА",gp.x+12,gp.y-12);
+}
+
+function drawHistory() {
+  if(model.history.length<2) return;
+
+  ctx.beginPath();
+
+  model.history.forEach((p,i)=>{
+    const s=worldToScreen(p.x,p.y);
+    if(i===0) ctx.moveTo(s.x,s.y);
+    else ctx.lineTo(s.x,s.y);
+  });
+
+  ctx.strokeStyle="#36d399";
+  ctx.lineWidth=3;
+  ctx.setLineDash([8,6]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawVehicle() {
+  const d=dimensions();
+  const hitch=hitchPosition();
+  const axle=trailerAxlePosition();
+
+  const trailerCenterX=
+    axle.x+(d.length-d.axle)/2*Math.cos(model.trailerHeading);
+
+  const trailerCenterY=
+    axle.y+(d.length-d.axle)/2*Math.sin(model.trailerHeading);
+
+  drawPolygon(
+    trailerCenterX,
+    trailerCenterY,
+    model.trailerHeading,
+    d.length/2,
+    d.length/2,
+    d.width/2,
+    "#285b78",
+    "#8bd7ff"
+  );
+
+  // Три оси полуприцепа.
+  for(let i=0;i<3;i++) {
+    const offset=(i-1)*1.25;
+    const p=worldToScreen(
+      axle.x+offset*Math.cos(model.trailerHeading),
+      axle.y+offset*Math.sin(model.trailerHeading)
+    );
+
+    ctx.fillStyle="#111820";
+    ctx.fillRect(p.x-6,p.y-34,12,68);
+  }
+
+  // Корпус тягача.
+  drawPolygon(
+    model.x,
+    model.y,
+    model.heading,
+    4.0,
+    1.5,
+    1.25,
+    "#167d55",
+    "#65e0a9"
+  );
+
+  // Кабина.
+  drawPolygon(
+    model.x+2.9*Math.cos(model.heading),
+    model.y+2.9*Math.sin(model.heading),
+    model.heading,
+    1.1,
+    -0.7,
+    1.15,
+    "#2ebd83",
+    "#a1f2cf"
+  );
+
+  // Точка сцепки.
+  const hp=worldToScreen(hitch.x,hitch.y);
+  ctx.beginPath();
+  ctx.arc(hp.x,hp.y,7,0,Math.PI*2);
+  ctx.fillStyle="#ffbd59";
+  ctx.fill();
+
+  // Линия направления тягача.
+  const front=worldToScreen(
+    model.x+5*Math.cos(model.heading),
+    model.y+5*Math.sin(model.heading)
+  );
+
+  const rear=worldToScreen(model.x,model.y);
+
+  ctx.beginPath();
+  ctx.moveTo(rear.x,rear.y);
+  ctx.lineTo(front.x,front.y);
+  ctx.strokeStyle="#ffffff";
+  ctx.lineWidth=2;
+  ctx.stroke();
+}
+
+function render() {
+  drawGrid();
+  drawHistory();
+  drawVehicle();
+
+  const articulation=normalizeAngle(
+    model.heading-model.trailerHeading
+  );
+
+  const degrees=articulation*180/Math.PI;
+  const steer=model.actualSteering*180/Math.PI;
+
+  ui.angle.textContent=degrees.toFixed(1)+"°";
+  ui.speed.textContent=(Math.abs(model.speed)*3.6).toFixed(1)+" км/ч";
+  ui.steerValue.textContent=steer.toFixed(1)+"°";
+
+  ui.state.textContent=model.brake
+    ?"Торможение"
+    :model.speed>0.05
+      ?"Вперёд"
+      :model.speed< -0.05
+        ?"Назад"
+        :"Стоянка";
+
+  if(Math.abs(degrees)>45) ui.angle.style.color="#ff6262";
+  else if(Math.abs(degrees)>25) ui.angle.style.color="#ffbd59";
+  else ui.angle.style.color="#36d399";
+}
+
+function setSteering(degrees) {
+  model.steering=degrees*Math.PI/180;
+  ui.steering.value=degrees;
+  ui.steerText.textContent=degrees+"°";
+}
+
+ui.steering.addEventListener("input",()=>{
+  setSteering(Number(ui.steering.value));
+});
+
+document.getElementById("left").addEventListener("click",()=>{
+  setSteering(-25);
+});
+
+document.getElementById("center").addEventListener("click",()=>{
+  setSteering(0);
+});
+
+document.getElementById("right").addEventListener("click",()=>{
+  setSteering(25);
+});
+
+function bindHold(id,throttle) {
+  const button=document.getElementById(id);
+
+  const start=e=>{
+    e.preventDefault();
+    model.throttle=throttle;
+    model.brake=false;
+  };
+
+  const stop=e=>{
+    e.preventDefault();
+    model.throttle=0;
+  };
+
+  button.addEventListener("pointerdown",start);
+  button.addEventListener("pointerup",stop);
+  button.addEventListener("pointerleave",stop);
+  button.addEventListener("pointercancel",stop);
+}
+
+bindHold("forward",1);
+bindHold("reverse",-1);
+
+const brakeButton=document.getElementById("brake");
+
+brakeButton.addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  model.brake=true;
+  model.throttle=0;
+});
+
+function releaseBrake() {
+  model.brake=false;
+}
+
+brakeButton.addEventListener("pointerup",releaseBrake);
+brakeButton.addEventListener("pointerleave",releaseBrake);
+brakeButton.addEventListener("pointercancel",releaseBrake);
+
+document.getElementById("reset").addEventListener("click",()=>{
+  model.x=0;
+  model.y=0;
+  model.heading=0;
+  model.trailerHeading=0;
+  model.speed=0;
+  model.steering=0;
+  model.actualSteering=0;
+  model.throttle=0;
+  model.brake=false;
+  model.history=[];
+  setSteering(0);
+});
+
+document.getElementById("checkGate").addEventListener("click",()=>{
+  const d=dimensions();
+  const clearance=d.gate-d.width;
+
+  let message="";
+
+  if(clearance<0) {
+    message="⛔ По ширине не проходит: полуприцеп шире ворот на "+
+      Math.abs(clearance).toFixed(2)+" м.";
+    ui.gateResult.style.color="#ff7777";
+  } else if(clearance<0.3) {
+    message="⚠️ Очень маленький запас: "+
+      clearance.toFixed(2)+" м суммарно.";
+    ui.gateResult.style.color="#ffbd59";
+  } else {
+    message="Предварительно проходит по ширине. Общий запас: "+
+      clearance.toFixed(2)+" м. При идеальном центрировании — "+
+      (clearance/2).toFixed(2)+" м с каждой стороны.";
+    ui.gateResult.style.color="#36d399";
+  }
+
+  message+=" Это сравнение ширины, а не проверка траектории и безопасности манёвра.";
+  ui.gateResult.textContent=message;
+});
+
+// Работа с камерой iPhone.
+let cameraStream=null;
+
+const video=document.getElementById("video");
+const cameraBox=document.getElementById("cameraBox");
+const cameraMessage=document.getElementById("cameraMessage");
+
+document.getElementById("cameraButton").addEventListener("click",async()=>{
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    cameraBox.style.display="block";
+    cameraMessage.textContent=
+      "Камера недоступна. Открой страницу в Safari через HTTPS.";
+    return;
+  }
+
+  try {
+    cameraStream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:"environment"}},
+      audio:false
+    });
+
+    video.srcObject=cameraStream;
+    cameraBox.style.display="block";
+    cameraMessage.textContent=
+      "Камера работает. Автоматическое измерение ворот пока не реализовано.";
+  } catch(error) {
+    cameraBox.style.display="block";
+    cameraMessage.textContent=
+      "Не удалось включить камеру: "+error.message+
+      ". Проверь разрешение Safari.";
+  }
+});
+
+function stopCamera() {
+  if(cameraStream) {
+    cameraStream.getTracks().forEach(track=>track.stop());
+    cameraStream=null;
+  }
+
+  video.srcObject=null;
+  cameraBox.style.display="none";
+}
+
+document.getElementById("cameraOff").addEventListener("click",stopCamera);
+window.addEventListener("pagehide",stopCamera);
+
+function loop(timestamp) {
+  if(!model.lastTime) model.lastTime=timestamp;
+
+  const dt=(timestamp-model.lastTime)/1000;
+  model.lastTime=timestamp;
+
+  update(dt);
+  render();
+
+  requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
