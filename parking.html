@@ -3,20 +3,19 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#101820">
 <title>TruckVision 360</title>
 <style>
-:root{color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;background:#101820;color:#f5f8fb;font:15px system-ui,sans-serif}
-header{text-align:center;padding:17px;background:#182633}
+header{text-align:center;padding:18px;background:#182633}
 h1{margin:0;color:#43c9ff}
 main{max-width:1100px;margin:auto;padding:12px;display:grid;gap:12px}
 .panel{background:#1b2a37;border:1px solid #354b5e;border-radius:13px;padding:13px}
 .tabs,.controls{display:flex;flex-wrap:wrap;gap:8px}
-button,select{border:0;border-radius:9px;padding:11px;background:#1768b5;color:white;font-weight:650}
-button{cursor:pointer}
+button{border:0;border-radius:9px;padding:11px;background:#1768b5;color:white;font-weight:650}
+button:active{filter:brightness(1.3)}
 .secondary{background:#43566a}
 .stop{background:#a43b3b}
 .layout{display:grid;grid-template-columns:1.4fr 1fr;gap:12px}
@@ -24,16 +23,12 @@ button{cursor:pointer}
 .metric{background:#14212c;border-radius:9px;padding:10px;color:#aebdca;font-size:12px}
 .metric strong{display:block;color:white;font-size:18px;margin-top:4px}
 label{display:block;margin:10px 0 5px;color:#c5d2df;font-size:13px}
-input,select{width:100%;background:#101820;border:1px solid #526579;color:white;padding:9px;border-radius:8px}
+input,select{width:100%;background:#101820;border:1px solid #526579;color:white;padding:10px;border-radius:8px}
 input[type=range]{padding:0}
 canvas{width:100%;height:auto;display:block;border-radius:9px;background:#314944}
-.status{padding:10px;background:#14212c;border-radius:9px;line-height:1.5}
+.status{padding:11px;background:#14212c;border-radius:9px;line-height:1.5}
 .note{font-size:12px;color:#aebdca;line-height:1.5}
 .hidden{display:none}
-h2,h3{margin:4px 0 12px}
-.good{border:1px solid #42a879}
-.warn{border:1px solid #e6a23c}
-.bad{border:1px solid #d9534f}
 @media(max-width:720px){.layout{grid-template-columns:1fr}}
 </style>
 </head>
@@ -60,14 +55,14 @@ h2,h3{margin:4px 0 12px}
 <div class="metric">Угол сцепки<strong id="articulation">0°</strong></div>
 <div class="metric">Пройдено<strong id="distance">0 м</strong></div>
 <div class="metric">Ускорение<strong id="acceleration">0 м/с²</strong></div>
-<div class="metric">Сцепление<strong id="grip">0%</strong></div>
+<div class="metric">Сцепление<strong id="grip">85%</strong></div>
 <div class="metric">Крен кузова<strong id="roll">0°</strong></div>
 </div>
 </div>
 <div class="panel">
 <h3>Управление автопоездом</h3>
 <div class="status" id="driveStatus">Автопоезд остановлен</div>
-<label>Скорость: <span id="speedTargetText">10</span> км/ч</label>
+<label>Целевая скорость: <span id="speedTargetText">10</span> км/ч</label>
 <input id="targetSpeed" type="range" min="1" max="60" value="10">
 <label>Поворот руля: <span id="steerText">0</span>°</label>
 <input id="steer" type="range" min="-35" max="35" value="0">
@@ -87,47 +82,47 @@ h2,h3{margin:4px 0 12px}
 <option value="0.12">Лёд</option>
 <option value="0.65">Укатанный грунт</option>
 </select>
-<p class="note">Учебная симуляция, не управление настоящим грузовиком.</p>
+<p class="note">Демонстрационная модель, не для управления настоящим грузовиком.</p>
 </div>
 </section>
 
 <section id="physicsView" class="hidden">
 <div class="layout">
 <div class="panel">
-<h3>Параметры тягача и прицепа</h3>
+<h3>Параметры автопоезда</h3>
 <div class="grid">
 <div><label>Полная масса, кг</label><input id="mass" type="number" value="36000"></div>
 <div><label>Масса тягача, кг</label><input id="tractorMass" type="number" value="8500"></div>
 <div><label>Колёсная база, м</label><input id="wheelbase" type="number" value="3.8" step=".05"></div>
+<div><label>Задняя ось — сцепка, м</label><input id="hitchOffset" type="number" value="0.5" step=".05"></div>
 <div><label>Длина прицепа, м</label><input id="trailerLength" type="number" value="13.6" step=".1"></div>
 <div><label>Ширина, м</label><input id="vehicleWidth" type="number" value="2.55" step=".05"></div>
 <div><label>Высота центра тяжести, м</label><input id="cgHeight" type="number" value="1.5" step=".05"></div>
-<div><label>Радиус колеса, м</label><input id="wheelRadius" type="number" value=".5" step=".01"></div>
 <div><label>Жёсткость подвески, Н/м</label><input id="suspension" type="number" value="350000"></div>
 </div>
-<p class="note">Начальные значения условные. Для точной модели нужны данные конкретного шасси.</p>
+<p class="note">Начальные параметры условные. Для точной модели нужны заводские данные конкретного шасси и прицепа.</p>
 </div>
 <div class="panel">
 <h3>Физические показатели</h3>
 <div class="grid">
 <div class="metric">Нагрузка тягача<strong id="tractorLoad">—</strong></div>
 <div class="metric">Нагрузка прицепа<strong id="trailerLoad">—</strong></div>
-<div class="metric">Нагрузка на колесо<strong id="wheelLoad">—</strong></div>
+<div class="metric">Условная нагрузка на колесо<strong id="wheelLoad">—</strong></div>
 <div class="metric">Сила сцепления<strong id="gripForce">—</strong></div>
-<div class="metric">Скольжение<strong id="slip">—</strong></div>
+<div class="metric">Расчётное скольжение<strong id="slip">—</strong></div>
 <div class="metric">Подвеска<strong id="suspensionRead">—</strong></div>
 </div>
 </div>
 </div>
 <div class="panel">
-<h3>ABS / EBS — учебная модель</h3>
+<h3>ABS / EBS — демонстрация</h3>
 <div class="grid">
 <div class="metric">ABS<strong id="absState">Ожидание</strong></div>
 <div class="metric">EBS<strong id="ebsState">Ожидание</strong></div>
-<div class="metric">Тормоза тягача<strong id="tractorBrake">0%</strong></div>
-<div class="metric">Тормоза прицепа<strong id="trailerBrake">0%</strong></div>
+<div class="metric">Торможение тягача<strong id="tractorBrake">0%</strong></div>
+<div class="metric">Торможение прицепа<strong id="trailerBrake">0%</strong></div>
 </div>
-<p class="note">Демонстрационная логика, не заводские алгоритмы Volvo или производителей тормозных систем.</p>
+<p class="note">Это не реальные алгоритмы ABS/EBS Volvo или производителей тормозных систем.</p>
 </div>
 </section>
 
@@ -143,16 +138,15 @@ h2,h3{margin:4px 0 12px}
 <label>Погрешность измерения, м</label>
 <input id="measurementError" type="number" value=".10" step=".01">
 <button id="evaluate" style="margin-top:12px">Рассчитать манёвр</button>
-<p class="note">Угол сцепки и положение руля берутся из текущей модели движения.</p>
 </div>
 <div class="panel">
 <h3>Результат оценки</h3>
-<div class="status" id="parkingResult">Введи параметры и запусти расчёт.</div>
+<div class="status" id="parkingResult">Введи параметры и рассчитай манёвр.</div>
 <div class="grid" style="margin-top:10px">
-<div class="metric">Запас ширины<strong id="clearance">—</strong></div>
+<div class="metric">Предварительный запас<strong id="clearance">—</strong></div>
 <div class="metric">Сложность<strong id="difficulty">—</strong></div>
 <div class="metric">Рекомендация<strong id="direction">—</strong></div>
-<div class="metric">Уверенность<strong id="confidence">—</strong></div>
+<div class="metric">Качество измерения<strong id="confidence">—</strong></div>
 </div>
 </div>
 </section>
@@ -161,406 +155,363 @@ h2,h3{margin:4px 0 12px}
 <h3>Тормозной путь</h3>
 <div class="grid">
 <div class="metric">Тормозной путь<strong id="brakeDistance">—</strong></div>
-<div class="metric">Полный путь<strong id="totalDistance">—</strong></div>
-<div class="metric">Время остановки<strong id="stopTime">—</strong></div>
+<div class="metric">Полный путь с задержкой<strong id="totalDistance">—</strong></div>
+<div class="metric">Время торможения<strong id="stopTime">—</strong></div>
 <div class="metric">Замедление<strong id="decel">—</strong></div>
 </div>
 </section>
 
 <section class="panel">
-<strong>Важное предупреждение</strong>
-<p class="note">TruckVision 360 пока является исследовательским прототипом. Не используй его для управления грузовиком или принятия решений о безопасности. Для реального применения необходимы проверенная физическая модель, заводские данные и испытания.</p>
+<strong>Важно</strong>
+<p class="note">Это исследовательский прототип. Модель движения, физика и ABS/EBS не проверены и не сертифицированы для реального автомобиля. Не используй их для принятия решений о безопасности.</p>
 </section>
 </main>
 
 <script>
 "use strict";
-(()=>{
-const $=id=>document.getElementById(id);
-const canvas=$("scene");
-const ctx=canvas.getContext("2d");
 
-const s={
- x:450,y:300,yaw:-Math.PI/2,trailerYaw:-Math.PI/2,
- speed:0,acceleration:0,steer:0,drive:0,braking:false,
- distance:0,roll:0,slip:0,abs:false,last:0,trail:[]
+const $ = id => document.getElementById(id);
+const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
+const rad = d=>d*Math.PI/180;
+const deg = r=>r*180/Math.PI;
+
+const state = {
+ x:0,
+ y:0,
+ yaw:0,
+ trailerYaw:0,
+ speed:0,
+ acceleration:0,
+ distance:0,
+ direction:0,
+ steering:0,
+ braking:false,
+ roll:0,
+ slip:0,
+ lastTime:0
 };
 
-const scale=13;
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const norm=a=>Math.atan2(Math.sin(a),Math.cos(a));
+let lastFrame = 0;
+let animationId = null;
 
-function val(id,d){
- const n=Number($(id).value);
- return Number.isFinite(n)?n:d;
+function value(id, fallback=0){
+ const v = Number($(id).value);
+ return Number.isFinite(v) ? v : fallback;
 }
 
 function params(){
- const total=Math.max(10000,val("mass",36000));
- const tractor=Math.min(total,Math.max(5000,val("tractorMass",8500)));
- return{
-  total,tractor,trailer:total-tractor,
-  wheelbase:clamp(val("wheelbase",3.8),3,6),
-  trailerLength:clamp(val("trailerLength",13.6),8,16),
-  width:clamp(val("vehicleWidth",2.55),2,3),
-  cg:clamp(val("cgHeight",1.5),.5,3),
-  stiffness:clamp(val("suspension",350000),100000,800000),
-  mu:clamp(val("surface",.85),.05,1.2)
+ return {
+  mass:Math.max(1000,value("mass",36000)),
+  tractorMass:Math.max(1000,value("tractorMass",8500)),
+  wheelbase:Math.max(1,value("wheelbase",3.8)),
+  hitchOffset:Math.max(0,value("hitchOffset",.5)),
+  trailerLength:Math.max(2,value("trailerLength",13.6)),
+  width:Math.max(1,value("vehicleWidth",2.55)),
+  cgHeight:Math.max(.2,value("cgHeight",1.5)),
+  suspension:Math.max(1000,value("suspension",350000))
  };
 }
 
-function hitch(){
- return{
-  x:s.x-Math.cos(s.yaw)*3*scale,
-  y:s.y-Math.sin(s.yaw)*3*scale
- };
+function setText(id,text){
+ $(id).textContent=text;
 }
 
-function vehicle(x,y,yaw,length,width,color,axles){
+function setTab(name){
+ const names=["drive","physics","parking"];
+ names.forEach(n=>{
+  $(n+"View").classList.toggle("hidden",n!==name);
+  $("tab"+n[0].toUpperCase()+n.slice(1)).classList.toggle("secondary",n!==name);
+ });
+ if(name==="drive") draw();
+}
+
+$("tabDrive").onclick=()=>setTab("drive");
+$("tabPhysics").onclick=()=>setTab("physics");
+$("tabParking").onclick=()=>setTab("parking");
+
+$("targetSpeed").addEventListener("input",()=>{
+ setText("speedTargetText",$("targetSpeed").value);
+});
+$("steer").addEventListener("input",()=>{
+ state.steering=value("steer");
+ setText("steerText",Math.round(state.steering));
+});
+
+$("forward").onclick=()=>{
+ state.direction=1;
+ state.braking=false;
+};
+$("reverse").onclick=()=>{
+ state.direction=-1;
+ state.braking=false;
+};
+$("brake").onclick=()=>{
+ state.braking=true;
+ state.direction=0;
+};
+$("left").onclick=()=>{
+ state.steering=-25;
+ $("steer").value=-25;
+ setText("steerText","-25");
+};
+$("right").onclick=()=>{
+ state.steering=25;
+ $("steer").value=25;
+ setText("steerText","25");
+};
+
+$("reset").onclick=()=>{
+ Object.assign(state,{
+  x:0,y:0,yaw:0,trailerYaw:0,speed:0,
+  acceleration:0,distance:0,direction:0,
+  steering:0,braking:false,roll:0,slip:0
+ });
+ $("steer").value=0;
+ setText("steerText","0");
+ setText("driveStatus","Автопоезд остановлен");
+ updateReadouts();
+ draw();
+};
+
+function updatePhysics(dt){
+ const p=params();
+ const grip=value("surface",.85);
+ const maxSpeed=value("targetSpeed",10)/3.6;
+ const oldSpeed=state.speed;
+
+ let desired=state.direction*maxSpeed;
+ if(state.braking) desired=0;
+
+ let acceleration;
+ if(state.braking){
+  acceleration=-Math.sign(state.speed)*Math.min(4.5,grip*7);
+ }else{
+  acceleration=clamp((desired-state.speed)*1.3,-1.5,1.2);
+ }
+
+ state.speed+=acceleration*dt;
+ if(Math.abs(state.speed)<.015)state.speed=0;
+
+ state.acceleration=(state.speed-oldSpeed)/Math.max(dt,.001);
+
+ const steer=rad(state.steering);
+ const beta=Math.atan(.5*Math.tan(steer));
+ const yawRate=state.speed*Math.cos(beta)*Math.tan(steer)/p.wheelbase;
+
+ state.yaw+=yawRate*dt;
+ state.x+=state.speed*Math.cos(state.yaw+beta)*dt;
+ state.y+=state.speed*Math.sin(state.yaw+beta)*dt;
+
+ // Кинематическая оценка поворота прицепа.
+ const hitchX=state.x-p.hitchOffset*Math.cos(state.yaw);
+ const hitchY=state.y-p.hitchOffset*Math.sin(state.yaw);
+ const trailerX=hitchX-p.trailerLength*Math.cos(state.trailerYaw);
+ const trailerY=hitchY-p.trailerLength*Math.sin(state.trailerYaw);
+
+ const lateral=-state.speed*Math.sin(state.trailerYaw-state.yaw);
+ const trailerYawRate=lateral/Math.max(1,p.trailerLength);
+ state.trailerYaw+=trailerYawRate*dt;
+
+ state.distance+=Math.abs(state.speed)*dt;
+ state.roll=clamp(yawRate*state.speed*p.cgHeight/9.81*12,-8,8);
+
+ const idealBrake=Math.abs(state.acceleration)/9.81;
+ state.slip=clamp(idealBrake/Math.max(.05,grip)*100,0,100);
+
+ updateReadouts();
+}
+
+function updateReadouts(){
+ const p=params();
+ const grip=value("surface",.85);
+ const speed=Math.abs(state.speed);
+ const angle=deg(state.yaw-state.trailerYaw);
+
+ setText("speed",(speed*3.6).toFixed(1)+" км/ч");
+ setText("articulation",angle.toFixed(1)+"°");
+ setText("distance",state.distance.toFixed(1)+" м");
+ setText("acceleration",state.acceleration.toFixed(2)+" м/с²");
+ setText("grip",Math.round(grip*100)+"%");
+ setText("roll",state.roll.toFixed(1)+"°");
+
+ const trailerMass=Math.max(0,p.mass-p.tractorMass);
+ setText("tractorLoad",Math.round(p.tractorMass*9.81/1000)+" кН");
+ setText("trailerLoad",Math.round(trailerMass*9.81/1000)+" кН");
+ setText("wheelLoad",Math.round(p.mass*9.81/10)+" Н");
+ setText("gripForce",Math.round(p.mass*9.81*grip/1000)+" кН");
+ setText("slip",state.slip.toFixed(1)+"%");
+ setText("suspensionRead",(p.suspension/1000).toFixed(0)+" кН/м");
+
+ const braking=state.braking?100:clamp(Math.abs(state.acceleration)/4.5*100,0,100);
+ setText("tractorBrake",Math.round(braking)+"%");
+ setText("trailerBrake",Math.round(braking*.9)+"%");
+ setText("absState",braking>10 && state.slip>60?"Активность (условно)":"Ожидание");
+ setText("ebsState",braking>10?"Торможение (условно)":"Ожидание");
+
+ if(state.braking){
+  setText("driveStatus","Торможение");
+ }else if(state.speed>0.05){
+  setText("driveStatus","Движение вперёд");
+ }else if(state.speed<-.05){
+  setText("driveStatus","Движение назад");
+ }else{
+  setText("driveStatus","Автопоезд остановлен");
+ }
+
+ const decel=Math.max(.1,grip*5.5);
+ const stopping=speed*speed/(2*decel);
+ const delay=.8;
+ setText("brakeDistance",stopping.toFixed(1)+" м");
+ setText("totalDistance",(stopping+speed*delay).toFixed(1)+" м");
+ setText("stopTime",(speed/decel).toFixed(1)+" с");
+ setText("decel",decel.toFixed(2)+" м/с²");
+}
+
+function drawTruck(ctx,x,y,yaw,length,width,color){
  ctx.save();
  ctx.translate(x,y);
  ctx.rotate(yaw);
  ctx.fillStyle=color;
- ctx.strokeStyle="#0c1820";
- ctx.lineWidth=3;
- ctx.fillRect(-length*scale/2,-width*scale/2,length*scale,width*scale);
- ctx.strokeRect(-length*scale/2,-width*scale/2,length*scale,width*scale);
- ctx.fillStyle="#101010";
- axles.forEach(a=>{
-  ctx.fillRect(a*scale-6,-width*scale/2-6,13,6);
-  ctx.fillRect(a*scale-6,width*scale/2,13,6);
- });
+ ctx.fillRect(-length/2,-width/2,length,width);
+ ctx.fillStyle="#101820";
+ ctx.fillRect(length*.12,-width*.43,length*.22,width*.86);
+ ctx.fillStyle="#b9d9e8";
+ ctx.fillRect(length*.20,-width*.35,length*.10,width*.70);
+ ctx.fillStyle="#111";
+ for(const wx of [-length*.32,length*.32]){
+  for(const wy of [-width*.58,width*.58]){
+   ctx.fillRect(wx-7,wy-5,14,10);
+  }
+ }
  ctx.restore();
 }
 
 function draw(){
- ctx.clearRect(0,0,900,580);
- ctx.fillStyle="#314944";
- ctx.fillRect(0,0,900,580);
+ const canvas=$("scene");
+ const ctx=canvas.getContext("2d");
+ const w=canvas.width,h=canvas.height;
+ ctx.clearRect(0,0,w,h);
+
+ ctx.fillStyle="#36554a";
+ ctx.fillRect(0,0,w,h);
+
  ctx.strokeStyle="rgba(255,255,255,.10)";
-
- for(let x=0;x<900;x+=40){
-  ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,580);ctx.stroke();
+ ctx.lineWidth=1;
+ for(let x=0;x<w;x+=45){
+  ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();
  }
- for(let y=0;y<580;y+=40){
-  ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(900,y);ctx.stroke();
+ for(let y=0;y<h;y+=45){
+  ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();
  }
 
- ctx.strokeStyle="#ffe16a";
- ctx.lineWidth=5;
- ctx.setLineDash([15,10]);
- ctx.strokeRect(650,80,180,420);
+ ctx.fillStyle="#626b72";
+ ctx.fillRect(0,h*.28,w,h*.48);
+ ctx.strokeStyle="#e8e4bb";
+ ctx.setLineDash([25,20]);
+ ctx.lineWidth=3;
+ ctx.beginPath();ctx.moveTo(0,h*.52);ctx.lineTo(w,h*.52);ctx.stroke();
  ctx.setLineDash([]);
 
- const p=params(),h=hitch();
+ const scale=13;
+ const cx=w/2-state.x*scale;
+ const cy=h/2+state.y*scale;
 
- if(s.trail.length>1){
-  ctx.beginPath();
-  ctx.moveTo(s.trail[0].x,s.trail[0].y);
-  s.trail.forEach(v=>ctx.lineTo(v.x,v.y));
-  ctx.strokeStyle="#39d5ff";
-  ctx.lineWidth=3;
-  ctx.stroke();
- }
+ const p=params();
+ const tractorL=7.2*scale;
+ const truckW=2.55*scale;
+ const trailerL=p.trailerLength*scale;
+ const trailerW=p.width*scale;
 
- vehicle(
-  h.x-Math.cos(s.trailerYaw)*p.trailerLength*scale/2,
-  h.y-Math.sin(s.trailerYaw)*p.trailerLength*scale/2,
-  s.trailerYaw,p.trailerLength,p.width,"#d6dce0",[-5.2,0,5.2]
- );
+ const hitchX=cx-p.hitchOffset*scale*Math.cos(state.yaw);
+ const hitchY=cy+p.hitchOffset*scale*Math.sin(state.yaw);
 
- vehicle(s.x,s.y,s.yaw,7.2,2.55,"#168fc1",[-2.1,1.8]);
+ const trailerX=hitchX-trailerL*.5*Math.cos(state.trailerYaw);
+ const trailerY=hitchY+trailerL*.5*Math.sin(state.trailerYaw);
 
- ctx.beginPath();
- ctx.moveTo(h.x,h.y);
- ctx.lineTo(h.x-Math.cos(s.trailerYaw)*20,h.y-Math.sin(s.trailerYaw)*20);
- ctx.strokeStyle="#ffcf59";
+ ctx.strokeStyle="#d9e7ee";
  ctx.lineWidth=5;
+ ctx.beginPath();
+ ctx.moveTo(hitchX,hitchY);
+ ctx.lineTo(hitchX-12*Math.cos(state.trailerYaw),hitchY+12*Math.sin(state.trailerYaw));
  ctx.stroke();
+
+ drawTruck(ctx,trailerX,trailerY,-state.trailerYaw,trailerL,trailerW,"#d4a33b");
+ drawTruck(ctx,cx,cy,-state.yaw,tractorL,truckW,"#168bd1");
+
+ ctx.fillStyle="white";
+ ctx.font="bold 16px system-ui";
+ ctx.fillText("VOLVO FH",cx-45,cy+5);
+
+ ctx.fillStyle="#fff";
+ ctx.font="13px system-ui";
+ ctx.fillText("Полуприцеп · 3 оси",trailerX-55,trailerY+5);
+
+ ctx.fillStyle="#43c9ff";
+ ctx.beginPath();ctx.arc(cx,cy,5,0,Math.PI*2);ctx.fill();
+
+ ctx.fillStyle="rgba(0,0,0,.55)";
+ ctx.fillRect(12,12,220,54);
+ ctx.fillStyle="white";
+ ctx.font="14px system-ui";
+ ctx.fillText("TruckVision 360 · DEMO",23,34);
+ ctx.fillText("Угол сцепки: "+deg(state.yaw-state.trailerYaw).toFixed(1)+"°",23,54);
 }
 
-function brakeDisplay(){
- const p=params(),v=Math.abs(s.speed);
- const a=Math.max(.1,p.mu*9.81*.65);
- $("brakeDistance").textContent=(v*v/(2*a)).toFixed(1)+" м";
- $("totalDistance").textContent=(v*v/(2*a)+v*1.5).toFixed(1)+" м";
- $("stopTime").textContent=(v/a).toFixed(1)+" с";
- $("decel").textContent=a.toFixed(2)+" м/с²";
-}
-
-function physics(dt){
- const p=params(),v=s.speed;
- const target=s.drive*val("targetSpeed",10)/3.6;
- const requested=clamp((target-v)*1.4,-1.1,1.1);
- const frontStatic=p.tractor*9.81*.42;
- const rearStatic=p.tractor*9.81*.58;
- const transfer=p.tractor*s.acceleration*p.cg/p.wheelbase;
- const frontLoad=Math.max(0,frontStatic-transfer);
- const rearLoad=Math.max(0,rearStatic+transfer);
- const totalNormal=frontLoad+rearLoad+p.trailer*9.81;
- const maxGrip=p.mu*totalNormal;
- const desiredBrake=s.braking?Math.min(5.5,p.mu*9.81*.75):0;
- const limitedBrake=Math.min(desiredBrake*p.total,maxGrip);
- const rawSlip=s.braking?clamp(desiredBrake/(p.mu*9.81||1)-.65,0,.5):0;
-
- s.slip=rawSlip;
- s.abs=s.braking&&rawSlip>.08;
-
- const brakeDecel=(s.abs?limitedBrake*.78:limitedBrake)/p.total;
- let acceleration=requested-Math.sign(v||1)*.025*v*Math.abs(v);
-
- if(s.braking)acceleration=-Math.sign(v||1)*brakeDecel;
- else if(s.drive===0)acceleration-=Math.sign(v||1)*.12;
-
- const previous=s.speed;
- s.speed+=acceleration*dt;
-
- if(s.drive===0&&!s.braking&&Math.abs(s.speed)<.04)s.speed=0;
- if(s.braking&&Math.sign(previous)!==Math.sign(s.speed))s.speed=0;
-
- s.acceleration=(s.speed-previous)/Math.max(dt,.0001);
-
- const yawRate=s.speed/p.wheelbase*Math.tan(s.steer*Math.PI/180);
- s.yaw+=yawRate*dt;
-
- const ds=s.speed*dt;
- s.x+=Math.cos(s.yaw)*ds*scale;
- s.y+=Math.sin(s.yaw)*ds*scale;
- s.distance+=Math.abs(ds);
-
- const h=hitch();
- const axle={
-  x:h.x-Math.cos(s.trailerYaw)*p.trailerLength*scale,
-  y:h.y-Math.sin(s.trailerYaw)*p.trailerLength*scale
- };
-
- const desiredYaw=Math.atan2(h.y-axle.y,h.x-axle.x);
- const articulation=norm(s.yaw-s.trailerYaw);
- const rate=s.speed/Math.max(1,p.trailerLength)*Math.sin(articulation);
-
- s.trailerYaw+=clamp(
-  norm(desiredYaw-s.trailerYaw),
-  -Math.abs(rate*dt)*2-.002,
-  Math.abs(rate*dt)*2+.002
- );
-
- s.roll+=(clamp(s.speed*yawRate*p.cg/9.81*5,-8,8)-s.roll)*Math.min(1,dt*2.5);
- s.x=clamp(s.x,45,855);
- s.y=clamp(s.y,45,535);
-
- if(!s.trail.length||Math.hypot(s.x-s.trail.at(-1).x,s.y-s.trail.at(-1).y)>2.5){
-  s.trail.push({x:s.x,y:s.y});
-  if(s.trail.length>700)s.trail.shift();
- }
-
- $("speed").textContent=(s.speed*3.6).toFixed(1)+" км/ч";
- $("articulation").textContent=(articulation*180/Math.PI).toFixed(1)+"°";
- $("distance").textContent=s.distance.toFixed(1)+" м";
- $("acceleration").textContent=s.acceleration.toFixed(2)+" м/с²";
- $("grip").textContent=(p.mu*100).toFixed(0)+"%";
- $("roll").textContent=s.roll.toFixed(1)+"°";
-
- $("tractorLoad").textContent=(p.tractor*9.81/1000).toFixed(1)+" кН";
- $("trailerLoad").textContent=(p.trailer*9.81/1000).toFixed(1)+" кН";
- $("wheelLoad").textContent=(totalNormal/10/1000).toFixed(2)+" кН";
- $("gripForce").textContent=(maxGrip/1000).toFixed(1)+" кН";
- $("slip").textContent=(s.slip*100).toFixed(1)+"%";
- $("suspensionRead").textContent=(p.stiffness/1000).toFixed(0)+" кН/м";
-
- $("absState").textContent=s.abs?"Регулирование":"Ожидание";
- $("ebsState").textContent=s.braking?"Торможение":"Ожидание";
- $("tractorBrake").textContent=s.braking?"38%":"0%";
- $("trailerBrake").textContent=s.braking?"62%":"0%";
-
- $("driveStatus").textContent=
-  s.braking?"Торможение":
-  s.drive>0?"Движение вперёд":
-  s.drive<0?"Движение назад":
-  Math.abs(s.speed)>.1?"Свободный ход":"Автопоезд остановлен";
-
- brakeDisplay();
-}
-
-function frame(t){
- const dt=s.last?Math.min((t-s.last)/1000,.035):0;
- s.last=t;
- if(dt>0)physics(dt);
+function frame(timestamp){
+ if(!lastFrame)lastFrame=timestamp;
+ const dt=clamp((timestamp-lastFrame)/1000,0,.05);
+ lastFrame=timestamp;
+ updatePhysics(dt);
  draw();
- requestAnimationFrame(frame);
+ animationId=requestAnimationFrame(frame);
 }
-
-function drive(v){
- s.drive=v;
- s.braking=false;
-}
-
-function reset(){
- Object.assign(s,{
-  x:450,y:300,yaw:-Math.PI/2,trailerYaw:-Math.PI/2,
-  speed:0,acceleration:0,steer:0,drive:0,braking:false,
-  distance:0,roll:0,slip:0,abs:false,trail:[]
- });
- $("steer").value=0;
- $("steerText").textContent="0";
-}
-
-$("forward").onpointerdown=()=>drive(1);
-$("reverse").onpointerdown=()=>drive(-1);
-$("brake").onclick=()=>{s.drive=0;s.braking=true;};
-$("reset").onclick=reset;
-
-["forward","reverse"].forEach(id=>{
- ["pointerup","pointerleave","pointercancel"].forEach(ev=>{
-  $(id).addEventListener(ev,()=>s.drive=0);
- });
-});
-
-function steering(v){
- s.steer=v;
- $("steer").value=v;
- $("steerText").textContent=v;
-}
-
-$("left").onpointerdown=()=>steering(-25);
-$("right").onpointerdown=()=>steering(25);
-
-["left","right"].forEach(id=>{
- ["pointerup","pointerleave","pointercancel"].forEach(ev=>{
-  $(id).addEventListener(ev,()=>steering(0));
- });
-});
-
-$("steer").oninput=e=>steering(+e.target.value);
-$("targetSpeed").oninput=()=>{$("speedTargetText").textContent=$("targetSpeed").value;};
-
-function showTab(name){
- ["drive","physics","parking"].forEach(tab=>{
-  $(tab+"View").classList.toggle("hidden",tab!==name);
-  $("tab"+tab[0].toUpperCase()+tab.slice(1)).classList.toggle("secondary",tab!==name);
- });
-}
-
-$("tabDrive").onclick=()=>showTab("drive");
-$("tabPhysics").onclick=()=>showTab("physics");
-$("tabParking").onclick=()=>showTab("parking");
-
-/* ОЦЕНКА СЛОЖНОСТИ МАНЁВРА */
 
 function evaluateParking(){
  const p=params();
- const gate=val("gateWidth",4);
- const approach=val("approachAngle",0);
- const space=val("approachSpace",20);
- const error=Math.max(0,val("measurementError",.1));
+ const gate=value("gateWidth",4);
+ const angle=Math.abs(value("approachAngle",0));
+ const space=value("approachSpace",20);
+ const error=Math.max(0,value("measurementError",.1));
 
- const articulation=Math.abs(norm(s.yaw-s.trailerYaw)*180/Math.PI);
- const steering=Math.abs(s.steer);
- const angle=Math.abs(approach);
- const effectiveAngle=(angle+articulation)*Math.PI/180;
+ const projectedWidth=p.width/Math.max(.15,Math.cos(rad(Math.min(angle,80))));
+ const clearance=gate-projectedWidth-2*error;
 
- const projectedWidth=
-  p.width*Math.cos(Math.min(effectiveAngle,Math.PI/2))+
-  p.trailerLength*Math.sin(Math.min(effectiveAngle,Math.PI/2));
+ let difficulty="Низкая";
+ if(angle>20 || space<12 || clearance<.8)difficulty="Средняя";
+ if(angle>40 || space<8 || clearance<.4)difficulty="Высокая";
+ if(angle>60 || clearance<0)difficulty="Очень высокая";
 
- const safeWidth=projectedWidth+2*error;
- const clearance=gate-safeWidth;
+ let recommendation="Начать выравнивание по центру";
+ if(angle>15)recommendation="Сначала выровнять тягач относительно ворот";
+ if(angle>35)recommendation="Рассмотреть более широкий заход";
+ if(space<8)recommendation="Недостаточно пространства для уверенного манёвра";
 
- let score=0;
- const reasons=[];
-
- if(clearance<0){
-  score+=50;
-  reasons.push("Расчётная ширина больше ширины ворот");
- }else if(clearance<.3){
-  score+=35;
-  reasons.push("Очень маленький запас по ширине");
- }else if(clearance<.6){
-  score+=20;
-  reasons.push("Ограниченный запас по ширине");
+ let result;
+ if(clearance<=0){
+  result="Предварительно недостаточный запас по ширине. Не считай проезд безопасным.";
+ }else if(clearance<.4){
+  result="Очень маленький расчётный запас. Нужны точные измерения и проверка траектории.";
+ }else{
+  result="Предварительно есть запас по ширине, но траектория всего автопоезда не проверена.";
  }
 
- if(angle>25){
-  score+=25;
-  reasons.push("Большой угол подхода");
- }else if(angle>12){
-  score+=12;
-  reasons.push("Подход не выровнен");
- }
-
- if(articulation>25){
-  score+=25;
-  reasons.push("Большой угол между тягачом и прицепом");
- }else if(articulation>12){
-  score+=12;
-  reasons.push("Автопоезд ещё не выровнен");
- }
-
- if(space<8){
-  score+=25;
-  reasons.push("Мало места для манёвра");
- }else if(space<15){
-  score+=12;
-  reasons.push("Ограничено пространство для манёвра");
- }
-
- if(steering>20){
-  score+=10;
-  reasons.push("Руль сильно повёрнут");
- }
-
- if(error>.15){
-  score+=10;
-  reasons.push("Высокая погрешность измерения");
- }
-
- let difficulty;
- if(clearance<0||score>=65) difficulty="Очень сложно";
- else if(score>=40) difficulty="Сложно";
- else if(score>=20) difficulty="Средне";
- else difficulty="Легко";
-
- let recommendation;
- if(articulation>12) recommendation="Сначала выровнять тягач и прицеп";
- else if(angle>12) recommendation="Скорректировать угол подхода";
- else if(steering>20) recommendation="Вернуть руль ближе к прямому положению";
- else recommendation="Подходить медленно, контролируя обе стороны";
-
- $("clearance").textContent=clearance.toFixed(2)+" м";
- $("difficulty").textContent=difficulty;
- $("direction").textContent=recommendation;
- $("confidence").textContent=
-  error<=.05?"Относительно высокая":error<=.15?"Средняя":"Низкая";
-
- const reasonsText=reasons.length
-  ?reasons.join("; ")
-  :"Критических факторов по введённым параметрам не обнаружено";
-
- $("parkingResult").textContent=
-  "Оценка: "+difficulty+
-  ". Запас ширины: "+clearance.toFixed(2)+" м. "+
-  "Угол сцепки: "+articulation.toFixed(1)+"°. "+
-  "Факторы: "+reasonsText+
-  ". Рекомендация: "+recommendation+
-  ". Предварительный расчёт, не подтверждение безопасности.";
-
- $("parkingResult").className="status";
- if(clearance<0||score>=65) $("parkingResult").classList.add("bad");
- else if(score>=40) $("parkingResult").classList.add("warn");
- else $("parkingResult").classList.add("good");
+ setText("clearance",clearance.toFixed(2)+" м");
+ setText("difficulty",difficulty);
+ setText("direction",recommendation);
+ setText("confidence",error<=.05?"Выше":"Ограниченное");
+ setText("parkingResult",result);
 }
 
 $("evaluate").onclick=evaluateParking;
 
-[
- "mass","tractorMass","wheelbase","trailerLength",
- "vehicleWidth","cgHeight","wheelRadius","suspension","surface"
-].forEach(id=>$(id).addEventListener("input",brakeDisplay));
+["mass","tractorMass","wheelbase","hitchOffset","trailerLength","vehicleWidth","cgHeight","suspension","surface"].forEach(id=>{
+ $(id).addEventListener("input",updateReadouts);
+ $(id).addEventListener("change",updateReadouts);
+});
 
-brakeDisplay();
-evaluateParking();
+updateReadouts();
 draw();
-requestAnimationFrame(frame);
-})();
+animationId=requestAnimationFrame(frame);
 </script>
 </body>
 </html>
