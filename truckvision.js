@@ -407,39 +407,50 @@ function planAStar(start,goal){
 }
 
 function routeMetrics(path){
- let length=0,turns=0,minClearance=Infinity,maxBeta=0,collision=false;
- let previousGear=path[1]?.gear||1,previousSteer=path[1]?.steer||0;
+ let length=0,gearChanges=0,steeringChanges=0,reverseDistance=0,reverseSegments=0;
+ let minClearance=Infinity,maxBeta=0,collision=false;
+ let previousGear=path[0]?.gear||1,previousSteer=path[0]?.steer||0,wasReverse=false;
  for(let i=0;i<path.length;i++){
   const q=path[i];
   maxBeta=Math.max(maxBeta,Math.abs(norm(q.psi-q.psiT))*180/Math.PI);
   if(i>0){
    const prev=path[i-1];
-   length+=Math.hypot(q.x-prev.x,q.y-prev.y);
-   if(q.gear!==previousGear||Math.abs(q.steer-previousSteer)>0.12)turns++;
-   previousGear=q.gear;previousSteer=q.steer;
-  }
+   const segmentLength=Math.hypot(q.x-prev.x,q.y-prev.y);
+   length+=segmentLength;
+   const reversing=q.gear<0;
+   if(reversing){
+    reverseDistance+=segmentLength;
+    if(!wasReverse)reverseSegments++;
+   }
+   if(q.gear!==previousGear)gearChanges++;
+   if(Math.abs(q.steer-previousSteer)>0.12)steeringChanges++;
+   wasReverse=reversing;
+  }else wasReverse=q.gear<0;
+  previousGear=q.gear||previousGear;
+  previousSteer=q.steer||0;
   if(showObstacles){
    const c=planner.clearance(q,obstacles,cfg);
    minClearance=Math.min(minClearance,c.distance);
-   if(c.distance===0)collision=true;
+   if(c.distance<=1e-9)collision=true;
   }
  }
+ const turns=gearChanges+steeringChanges;
  const effectiveClearance=minClearance-2*Math.max(0,cfg.measurementUncertainty);
  const reached=path.length>1&&Math.hypot(path[path.length-1].x-routeGoal.x,path[path.length-1].y-routeGoal.y)<0.9;
  const clearanceInsufficient=Number.isFinite(effectiveClearance)&&effectiveClearance<0.35;
  const articulationBlocked=maxBeta>=55;
- const reverseSegments=path.filter(p=>p.gear<0).length;
- const score=turns*0.8+(reverseSegments>0?1.5:0)+(maxBeta>45?3:maxBeta>30?1.5:0)+
+ const score=gearChanges*1.2+steeringChanges*0.4+(reverseDistance>0?1.5:0)+(maxBeta>45?3:maxBeta>30?1.5:0)+
   (effectiveClearance<0.35?4:effectiveClearance<0.75?2:effectiveClearance<1.5?1:0)+(!reached?3:0)+(collision?8:0);
  const reasons=[];
- if(reverseSegments)reasons.push('задний ход на '+(reverseSegments*0.1).toFixed(1)+' м пути');
- if(turns)reasons.push('смены передачи/рулевого режима: '+turns);
+ if(reverseDistance>0)reasons.push('задний ход: '+reverseSegments+' участков, '+reverseDistance.toFixed(1)+' м');
+ if(gearChanges)reasons.push('переключений передачи: '+gearChanges);
+ if(steeringChanges)reasons.push('изменений рулевого режима: '+steeringChanges);
  if(collision)reasons.push('пересечение с препятствием');
  if(!reached)reasons.push('цель не достигнута');
  if(articulationBlocked)reasons.push('угол сочленения достиг 55°');
  if(clearanceInsufficient)reasons.push('недостаточный зазор после резерва погрешности');
  if(!reasons.length)reasons.push('в проверенной модели препятствия не пересечены');
- return {length,turns,level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',maxBeta,clearance:minClearance,effectiveClearance,collision,reached,clearanceInsufficient,articulationBlocked,reverseSegments,reasons};
+ return {length,turns,gearChanges,steeringChanges,reverseDistance,reverseSegments,level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',maxBeta,clearance:minClearance,effectiveClearance,collision,reached,clearanceInsufficient,articulationBlocked,reasons};
 }
 
 function cancelPlannerWorker(reason='Расчёт маршрута отменён.'){
@@ -572,7 +583,8 @@ async function buildRoute(){
    'Начало манёвра: '+gearText+', '+turn+
    ' (расчётное изменение курса '+(relative*180/Math.PI).toFixed(0)+'°). Маршрут до точки ('+
    gx.toFixed(1)+', '+gy.toFixed(1)+') м; длина '+m.length.toFixed(1)+
-   ' м; переключений режима: '+m.turns+'. Цель достигнута по координатам; конечный курс не задан и не проверен.';
+   ' м; переключений передачи: '+m.gearChanges+'; изменений руля: '+m.steeringChanges+
+   '; задний ход: '+m.reverseDistance.toFixed(1)+' м. Цель достигнута по координатам; конечный курс не задан и не проверен.';
 
   $('difficultyAdvice').textContent=
    'Сложность: '+m.level+'. Причины: '+m.reasons.join('; ')+
@@ -958,7 +970,7 @@ $('speedSet').oninput=()=>{
 };
 
 $('reset').onclick=()=>{
- routeBuildToken++;cancelPlannerWorker('Расчёт отменён сбросом симулятора.');
+ routeBuildToken++;cancelPlannerWorker('Расчёт отменён сбросом симулятора.');$('planRoute').disabled=false;
  stopRoutePlayback('');
  resetState();
  plannedRoute=[];
@@ -985,7 +997,7 @@ $('obstaclesToggle').onclick=()=>{
  $('obstaclesToggle').textContent=
   'Препятствия: '+(showObstacles?'вкл.':'выкл.');
  if(!showObstacles){
-  routeBuildToken++;cancelPlannerWorker('Расчёт отменён: препятствия отключены.');
+  routeBuildToken++;cancelPlannerWorker('Расчёт отменён: препятствия отключены.');$('planRoute').disabled=false;
   stopRoutePlayback('');
   routeAssessment=null;
   $('routeAdvice').textContent='Препятствия отключены. Автопроезд заблокирован; включите препятствия и заново постройте маршрут.';
@@ -1002,7 +1014,7 @@ $('helperToggle').onclick=()=>{
 };
 
 $('scenarioReset').onclick=()=>{
- routeBuildToken++;cancelPlannerWorker('Расчёт отменён сбросом площадки.');
+ routeBuildToken++;cancelPlannerWorker('Расчёт отменён сбросом площадки.');$('planRoute').disabled=false;
  stopRoutePlayback('');
  resetState();
  showObstacles=true;
@@ -1072,7 +1084,7 @@ $('planRoute').onclick=()=>{
 };
 
 $('clearRoute').onclick=()=>{
- routeBuildToken++;cancelPlannerWorker('Расчёт отменён: маршрут удалён.');
+ routeBuildToken++;cancelPlannerWorker('Расчёт отменён: маршрут удалён.');$('planRoute').disabled=false;
  stopRoutePlayback('');
  plannedRoute=[];
  routeGoal=null;
