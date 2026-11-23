@@ -36,3 +36,12 @@ test('articulated planner can select reverse gear and reports progress',()=>{
  assert.ok(progress.length>0,'planner should report progress');
  assert.ok(progress.every((n,i)=>i===0||n>progress[i-1]),'progress counters should increase');
 });
+ 
+test('planner and simulator use exactly the same articulated collision geometry',()=>{
+ const q={x:3.2,y:-1.7,psi:0.28,psiT:-0.19};
+ assert.deepEqual(planner.polygons(q,params),physics.vehiclePolygons(q,params));
+ const hitch=physics.hitchPoint(q,params);
+ const axle=physics.axlePoint(q,params);
+ assert.ok(Math.hypot(hitch.x-(q.x-params.hitchOffset*Math.cos(q.psi)),hitch.y-(q.y-params.hitchOffset*Math.sin(q.psi)))<1e-10);
+ assert.ok(Math.hypot(axle.x-(hitch.x-params.kingpinAxles*Math.cos(q.psiT)),axle.y-(hitch.y-params.kingpinAxles*Math.sin(q.psiT)))<1e-10);
+});
