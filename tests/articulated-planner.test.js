@@ -128,7 +128,9 @@ test('swept displacement bound covers every tractor, cab and trailer vertex in f
   {q:{x:-3,y:1,psi:1.1,psiT:-0.1},steer:0.24,gear:1}
  ];
  for(const item of cases){
-  const rate=planner.sweptDisplacementPerMeter(item.steer,params);
+  const globalRate=planner.sweptDisplacementPerMeter(item.steer,params);
+  const rate=planner.sweptDisplacementPerMeter(item.steer,params,item.q,0.05);
+  assert.ok(rate<=globalRate+1e-9,'local articulation bound should not exceed the all-angle bound');
   const initial=planner.polygons(item.q,params);
   for(let sample=1;sample<=8;sample++){
    const distance=0.05*sample/8;
@@ -147,6 +149,7 @@ test('swept displacement bound covers every tractor, cab and trailer vertex in f
 test('swept displacement bound rejects missing or incomplete vehicle geometry',()=>{
  assert.throws(()=>planner.sweptDisplacementPerMeter(0,null),/missing/i);
  assert.throws(()=>planner.sweptDisplacementPerMeter(0,{...params,kingpinAxles:0}),/invalid/i);
+ assert.throws(()=>planner.sweptDisplacementPerMeter(0,params,null,0),/positive/i);
 });
 
 test('planner rejects a start position already inside the requested clearance reserve',()=>{
@@ -174,8 +177,8 @@ test('planner adaptively shortens reverse steps near the requested clearance res
   bounds:{minX:-18,maxX:18,minY:-12,maxY:12}
  });
  assert.equal(result.ok,true,JSON.stringify(result));
- assert.ok(Math.hypot(result.states[1].x-result.states[0].x,result.states[1].y-result.states[0].y)<0.01,
-  'the first step should shrink when initial clearance is only slightly above the reserve');
+ assert.ok(Math.hypot(result.states[1].x-result.states[0].x,result.states[1].y-result.states[0].y)<0.05,
+  'the first step should be shorter than the normal 0.05 m step near the clearance reserve');
  assert.ok(result.minimumClearanceLowerBound>=0.30-1e-6);
  assert.ok(result.states.some((q,i)=>i>0&&q.gear===-1),'the route should use reverse to move away from the obstacle');
 });
