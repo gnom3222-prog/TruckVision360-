@@ -172,7 +172,7 @@
       if(margin<=1e-9){valid=false;break;}
       travel=Math.min(travel,0.8*margin/displacementRate);
      }
-     if(travel<1e-3){valid=false;break;}
+     if(travel<5e-3){valid=false;break;}
      const next=options.integrate(q,gear*0.7,steer,travel/0.7,params);
      if(next.x<bounds.minX||next.x>bounds.maxX||next.y<bounds.minY||next.y>bounds.maxY||
         Math.abs(norm(next.psi-next.psiT))>Math.PI*0.92){valid=false;break;}
