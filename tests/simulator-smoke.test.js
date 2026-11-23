@@ -18,9 +18,11 @@ function bootSimulator(){
  }
  values.model='hybrid';
  const elements={};
+ const frames=[];
+ let drawCalls=0;
  const ctx={};
  for(const name of ['beginPath','moveTo','lineTo','setLineDash','stroke','closePath','fill','fillText','arc','clearRect','fillRect']){
-  ctx[name]=()=>{};
+  ctx[name]=()=>{if(name==='clearRect')drawCalls++;};
  }
  const getElementById=id=>{
   if(!elements[id]){
@@ -37,11 +39,11 @@ function bootSimulator(){
  const sandbox={
   window:windowObject,
   document:{getElementById},
-  requestAnimationFrame:()=>{},
+  requestAnimationFrame:callback=>frames.push(callback),
   console
  };
  vm.runInNewContext(source,sandbox,{filename:'truckvision.js'});
- return elements;
+ return {elements,frames,get drawCalls(){return drawCalls;}};
 }
 
 test('planner goal pose checks wrapped heading and trailer articulation',()=>{
@@ -91,4 +93,20 @@ test('route planning reports missing Web Worker support without blanking the sim
  assert.match(elements.routeAdvice.textContent,/не поддерживает фоновый расчёт маршрута/);
  assert.equal(elements.planRoute.disabled,false);
  assert.equal(typeof elements.routeStart.onclick,'function');
+});
+
+
+test('canvas keeps rendering after a route-planning worker error',async()=>{
+ const simulator=bootSimulator();
+ const before=simulator.drawCalls;
+ simulator.elements.planRoute.onclick();
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.match(simulator.elements.routeAdvice.textContent,/не поддерживает фоновый расчёт маршрута/);
+ assert.ok(simulator.drawCalls>before,'route planning should redraw the existing simulator scene');
+ const frame=simulator.frames.shift();
+ assert.equal(typeof frame,'function','the animation frame should remain scheduled');
+ const afterPlanning=simulator.drawCalls;
+ frame(16);
+ assert.ok(simulator.drawCalls>afterPlanning,'the animation loop should continue drawing after the worker error');
+ assert.ok(simulator.frames.length>0,'the next animation frame should be scheduled');
 });
