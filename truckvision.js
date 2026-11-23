@@ -30,7 +30,7 @@ let state,steer=0,targetSpeed=2,speed=0,drive=0;
 let braking=false,distance=0,trace=[],showTrace=true;
 let camera={x:0,y:0},lastTime=0;
 let showObstacles=true,helperEnabled=true;
-let plannedRoute=[],routeGoal=null;
+let plannedRoute=[],routeGoal=null,routeAssessment=null;
 let routePlayback={active:false,paused:false,index:1,stopReason:''};
 
 const obstacles=[
@@ -525,6 +525,7 @@ function buildRoute(){
  }
 
  const m=routeMetrics(plannedRoute);
+ routeAssessment=m;
  const next=plannedRoute[1];
 
  const relative=norm(
@@ -938,6 +939,7 @@ $('reset').onclick=()=>{
  resetState();
  plannedRoute=[];
  routeGoal=null;
+ routeAssessment=null;
  draw();
 };
 
@@ -1000,8 +1002,14 @@ $('assess').onclick=()=>{
 };
 
 $('routeStart').onclick=()=>{
- if(plannedRoute.length<2){
-  $('routeAdvice').textContent='Сначала нажмите «Построить путь» и проверьте результат.';
+ if(plannedRoute.length<2||!routeAssessment){
+  $('routeAdvice').textContent='Сначала нажмите «Построить путь» и дождитесь оценки маршрута.';
+  return;
+ }
+ const clearance=routeAssessment.effectiveClearance;
+ if(routeAssessment.collision||!routeAssessment.reached||routeAssessment.maxBeta>=55||
+    (Number.isFinite(clearance)&&clearance<0.35)){
+  $('routeAdvice').textContent='Автопроезд не запущен: предварительная проверка маршрута выявила риск или не смогла подтвердить прохождение. Перестройте маршрут и проверьте препятствия, угол сочленения и зазоры.';
   return;
  }
  if(routePlayback.active&&routePlayback.paused){
@@ -1031,6 +1039,7 @@ $('clearRoute').onclick=()=>{
  stopRoutePlayback('');
  plannedRoute=[];
  routeGoal=null;
+ routeAssessment=null;
  $('routeAdvice').textContent='Маршрут удалён.';
  $('difficultyAdvice').textContent='Сложность: пока не рассчитана.';
  draw();
