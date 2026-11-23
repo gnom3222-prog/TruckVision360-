@@ -31,7 +31,7 @@ let braking=false,distance=0,trace=[],showTrace=true;
 let camera={x:0,y:0},lastTime=0;
 let showObstacles=true,helperEnabled=true;
 let plannedRoute=[],routeGoal=null,routeAssessment=null;
-let routePlayback={active:false,paused:false,index:1,stopReason:''};
+let routePlayback={active:false,paused:false,index:1,stopReason:'',currentGear:1};
 let plannerWorker=null,plannerRequestId=0,plannerReject=null,routeBuildToken=0;
 
 const obstacles=[
@@ -805,6 +805,15 @@ function updateRoutePlayback(){
  while(index<plannedRoute.length-2&&
   Math.hypot(plannedRoute[index].x-state.x,plannedRoute[index].y-state.y)<0.22)index++;
  routePlayback.index=index;
+ const gear=plannedRoute[Math.min(index+1,plannedRoute.length-1)].gear||1;
+ if(routePlayback.currentGear!==gear){
+  if(Math.abs(speed)>0.02){
+   drive=0;braking=true;steer=0;$('steer').value='0';
+   return;
+  }
+  routePlayback.currentGear=gear;
+  braking=false;
+ }
  let nearest=Infinity;
  for(let i=Math.max(1,index-8);i<Math.min(plannedRoute.length,index+18);i++){
   nearest=Math.min(nearest,Math.hypot(plannedRoute[i].x-state.x,plannedRoute[i].y-state.y));
@@ -818,10 +827,13 @@ function updateRoutePlayback(){
   stopRoutePlayback('Виртуальный автопроезд завершён: контрольная точка достигнута.');
   return;
  }
- const target=plannedRoute[Math.min(plannedRoute.length-1,index+6)];
+ let targetIndex=Math.min(plannedRoute.length-1,index+6);
+ for(let i=index+1;i<=targetIndex;i++){
+  if((plannedRoute[i].gear||1)!==gear){targetIndex=Math.max(index+1,i-1);break;}
+ }
+ const target=plannedRoute[targetIndex];
  const dx=target.x-state.x,dy=target.y-state.y;
  const distance=Math.max(0.5,Math.hypot(dx,dy));
- const gear=plannedRoute[Math.min(index+1,plannedRoute.length-1)].gear||1;
  const desiredHeading=Math.atan2(dy,dx)+(gear<0?Math.PI:0);
  const alpha=norm(desiredHeading-state.psi);
  const command=gear*Math.atan2(2*cfg.wheelbase*Math.sin(alpha),distance);
@@ -1048,7 +1060,7 @@ $('routeStart').onclick=()=>{
   $('routePause').textContent='Ⅱ Пауза';
   return;
  }
- routePlayback={active:true,paused:false,index:1,stopReason:''};
+ routePlayback={active:true,paused:false,index:1,stopReason:'',currentGear:plannedRoute[1].gear||1};
  speed=0;drive=0;braking=false;
  targetSpeed=0.6;
  $('speedSet').value='0.6';
