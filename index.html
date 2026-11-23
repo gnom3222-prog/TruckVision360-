@@ -144,7 +144,9 @@ input[type=number],select{width:100%;background:#0e2031;color:#fff;border:1px so
 <div class="grid">
 <div><label for="gateWidth">Ширина проёма, м</label><input id="gateWidth" type="number" value="3.50" step="0.05"></div>
 <div><label for="margin">Запас с каждой стороны, м</label><input id="margin" type="number" value="0.20" step="0.05"></div>
+<div><label for="measurementUncertainty">Доп. резерв неопределённости с каждой стороны, м</label><input id="measurementUncertainty" type="number" min="0" max="2" value="0.15" step="0.05"></div>
 </div>
+<p class="small">Этот резерв вычитается из зазоров и полезной ширины ворот. Это настраиваемый запас, а не автоматически измеренная погрешность камеры.</p>
 <div class="row" style="margin-top:8px">
 <button id="apply">Применить параметры</button>
 <button id="assess" class="primary">Оценить проём</button>
