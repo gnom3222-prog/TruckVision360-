@@ -44,5 +44,5 @@ test('camera calibration rejects singular point arrangements and invalid dimensi
 
 test('perspective mapping rejects malformed input and non-finite results',()=>{
  assert.throws(()=>camera.map({x:0,y:0},[1,2]));
- assert.throws(()=>camera.map({x:0,y:0},[0,0,0,0,0,0,0,0]));
+ assert.throws(()=>camera.map({x:1,y:0},[0,0,0,0,0,0,-1,0]));
 });
