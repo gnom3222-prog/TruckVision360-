@@ -3,6 +3,12 @@
 
 const $=id=>document.getElementById(id);
 const canvas=$('view');
+
+if(!canvas){
+ console.error('TruckVision 360: элемент canvas #view не найден.');
+ return;
+}
+
 const ctx=canvas.getContext('2d');
 const G=9.81;
 const SCALE=22;
@@ -24,26 +30,139 @@ const cfg={
  margin:0.2
 };
 
-let state,steer=0,targetSpeed=2,speed=0,drive=0;
-let braking=false,distance=0,trace=[],showTrace=true;
-let camera={x:0,y:0},lastTime=0;
-let showObstacles=true, helperEnabled=true;
-let plannedRoute=[], routeGoal=null;
+let state;
+let steer=0;
+let targetSpeed=2;
+let speed=0;
+let drive=0;
+let braking=false;
+let distance=0;
+let trace=[];
+let showTrace=true;
+let camera={x:0,y:0};
+let lastTime=0;
+let showObstacles=true;
+let helperEnabled=true;
+let plannedRoute=[];
+let routeGoal=null;
 
 const obstacles=[
- {x:8.0,y:2.9,w:1.2,h:1.2,name:'Паллет A'},
- {x:11.5,y:-2.9,w:1.0,h:1.0,name:'Паллет B'},
- {x:15.0,y:0.0,w:0.7,h:6.0,name:'Стена справа'},
- {x:6.5,y:-5.0,w:0.7,h:5.0,name:'Стена слева'}
+ {x:8,y:2.9,w:1.2,h:1.2,name:'Паллет A'},
+ {x:11.5,y:-2.9,w:1,h:1,name:'Паллет B'},
+ {x:15,y:0,w:0.7,h:6,name:'Стена справа'},
+ {x:6.5,y:-5,w:0.7,h:5,name:'Стена слева'}
 ];
 
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const norm=a=>Math.atan2(Math.sin(a),Math.cos(a));
 
+/* =====================================
+   ГОЛОСОВОЙ ПОМОЩНИК
+===================================== */
+
+let voiceEnabled=false;
+let lastVoiceMessage='';
+let lastVoiceAt=0;
+
+function speakTruckVision(message,force=false){
+ if(!voiceEnabled||!('speechSynthesis' in window))return;
+
+ const now=Date.now();
+
+ if(!force&&message===lastVoiceMessage)return;
+ if(!force&&now-lastVoiceAt<3500)return;
+
+ lastVoiceMessage=message;
+ lastVoiceAt=now;
+
+ window.speechSynthesis.cancel();
+
+ const utterance=new SpeechSynthesisUtterance(message);
+ utterance.lang='ru-RU';
+ utterance.rate=0.92;
+ utterance.pitch=1;
+ utterance.volume=1;
+
+ window.speechSynthesis.speak(utterance);
+}
+
+function createVoiceControls(){
+ const advice=$('assistantAdvice');
+
+ if(!advice||!advice.parentElement)return;
+
+ if($('voiceControls'))return;
+
+ const box=document.createElement('div');
+ box.id='voiceControls';
+ box.style.cssText=
+  'margin-top:12px;padding:12px;border:1px solid #456;' +
+  'border-radius:12px;background:#142b40;color:white;';
+
+ box.innerHTML=`
+  <strong>🔊 Голосовой помощник</strong>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+   <button id="voiceToggle" type="button">Включить голос</button>
+   <button id="voiceTest" type="button">Проверить голос</button>
+  </div>
+  <p id="voiceStatus" style="margin:8px 0 0">
+   Голос выключен
+  </p>
+ `;
+
+ advice.parentElement.appendChild(box);
+
+ $('voiceToggle').onclick=()=>{
+  if(!('speechSynthesis' in window)){
+   $('voiceStatus').textContent=
+    'Браузер не поддерживает синтез речи.';
+   return;
+  }
+
+  voiceEnabled=!voiceEnabled;
+
+  $('voiceToggle').textContent=
+   voiceEnabled?'Выключить голос':'Включить голос';
+
+  $('voiceStatus').textContent=
+   voiceEnabled?'Голосовой помощник включён':'Голос выключен';
+
+  if(!voiceEnabled){
+   window.speechSynthesis.cancel();
+   lastVoiceMessage='';
+  }else{
+   speakTruckVision(
+    'Голосовой помощник TruckVision 360 включён.',
+    true
+   );
+  }
+ };
+
+ $('voiceTest').onclick=()=>{
+  if(!voiceEnabled){
+   $('voiceStatus').textContent=
+    'Сначала включите голосовой помощник.';
+   return;
+  }
+
+  speakTruckVision(
+   'Проверка голосовой системы. TruckVision 360 готов к работе.',
+   true
+  );
+ };
+}
+
+/* =====================================
+   НАСТРОЙКИ
+===================================== */
+
 function readSettings(){
  for(const key of Object.keys(cfg)){
   const input=$(key);
-  if(input)cfg[key]=Number(input.value);
+  if(input){
+   const value=Number(input.value);
+   if(Number.isFinite(value))cfg[key]=value;
+  }
  }
 }
 
@@ -72,9 +191,14 @@ function axlePoint(q){
  };
 }
 
+/* =====================================
+   КИНЕМАТИКА АВТОПОЕЗДА
+===================================== */
+
 function derivative(q,v,delta){
  const yawRate=v/cfg.wheelbase*Math.tan(delta);
  const beta=norm(q.psi-q.psiT);
+
  const trailerYawRate=(
   v*Math.sin(beta)
   -cfg.hitchOffset*yawRate*Math.cos(beta)
@@ -111,6 +235,10 @@ function rk4(q,v,delta,dt){
  };
 }
 
+/* =====================================
+   ГЕОМЕТРИЯ И ОТОБРАЖЕНИЕ
+===================================== */
+
 function toScreen(p){
  return{
   x:canvas.width/2+(p.x-camera.x)*SCALE,
@@ -126,12 +254,16 @@ function localPoint(origin,angle,longitudinal,lateral=0){
 }
 
 function drawLine(points,color,width=2,dash=[]){
+ if(!points.length)return;
+
  ctx.beginPath();
+
  points.forEach((p,i)=>{
   const z=toScreen(p);
   if(i===0)ctx.moveTo(z.x,z.y);
   else ctx.lineTo(z.x,z.y);
  });
+
  ctx.strokeStyle=color;
  ctx.lineWidth=width;
  ctx.setLineDash(dash);
@@ -141,11 +273,14 @@ function drawLine(points,color,width=2,dash=[]){
 
 function drawPolygon(points,fill){
  const p=points.map(toScreen);
+
  ctx.beginPath();
+
  p.forEach((z,i)=>{
   if(i===0)ctx.moveTo(z.x,z.y);
   else ctx.lineTo(z.x,z.y);
  });
+
  ctx.closePath();
  ctx.fillStyle=fill;
  ctx.fill();
@@ -154,17 +289,8 @@ function drawPolygon(points,fill){
  ctx.stroke();
 }
 
-function drawBody(origin,angle,front,rear,width,fill){
- drawPolygon([
-  localPoint(origin,angle,front,width/2),
-  localPoint(origin,angle,rear,width/2),
-  localPoint(origin,angle,rear,-width/2),
-  localPoint(origin,angle,front,-width/2)
- ],fill);
-}
-
 function bodyCorners(origin,angle,front,rear,width){
- return [
+ return[
   localPoint(origin,angle,front,width/2),
   localPoint(origin,angle,rear,width/2),
   localPoint(origin,angle,rear,-width/2),
@@ -172,9 +298,17 @@ function bodyCorners(origin,angle,front,rear,width){
  ];
 }
 
+function drawBody(origin,angle,front,rear,width,fill){
+ drawPolygon(
+  bodyCorners(origin,angle,front,rear,width),
+  fill
+ );
+}
+
 function vehiclePolygons(q){
- const h=hitchPoint(q), a=axlePoint(q);
- return [
+ const h=hitchPoint(q);
+
+ return[
   bodyCorners(q,q.psi,5,-1.2,2.55),
   bodyCorners(localPoint(q,q.psi,2.1),q.psi,1.35,-0.9,2.25),
   bodyCorners(h,q.psiT,1.5,-(cfg.trailerLength-1.5),cfg.trailerWidth)
@@ -182,7 +316,7 @@ function vehiclePolygons(q){
 }
 
 function obstaclePolygon(o){
- return [
+ return[
   {x:o.x-o.w/2,y:o.y-o.h/2},
   {x:o.x+o.w/2,y:o.y-o.h/2},
   {x:o.x+o.w/2,y:o.y+o.h/2},
@@ -192,43 +326,69 @@ function obstaclePolygon(o){
 
 function polygonsIntersect(a,b){
  const axes=[];
+
  for(const p of [a,b]){
   for(let i=0;i<p.length;i++){
-   const n=p[(i+1)%p.length],c=p[i];
-   const dx=n.x-c.x,dy=n.y-c.y;
+   const n=p[(i+1)%p.length];
+   const c=p[i];
+   const dx=n.x-c.x;
+   const dy=n.y-c.y;
    const len=Math.hypot(dx,dy)||1;
+
    axes.push({x:-dy/len,y:dx/len});
   }
  }
+
  for(const axis of axes){
   const pa=a.map(p=>p.x*axis.x+p.y*axis.y);
   const pb=b.map(p=>p.x*axis.x+p.y*axis.y);
-  if(Math.max(...pa)<Math.min(...pb)||
-     Math.max(...pb)<Math.min(...pa))return false;
+
+  if(
+   Math.max(...pa)<Math.min(...pb)||
+   Math.max(...pb)<Math.min(...pa)
+  )return false;
  }
+
  return true;
 }
 
 function pointSegmentDistance(p,a,b){
- const dx=b.x-a.x,dy=b.y-a.y;
+ const dx=b.x-a.x;
+ const dy=b.y-a.y;
  const l2=dx*dx+dy*dy;
- const t=l2?clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/l2,0,1):0;
- return Math.hypot(p.x-(a.x+t*dx),p.y-(a.y+t*dy));
+
+ const t=l2?
+  clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/l2,0,1):0;
+
+ return Math.hypot(
+  p.x-(a.x+t*dx),
+  p.y-(a.y+t*dy)
+ );
 }
 
 function polygonDistance(a,b){
  if(polygonsIntersect(a,b))return 0;
+
  let best=Infinity;
+
  for(const p of a){
   for(let i=0;i<b.length;i++){
-   best=Math.min(best,pointSegmentDistance(p,b[i],b[(i+1)%b.length]));
+   best=Math.min(
+    best,
+    pointSegmentDistance(p,b[i],b[(i+1)%b.length])
+   );
   }
  }
+
  for(const p of b){
   for(let i=0;i<a.length;i++){
-   best=Math.min(best,pointSegmentDistance(p,a[i],a[(i+1)%a.length]));
+   best=Math.min(
+    best,
+    pointSegmentDistance(p,a[i],a[(i+1)%a.length])
+   );
   }
  }
+
  return best;
 }
 
@@ -240,15 +400,19 @@ function assessScene(q=state){
  if(showObstacles){
   for(const o of obstacles){
    const op=obstaclePolygon(o);
+
    for(const vp of vehicle){
     const d=polygonDistance(vp,op);
+
     if(d<nearest.distance){
      nearest={distance:d,name:o.name};
     }
+
     if(d===0)collision=true;
    }
   }
  }
+
  return{
   nearest,
   collision,
@@ -256,52 +420,23 @@ function assessScene(q=state){
  };
 }
 
-function updateAssistant(){
- const el=$('assistantAdvice');
- if(!el)return;
-
- if(!helperEnabled){
-  el.textContent='Помощник выключен. Контроль препятствий остаётся доступен только визуально.';
-  return;
- }
-
- const a=assessScene();
-
- if(a.collision){
-  el.textContent='СТОП! Расчётные контуры автопоезда пересекаются с препятствием '+a.nearest.name+'. Остановитесь и измените траекторию.';
-  el.style.color='#ff8585';
-  return;
- }
-
- if(a.beta>55){
-  el.textContent='Осторожно: большой угол сочленения '+a.beta.toFixed(0)+'°. Уменьшите угол складывания, не продолжайте резкий задний ход.';
-  el.style.color='#ffd18b';
-  return;
- }
-
- if(a.nearest.distance<0.45){
-  el.textContent='Очень близко к объекту «'+a.nearest.name+'»: примерно '+a.nearest.distance.toFixed(2)+' м по упрощённой геометрической оценке. Остановитесь и проверьте пространство.';
-  el.style.color='#ff8585';
-  return;
- }
-
- if(a.nearest.distance<1.0){
-  el.textContent='Внимание: препятствие «'+a.nearest.name+'» на расстоянии около '+a.nearest.distance.toFixed(2)+' м. Маневрируйте медленно.';
-  el.style.color='#ffd18b';
-  return;
- }
-
- el.textContent='Путь по текущему положению свободен в пределах тестовой карты. Ближайший объект: '+a.nearest.name+' — '+(Number.isFinite(a.nearest.distance)?a.nearest.distance.toFixed(2)+' м':'не обнаружен')+'. Продолжайте медленно и контролируйте зеркала.';
- el.style.color='#83d6a8';
-}
+/* =====================================
+   ПРЕПЯТСТВИЯ
+===================================== */
 
 function drawObstacles(){
  if(!showObstacles)return;
 
  for(const o of obstacles){
   const p=obstaclePolygon(o).map(toScreen);
+
   ctx.beginPath();
-  p.forEach((z,i)=>i?ctx.lineTo(z.x,z.y):ctx.moveTo(z.x,z.y));
+
+  p.forEach((z,i)=>{
+   if(i)ctx.lineTo(z.x,z.y);
+   else ctx.moveTo(z.x,z.y);
+  });
+
   ctx.closePath();
   ctx.fillStyle='#8b4c43';
   ctx.fill();
@@ -310,17 +445,76 @@ function drawObstacles(){
   ctx.stroke();
 
   const c=toScreen({x:o.x,y:o.y});
+
   ctx.fillStyle='#fff';
   ctx.font='12px system-ui';
   ctx.fillText(o.name,c.x+5,c.y-5);
  }
 }
 
-// Построение ориентировочного маршрута алгоритмом A*.
-// Сетка 0,5 м; препятствия расширены на 1,7 м.
+/* =====================================
+   ПОМОЩНИК ВОДИТЕЛЯ
+===================================== */
+
+function updateAssistant(){
+ const el=$('assistantAdvice');
+ if(!el)return;
+
+ let message='';
+ let color='#83d6a8';
+
+ if(!helperEnabled){
+  message='Помощник выключен. Контроль препятствий остаётся доступен только визуально.';
+  color='#a9bacb';
+ }else{
+  const a=assessScene();
+
+  if(a.collision){
+   message='Стоп! Расчётные контуры автопоезда пересекаются с препятствием '+
+    a.nearest.name+
+    '. Остановитесь и измените траекторию.';
+   color='#ff8585';
+  }else if(a.beta>55){
+   message='Осторожно! Большой угол сочленения '+
+    a.beta.toFixed(0)+
+    ' градусов. Уменьшите угол складывания.';
+   color='#ffd18b';
+  }else if(a.nearest.distance<0.45){
+   message='Очень близко к объекту '+a.nearest.name+
+    ': примерно '+a.nearest.distance.toFixed(2)+
+    ' метра. Остановитесь и проверьте пространство.';
+   color='#ff8585';
+  }else if(a.nearest.distance<1){
+   message='Внимание! Препятствие '+a.nearest.name+
+    ' на расстоянии около '+a.nearest.distance.toFixed(2)+
+    ' метра. Маневрируйте медленно.';
+   color='#ffd18b';
+  }else{
+   message='Путь по текущему положению свободен в пределах тестовой карты. Ближайший объект: '+
+    a.nearest.name+' — '+
+    (Number.isFinite(a.nearest.distance)?
+     a.nearest.distance.toFixed(2)+' метра':
+     'не обнаружен')+
+    '. Контролируйте зеркала.';
+  }
+ }
+
+ el.textContent=message;
+ el.style.color=color;
+
+ speakTruckVision(message);
+}
+
+/* =====================================
+   МАРШРУТ A*
+===================================== */
+
 function routeBlocked(ix,iy){
  if(!showObstacles)return false;
- const x=ix*0.5,y=iy*0.5,pad=1.7;
+
+ const x=ix*0.5;
+ const y=iy*0.5;
+ const pad=1.7;
 
  return obstacles.some(o=>
   x>=o.x-o.w/2-pad&&
@@ -332,11 +526,14 @@ function routeBlocked(ix,iy){
 
 function planAStar(start,goal){
  const step=0.5;
+
  const cell=p=>({
   x:Math.round(p.x/step),
   y:Math.round(p.y/step)
  });
- const s=cell(start),g=cell(goal);
+
+ const s=cell(start);
+ const g=cell(goal);
  const key=p=>p.x+','+p.y;
 
  const open=[{
@@ -346,16 +543,19 @@ function planAStar(start,goal){
 
  const came=new Map();
  const cost=new Map([[key(s),0]]);
+
  const dirs=[
   [-1,-1],[-1,0],[-1,1],
   [0,-1],[0,1],
   [1,-1],[1,0],[1,1]
  ];
 
- let found=false,loops=0;
+ let found=false;
+ let loops=0;
 
  while(open.length&&loops++<40000){
   open.sort((a,b)=>a.f-b.f);
+
   const cur=open.shift();
   const ck=key(cur);
 
@@ -379,6 +579,7 @@ function planAStar(start,goal){
    if(ng<(cost.get(nk)??Infinity)){
     cost.set(nk,ng);
     came.set(nk,ck);
+
     open.push({
      ...n,
      f:ng+Math.hypot(g.x-n.x,g.y-n.y)
@@ -389,7 +590,8 @@ function planAStar(start,goal){
 
  if(!found)return null;
 
- let k=key(g),points=[];
+ let k=key(g);
+ const points=[];
 
  while(k){
   const [x,y]=k.split(',').map(Number);
@@ -409,7 +611,9 @@ function planAStar(start,goal){
    continue;
   }
 
-  const a=points[i-1],b=points[i],c=points[i+1];
+  const a=points[i-1];
+  const b=points[i];
+  const c=points[i+1];
 
   if(
    Math.sign(b.x-a.x)!==Math.sign(c.x-b.x)||
@@ -423,7 +627,8 @@ function planAStar(start,goal){
 }
 
 function routeMetrics(path){
- let length=0,turns=0;
+ let length=0;
+ let turns=0;
 
  for(let i=1;i<path.length;i++){
   length+=Math.hypot(
@@ -437,6 +642,7 @@ function routeMetrics(path){
    path[i].y-path[i-1].y,
    path[i].x-path[i-1].x
   );
+
   const b=Math.atan2(
    path[i+1].y-path[i].y,
    path[i+1].x-path[i].x
@@ -446,6 +652,7 @@ function routeMetrics(path){
  }
 
  const scene=assessScene();
+
  const score=
   turns*2+
   (scene.beta>35?2:0)+
@@ -462,11 +669,13 @@ function routeMetrics(path){
 }
 
 function buildRoute(){
- const gx=Number($('goalX').value);
- const gy=Number($('goalY').value);
+ const gx=Number($('goalX')?.value);
+ const gy=Number($('goalY')?.value);
 
  if(!Number.isFinite(gx)||!Number.isFinite(gy)){
-  $('routeAdvice').textContent='Проверьте координаты конечной точки.';
+  if($('routeAdvice')){
+   $('routeAdvice').textContent='Проверьте координаты конечной точки.';
+  }
   return;
  }
 
@@ -479,8 +688,16 @@ function buildRoute(){
 
  if(plannedRoute.length<2){
   plannedRoute=[];
-  $('routeAdvice').textContent='Маршрут не найден. Попробуйте другую конечную точку.';
-  $('difficultyAdvice').textContent='Сложность не рассчитана.';
+
+  if($('routeAdvice')){
+   $('routeAdvice').textContent=
+    'Маршрут не найден. Попробуйте другую конечную точку.';
+  }
+
+  if($('difficultyAdvice')){
+   $('difficultyAdvice').textContent='Сложность не рассчитана.';
+  }
+
   draw();
   return;
  }
@@ -497,19 +714,31 @@ function buildRoute(){
   relative>0?'начать поворот влево':
   'начать поворот вправо';
 
- $('routeAdvice').textContent=
-  'Путь построен до точки ('+gx.toFixed(1)+', '+
-  gy.toFixed(1)+') м. Первый ориентир: '+first+
-  '. Длина: '+m.length.toFixed(1)+' м; поворотов: '+
-  m.turns+'. Двигайтесь медленно и контролируйте зеркала.';
+ if($('routeAdvice')){
+  $('routeAdvice').textContent=
+   'Путь построен до точки ('+gx.toFixed(1)+', '+
+   gy.toFixed(1)+') м. Первый ориентир: '+first+
+   '. Длина: '+m.length.toFixed(1)+
+   ' м; поворотов: '+m.turns+
+   '. Контролируйте зеркала.';
+ }
 
- $('difficultyAdvice').textContent=
-  'Сложность манёвра: '+m.level+
-  '. Учтены повороты маршрута, текущий угол сочленения '+
-  m.beta.toFixed(0)+'° и ближайшее препятствие '+
-  (Number.isFinite(m.clearance)?m.clearance.toFixed(2)+' м':'не определено')+'.';
+ if($('difficultyAdvice')){
+  $('difficultyAdvice').textContent=
+   'Сложность манёвра: '+m.level+
+   '. Текущий угол сочленения '+
+   m.beta.toFixed(0)+'°. Ближайшее препятствие: '+
+   (Number.isFinite(m.clearance)?
+    m.clearance.toFixed(2)+' м':'не определено')+'.';
+ }
 
  draw();
+
+ speakTruckVision(
+  'Маршрут построен. Длина маршрута '+
+  m.length.toFixed(1)+' метра. Сложность манёвра: '+m.level+'.',
+  true
+ );
 }
 
 function drawRoute(){
@@ -519,6 +748,7 @@ function drawRoute(){
 
  if(routeGoal){
   const z=toScreen(routeGoal);
+
   ctx.beginPath();
   ctx.arc(z.x,z.y,9,0,Math.PI*2);
   ctx.fillStyle='#ffe082';
@@ -533,8 +763,13 @@ function drawRoute(){
  }
 }
 
+/* =====================================
+   ОТРИСОВКА АВТОПОЕЗДА
+===================================== */
+
 function draw(){
  ctx.clearRect(0,0,canvas.width,canvas.height);
+
  ctx.fillStyle='#102235';
  ctx.fillRect(0,0,canvas.width,canvas.height);
 
@@ -550,6 +785,7 @@ function draw(){
   x+=5
  ){
   const p=toScreen({x,y:camera.y});
+
   ctx.beginPath();
   ctx.moveTo(p.x,0);
   ctx.lineTo(p.x,canvas.height);
@@ -562,6 +798,7 @@ function draw(){
   y+=5
  ){
   const p=toScreen({x:camera.x,y});
+
   ctx.beginPath();
   ctx.moveTo(0,p.y);
   ctx.lineTo(canvas.width,p.y);
@@ -572,8 +809,15 @@ function draw(){
  drawRoute();
 
  if(showTrace&&trace.length>1){
-  drawLine(trace.map(p=>({x:p.x,y:p.y})),'#35c8ef',2);
-  drawLine(trace.map(p=>({x:p.ax,y:p.ay})),'#f6bd60',2,[6,4]);
+  drawLine(
+   trace.map(p=>({x:p.x,y:p.y})),
+   '#35c8ef',2
+  );
+
+  drawLine(
+   trace.map(p=>({x:p.ax,y:p.ay})),
+   '#f6bd60',2,[6,4]
+  );
  }
 
  const h=hitchPoint(state);
@@ -594,7 +838,9 @@ function draw(){
   ],'#101820',7);
  }
 
- drawBody(state,state.psi,5,-1.2,2.55,'#087fa5');
+ drawBody(
+  state,state.psi,5,-1.2,2.55,'#087fa5'
+ );
 
  drawBody(
   localPoint(state,state.psi,2.1),
@@ -624,6 +870,10 @@ function draw(){
  updateAssistant();
 }
 
+/* =====================================
+   ПОКАЗАТЕЛИ
+===================================== */
+
 function updateReadouts(){
  const beta=norm(state.psi-state.psiT);
 
@@ -632,6 +882,7 @@ function updateReadouts(){
  );
 
  const gripLimit=cfg.mu*G;
+
  const brakeLimit=Math.max(
   0.1,
   Math.min(cfg.brakeDecel,gripLimit)
@@ -639,48 +890,64 @@ function updateReadouts(){
 
  const brakeDistance=speed*speed/(2*brakeLimit);
 
- $('vOut').textContent=Math.abs(speed).toFixed(2)+' м/с';
- $('betaOut').textContent=(beta*180/Math.PI).toFixed(1)+'°';
- $('steerOut').textContent=(steer*180/Math.PI).toFixed(0)+'°';
+ const set=(id,value)=>{
+  const el=$(id);
+  if(el)el.textContent=value;
+ };
 
- $('accelOut').textContent=(
+ set('vOut',Math.abs(speed).toFixed(2)+' м/с');
+ set('betaOut',(beta*180/Math.PI).toFixed(1)+'°');
+ set('steerOut',(steer*180/Math.PI).toFixed(0)+'°');
+
+ set('accelOut',(
   braking?-brakeLimit:
   (drive?cfg.maxAccel:0)
- ).toFixed(2)+' м/с²';
+ ).toFixed(2)+' м/с²');
 
- $('latOut').textContent=lateral.toFixed(2)+' м/с²';
- $('stopOut').textContent=brakeDistance.toFixed(1)+' м';
+ set('latOut',lateral.toFixed(2)+' м/с²');
+ set('stopOut',brakeDistance.toFixed(1)+' м');
 
- $('gripOut').textContent=
-  lateral>gripLimit?'Предел превышен':
-  'В пределах заданного μ';
+ set(
+  'gripOut',
+  lateral>gripLimit?'Предел превышен':'В пределах заданного μ'
+ );
 
- $('distanceOut').textContent=distance.toFixed(1)+' м';
+ set('distanceOut',distance.toFixed(1)+' м');
 
- $('mode').textContent=
+ set(
+  'mode',
   braking?'Торможение':
   drive>0?'Движение вперёд':
   drive<0?'Движение задним ходом':
-  'Остановлен';
+  'Остановлен'
+ );
 
- $('speedLabel').textContent=targetSpeed.toFixed(1)+' м/с';
- $('steerLabel').textContent=(steer*180/Math.PI).toFixed(0)+'°';
+ set('speedLabel',targetSpeed.toFixed(1)+' м/с');
+ set('steerLabel',(steer*180/Math.PI).toFixed(0)+'°');
 
- const angle=Math.abs(beta*180/Math.PI);
+ const mode=$('mode');
 
- if(angle>60){
-  $('mode').textContent='ВНИМАНИЕ: большой угол сочленения';
-  $('mode').style.color='#ff8585';
- }else if(angle>45){
-  $('mode').textContent='Предупреждение: угол сочленения';
-  $('mode').style.color='#ffd18b';
- }else{
-  $('mode').style.color='#83d6a8';
+ if(mode){
+  const angle=Math.abs(beta*180/Math.PI);
+
+  if(angle>60){
+   mode.textContent='ВНИМАНИЕ: большой угол сочленения';
+   mode.style.color='#ff8585';
+  }else if(angle>45){
+   mode.textContent='Предупреждение: угол сочленения';
+   mode.style.color='#ffd18b';
+  }else{
+   mode.style.color='#83d6a8';
+  }
  }
 }
 
+/* =====================================
+   УПРОЩЁННАЯ ДИНАМИКА
+===================================== */
+
 function updateSpeed(dt){
- if($('model').value==='kinematic'){
+ if($('model')?.value==='kinematic'){
   speed=drive*targetSpeed;
   if(braking)speed=0;
   return;
@@ -688,7 +955,11 @@ function updateSpeed(dt){
 
  const totalMass=cfg.tractorMass+cfg.trailerMass;
  const rolling=cfg.crr*G;
- const brakeLimit=Math.min(cfg.brakeDecel,cfg.mu*G);
+
+ const brakeLimit=Math.min(
+  cfg.brakeDecel,
+  cfg.mu*G
+ );
 
  const driveLimit=Math.min(
   cfg.maxAccel,
@@ -762,6 +1033,10 @@ function simulationStep(dt){
  camera={x:state.x,y:state.y};
 }
 
+/* =====================================
+   ЦИКЛ СИМУЛЯЦИИ
+===================================== */
+
 function frame(timestamp){
  if(!lastTime)lastTime=timestamp;
 
@@ -780,8 +1055,15 @@ function frame(timestamp){
  requestAnimationFrame(frame);
 }
 
+/* =====================================
+   УПРАВЛЕНИЕ
+===================================== */
+
 function setSteer(){
- steer=Number($('steer').value)*Math.PI/180;
+ const input=$('steer');
+ if(!input)return;
+
+ steer=Number(input.value)*Math.PI/180;
  draw();
 }
 
@@ -795,103 +1077,126 @@ function applySettings(){
  draw();
 }
 
-$('forward').onpointerdown=()=>startDrive(1);
-$('reverse').onpointerdown=()=>startDrive(-1);
+function bind(id,event,callback){
+ const el=$(id);
+ if(el)el.addEventListener(event,callback);
+}
+
+bind('forward','pointerdown',()=>startDrive(1));
+bind('reverse','pointerdown',()=>startDrive(-1));
 
 ['forward','reverse'].forEach(id=>{
  const button=$(id);
+ if(!button)return;
 
- button.onpointerup=()=>{drive=0};
- button.onpointerleave=()=>{drive=0};
- button.onpointercancel=()=>{drive=0};
+ button.addEventListener('pointerup',()=>{drive=0;});
+ button.addEventListener('pointerleave',()=>{drive=0;});
+ button.addEventListener('pointercancel',()=>{drive=0;});
 });
 
-$('brake').onclick=()=>{
+bind('brake','click',()=>{
  drive=0;
  braking=true;
-};
+});
 
-$('left').onclick=()=>{
- $('steer').value=clamp(
-  Number($('steer').value)-3,
-  -35,35
- );
+bind('left','click',()=>{
+ const input=$('steer');
+ if(!input)return;
+
+ input.value=clamp(Number(input.value)-3,-35,35);
  setSteer();
-};
+});
 
-$('right').onclick=()=>{
- $('steer').value=clamp(
-  Number($('steer').value)+3,
-  -35,35
- );
+bind('right','click',()=>{
+ const input=$('steer');
+ if(!input)return;
+
+ input.value=clamp(Number(input.value)+3,-35,35);
  setSteer();
-};
+});
 
-$('straight').onclick=()=>{
- $('steer').value=0;
+bind('straight','click',()=>{
+ const input=$('steer');
+ if(!input)return;
+
+ input.value=0;
  setSteer();
-};
+});
 
-$('steer').oninput=setSteer;
+bind('steer','input',setSteer);
 
-$('speedSet').oninput=()=>{
+bind('speedSet','input',()=>{
  targetSpeed=Number($('speedSet').value);
  draw();
-};
+});
 
-$('reset').onclick=()=>{
+bind('reset','click',()=>{
  resetState();
  plannedRoute=[];
  routeGoal=null;
  draw();
-};
+});
 
-$('center').onclick=()=>{
+bind('center','click',()=>{
  camera={x:state.x,y:state.y};
  draw();
-};
+});
 
-$('trace').onclick=()=>{
+bind('trace','click',()=>{
  showTrace=!showTrace;
- $('trace').textContent='Траектория: '+(
-  showTrace?'вкл.':'выкл.'
- );
+
+ $('trace').textContent=
+  'Траектория: '+(showTrace?'вкл.':'выкл.');
+
  draw();
-};
+});
 
-$('apply').onclick=applySettings;
+/* =====================================
+   ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ
+===================================== */
 
-$('obstaclesToggle').onclick=()=>{
+bind('apply','click',applySettings);
+
+bind('obstaclesToggle','click',()=>{
  showObstacles=!showObstacles;
 
  $('obstaclesToggle').textContent=
   'Препятствия: '+(showObstacles?'вкл.':'выкл.');
 
  draw();
-};
+});
 
-$('helperToggle').onclick=()=>{
+bind('helperToggle','click',()=>{
  helperEnabled=!helperEnabled;
 
  $('helperToggle').textContent=
   'Помощник: '+(helperEnabled?'вкл.':'выкл.');
 
  updateAssistant();
-};
+});
 
-$('scenarioReset').onclick=()=>{
+bind('scenarioReset','click',()=>{
  resetState();
 
  showObstacles=true;
  helperEnabled=true;
 
- $('obstaclesToggle').textContent='Препятствия: вкл.';
- $('helperToggle').textContent='Помощник: вкл.';
+ if($('obstaclesToggle')){
+  $('obstaclesToggle').textContent='Препятствия: вкл.';
+ }
+
+ if($('helperToggle')){
+  $('helperToggle').textContent='Помощник: вкл.';
+ }
 
  draw();
-};
+});
 
-$('assess').onclick=()=>{
+/* =====================================
+   ПРОВЕРКА ШИРИНЫ ВОРОТ
+===================================== */
+
+bind('assess','click',()=>{
  readSettings();
 
  const usable=cfg.gateWidth-2*cfg.margin;
@@ -909,42 +1214,59 @@ $('assess').onclick=()=>{
   result='По ширине имеется предварительный запас';
  }
 
- $('gateResult').textContent=
-  result+
-  '. Полезная ширина: '+usable.toFixed(2)+
-  ' м; ширина полуприцепа: '+cfg.trailerWidth.toFixed(2)+
-  ' м; суммарный запас: '+difference.toFixed(2)+
-  ' м. Это только сравнение ширины, не анализ траектории и не гарантия проезда.';
-};
+ const output=$('gateResult');
 
-$('planRoute').onclick=buildRoute;
+ if(output){
+  output.textContent=
+   result+
+   '. Полезная ширина: '+usable.toFixed(2)+
+   ' м; ширина полуприцепа: '+cfg.trailerWidth.toFixed(2)+
+   ' м; суммарный запас: '+difference.toFixed(2)+
+   ' м. Это только сравнение ширины, не гарантия проезда.';
+ }
+});
 
-$('clearRoute').onclick=()=>{
+/* =====================================
+   ПОСТРОЕНИЕ МАРШРУТА
+===================================== */
+
+bind('planRoute','click',buildRoute);
+
+bind('clearRoute','click',()=>{
  plannedRoute=[];
  routeGoal=null;
 
- $('routeAdvice').textContent='Маршрут удалён.';
- $('difficultyAdvice').textContent='Сложность: пока не рассчитана.';
+ if($('routeAdvice')){
+  $('routeAdvice').textContent='Маршрут удалён.';
+ }
+
+ if($('difficultyAdvice')){
+  $('difficultyAdvice').textContent='Сложность: пока не рассчитана.';
+ }
 
  draw();
-};
+});
 
-$('model').onchange=draw;
+bind('model','change',draw);
+
+/* =====================================
+   КЛАВИАТУРА
+===================================== */
 
 window.addEventListener('keydown',event=>{
  if(event.key==='ArrowLeft'){
-  $('steer').value=clamp(
-   Number($('steer').value)-1,
-   -35,35
-  );
+  const input=$('steer');
+  if(!input)return;
+
+  input.value=clamp(Number(input.value)-1,-35,35);
   setSteer();
  }
 
  if(event.key==='ArrowRight'){
-  $('steer').value=clamp(
-   Number($('steer').value)+1,
-   -35,35
-  );
+  const input=$('steer');
+  if(!input)return;
+
+  input.value=clamp(Number(input.value)+1,-35,35);
   setSteer();
  }
 
@@ -964,11 +1286,20 @@ window.addEventListener('keyup',event=>{
  }
 });
 
+/* =====================================
+   ЗАПУСК TRUCKVISION 360
+===================================== */
+
+createVoiceControls();
 readSettings();
-targetSpeed=Number($('speedSet').value);
+
+if($('speedSet')){
+ targetSpeed=Number($('speedSet').value);
+}
 
 resetState();
 draw();
+
 requestAnimationFrame(frame);
 
 })();
