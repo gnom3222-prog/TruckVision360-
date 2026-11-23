@@ -458,20 +458,26 @@ function buildRoute(){
  }
 
  routeGoal={x:gx,y:gy};
- plannedRoute=planAStar(
-  {x:state.x,y:state.y},
-  routeGoal
- )||[];
-
+ const result=planner.plan({
+  start:{...state},
+  goal:routeGoal,
+  params:cfg,
+  obstacles,
+  integrate:(q,v,delta,dt)=>rk4(q,v,delta,dt),
+  maxExpansions:24000,
+  minClearance:0.65,
+  bounds:{minX:-20,maxX:42,minY:-20,maxY:20}
+ });
+ plannedRoute=result.ok?result.states:[];
  if(plannedRoute.length<2){
-  plannedRoute=[];
-  $('routeAdvice').textContent=
-   'Маршрут не найден. Попробуйте другую конечную точку.';
-  $('difficultyAdvice').textContent='Сложность не рассчитана.';
+  routeAssessment=null;
+  $('routeAdvice').textContent=result.reason==='start-collision'?
+   'Маршрут не построен: текущая модель уже пересекается с препятствием. Сначала измените начальное положение.':
+   'Не найден путь для всего автопоезда с текущими ограничениями. Поиск проверил '+result.expanded+' состояний. Попробуйте другую конечную точку или измените начальное положение.';
+  $('difficultyAdvice').textContent='Автопроезд не разрешён: кинематический планировщик не подтвердил безопасную траекторию.';
   draw();
   return;
  }
-
  const m=routeMetrics(plannedRoute);
  routeAssessment=m;
  const next=plannedRoute[1];
@@ -714,75 +720,47 @@ function stopRoutePlayback(reason){
 
 function updateRoutePlayback(){
  if(!routePlayback.active||routePlayback.paused)return;
- if(plannedRoute.length<2){stopRoutePlayback('Нет рассчитанного маршрута. Сначала постройте путь.');return;}
-
- // Find the closest point on the route polyline, then select a look-ahead
- // point by travelled route distance rather than jumping between A* corners.
- let best={distance:Infinity,segment:0,t:0,point:plannedRoute[0],along:0};
- let travelled=0;
- const lengths=[];
- for(let i=0;i<plannedRoute.length-1;i++){
-  const a=plannedRoute[i],b=plannedRoute[i+1];
-  const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);
-  lengths.push(len);
-  const t=len?clamp(((state.x-a.x)*dx+(state.y-a.y)*dy)/(len*len),0,1):0;
-  const p={x:a.x+t*dx,y:a.y+t*dy};
-  const d=Math.hypot(state.x-p.x,state.y-p.y);
-  if(d<best.distance)best={distance:d,segment:i,t,point:p,along:travelled+t*len};
-  travelled+=len;
+ if(plannedRoute.length<2){stopRoutePlayback('Нет рассчитанной траектории автопоезда.');return;}
+ let index=clamp(routePlayback.index||1,1,plannedRoute.length-1);
+ while(index<plannedRoute.length-2&&
+  Math.hypot(plannedRoute[index].x-state.x,plannedRoute[index].y-state.y)<0.22)index++;
+ routePlayback.index=index;
+ let nearest=Infinity;
+ for(let i=Math.max(1,index-8);i<Math.min(plannedRoute.length,index+18);i++){
+  nearest=Math.min(nearest,Math.hypot(plannedRoute[i].x-state.x,plannedRoute[i].y-state.y));
  }
- routePlayback.progress=best.along;
- const lookAheadDistance=2.2;
- let remaining=lookAheadDistance;
- let target=plannedRoute[plannedRoute.length-1];
- for(let i=best.segment;i<plannedRoute.length-1;i++){
-  const a=i===best.segment?best.point:plannedRoute[i];
-  const b=plannedRoute[i+1];
-  const len=Math.hypot(b.x-a.x,b.y-a.y);
-  if(len>=remaining){
-   const f=len?remaining/len:0;
-   target={x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f};
-   break;
-  }
-  remaining-=len;
+ if(nearest>1.25){
+  stopRoutePlayback('Автопроезд остановлен: модель отклонилась от рассчитанной траектории автопоезда.');
+  return;
  }
  const goal=plannedRoute[plannedRoute.length-1];
- const goalDistance=Math.hypot(goal.x-state.x,goal.y-state.y);
- const goalHeading=Math.atan2(goal.y-state.y,goal.x-state.x);
- const headingError=norm(goalHeading-state.psi);
- if(goalDistance<0.75&&best.distance<0.85){
-  stopRoutePlayback('Автопроезд завершён: виртуальная модель достигла конечной точки маршрута.');
+ if(Math.hypot(goal.x-state.x,goal.y-state.y)<0.65&&nearest<0.8){
+  stopRoutePlayback('Виртуальный автопроезд завершён: контрольная точка достигнута.');
   return;
  }
+ const target=plannedRoute[Math.min(plannedRoute.length-1,index+6)];
  const dx=target.x-state.x,dy=target.y-state.y;
- const targetDistance=Math.hypot(dx,dy);
- const alpha=norm(Math.atan2(dy,dx)-state.psi);
- if(Math.abs(alpha)>Math.PI*0.58 && best.along<1.0){
-  stopRoutePlayback('Маршрут начинается позади тягача. Эта версия автопроезда выполняет только движение вперёд; перестройте маршрут с учётом направления тягача.');
-  return;
- }
- if(best.distance>2.0){
-  stopRoutePlayback('Автопроезд остановлен: модель слишком далеко отклонилась от рассчитанной линии маршрута.');
-  return;
- }
- const lookAhead=Math.max(1.2,targetDistance);
- const command=Math.atan2(2*cfg.wheelbase*Math.sin(alpha),lookAhead);
+ const distance=Math.max(0.5,Math.hypot(dx,dy));
+ const gear=plannedRoute[Math.min(index+1,plannedRoute.length-1)].gear||1;
+ const desiredHeading=Math.atan2(dy,dx)+(gear<0?Math.PI:0);
+ const alpha=norm(desiredHeading-state.psi);
+ const command=gear*Math.atan2(2*cfg.wheelbase*Math.sin(alpha),distance);
  steer=clamp(command,-28*Math.PI/180,28*Math.PI/180);
  $('steer').value=String(Math.round(steer*180/Math.PI));
- drive=1;
+ drive=gear;
  braking=false;
- targetSpeed=0.45;
- $('speedSet').value='0.45';
+ targetSpeed=0.35;
+ $('speedSet').value='0.35';
  const safety=assessScene(state);
- const conservativeClearance=safety.nearest.distance-2*Math.max(0,cfg.measurementUncertainty);
- if(safety.collision){
-  stopRoutePlayback('Автопроезд остановлен: расчётные контуры пересекаются с препятствием '+safety.nearest.name+'.');
- }else if(safety.beta>55){
-  stopRoutePlayback('Автопроезд остановлен: опасный расчётный угол сочленения '+safety.beta.toFixed(1)+'°. Перестройте манёвр.');
- }else if(Number.isFinite(conservativeClearance)&&conservativeClearance<0.75){
-  stopRoutePlayback('Автопроезд остановлен: малый расчётный зазор после резерва неопределённости ('+conservativeClearance.toFixed(2)+' м).');
+ const effective=safety.nearest.distance-2*Math.max(0,cfg.measurementUncertainty);
+ if(safety.collision||safety.beta>55||(Number.isFinite(effective)&&effective<0.35)){
+  stopRoutePlayback(safety.collision?
+   'Автопроезд остановлен перед расчётным столкновением с '+safety.nearest.name+'.':
+   safety.beta>55?'Автопроезд остановлен: угол сочленения превысил 55°.':
+   'Автопроезд остановлен: зазор меньше установленного резерва.');
  }
 }
+
 function simulationStep(dt){
  if(routePlayback.active&&!routePlayback.paused)updateRoutePlayback();
  updateSpeed(dt);
@@ -799,7 +777,7 @@ function simulationStep(dt){
   if(routePlayback.active){
    const safety=assessScene(state);
    const effective=safety.nearest.distance-2*Math.max(0,cfg.measurementUncertainty);
-   if(safety.collision||safety.beta>55||(Number.isFinite(effective)&&effective<0.75)){
+   if(safety.collision||safety.beta>55||(Number.isFinite(effective)&&effective<0.35)){
     state=previous;
     stopRoutePlayback(safety.collision?
      'Автопроезд остановлен перед расчётным столкновением с препятствием '+safety.nearest.name+'.':
@@ -967,7 +945,7 @@ $('routeStart').onclick=()=>{
  }
  const clearance=routeAssessment.effectiveClearance;
  if(routeAssessment.collision||!routeAssessment.reached||routeAssessment.maxBeta>=55||
-    (Number.isFinite(clearance)&&clearance<0.75)){
+    (Number.isFinite(clearance)&&clearance<0.35)){
   $('routeAdvice').textContent='Автопроезд не запущен: предварительная проверка маршрута выявила риск или не смогла подтвердить прохождение. Перестройте маршрут и проверьте препятствия, угол сочленения и зазоры.';
   return;
  }
