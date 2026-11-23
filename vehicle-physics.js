@@ -84,5 +84,33 @@
   ];
  }
 
- return Object.freeze({norm,derivative,rk4,hitchPoint,axlePoint,vehiclePolygons});
+ function trailerAxleOffsets(params){
+  const spacing=Number.isFinite(params.trailerAxleSpacing)&&params.trailerAxleSpacing>0?
+   params.trailerAxleSpacing:1.3;
+  return [spacing,0,-spacing];
+ }
+
+ function trailerAxlePoints(q,params){
+  const center=axlePoint(q,params);
+  return trailerAxleOffsets(params).map(offset=>localPoint(center,q.psiT,offset));
+ }
+
+ // Rigid-body lateral velocity relative to the equivalent axle-group center.
+ // This is a scrub indicator, not a tire-force or multi-body dynamics model.
+ function trailerAxleDiagnostics(q,v,delta,params){
+  const motion=derivative(q,v,delta,params);
+  const offsets=trailerAxleOffsets(params);
+  const axles=offsets.map((offset,index)=>({
+   index:index+1,
+   offsetFromGroupCenter:offset,
+   lateralVelocity:motion.psiT*offset
+  }));
+  return {
+   trailerYawRate:motion.psiT,
+   axles,
+   maxAbsLateralVelocity:Math.max(...axles.map(axle=>Math.abs(axle.lateralVelocity)))
+  };
+ }
+
+ return Object.freeze({norm,derivative,rk4,hitchPoint,axlePoint,trailerAxlePoints,trailerAxleDiagnostics,vehiclePolygons});
 });
