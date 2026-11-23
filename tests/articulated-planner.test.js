@@ -277,3 +277,37 @@ test('planner rejects malformed start states and zero-size obstacles',()=>{
 test('direct clearance checks fail closed for malformed obstacles',()=>{
  assert.throws(()=>planner.createClearanceChecker([{x:1,y:2,w:1,h:0}],params),/Некорректные препятствия/);
 });
+
+
+test('swept displacement bound remains conservative across articulation extrema, angle wrap and both gears',()=>{
+ const betaValues=[
+  -2.8,
+  -Math.PI/2-0.02,
+  -Math.PI/2,
+  -Math.PI/2+0.02,
+  -0.02,
+  0.02,
+  Math.PI/2-0.02,
+  Math.PI/2,
+  Math.PI/2+0.02,
+  2.8
+ ];
+ const steeringValues=[-Math.PI/7,-0.24,0,0.24,Math.PI/7];
+ const maxDistance=0.05;
+ for(const beta of betaValues)for(const steer of steeringValues)for(const gear of [-1,1]){
+  const q={x:0.7,y:-1.2,psi:3.05,psiT:3.05-beta};
+  const rate=planner.sweptDisplacementPerMeter(steer,params,q,maxDistance);
+  const initial=planner.polygons(q,params);
+  for(let sample=1;sample<=40;sample++){
+   const distance=maxDistance*sample/40;
+   const next=physics.rk4(q,gear*0.7,steer,distance/0.7,params);
+   const moved=planner.polygons(next,params);
+   for(let body=0;body<initial.length;body++)for(let vertex=0;vertex<initial[body].length;vertex++){
+    const a=initial[body][vertex],b=moved[body][vertex];
+    const displacement=Math.hypot(b.x-a.x,b.y-a.y);
+    assert.ok(displacement<=rate*distance+1e-8,
+     `swept bound underestimates body ${body+1} vertex ${vertex+1} at beta=${beta}, steer=${steer}, gear=${gear}, distance=${distance}`);
+   }
+  }
+ }
+});
