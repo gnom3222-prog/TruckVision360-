@@ -13,3 +13,4 @@ jobs:
           node-version: 22
       - run: node --test tests/vehicle-physics.test.js
       - run: node --check vehicle-physics.js
+      - run: node --check truckvision.js
