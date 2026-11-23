@@ -430,39 +430,68 @@ function planAStar(start,goal){
 function routeMetrics(path){
  let length=0;
  let turns=0;
-
  for(let i=1;i<path.length;i++){
-  length+=Math.hypot(
-   path[i].x-path[i-1].x,
-   path[i].y-path[i-1].y
-  );
+  length+=Math.hypot(path[i].x-path[i-1].x,path[i].y-path[i-1].y);
  }
-
  for(let i=1;i<path.length-1;i++){
-  const a=Math.atan2(
-   path[i].y-path[i-1].y,
-   path[i].x-path[i-1].x
-  );
-  const b=Math.atan2(
-   path[i+1].y-path[i].y,
-   path[i+1].x-path[i].x
-  );
+  const a=Math.atan2(path[i].y-path[i-1].y,path[i].x-path[i-1].x);
+  const b=Math.atan2(path[i+1].y-path[i].y,path[i+1].x-path[i].x);
   if(Math.abs(norm(b-a))>0.18)turns++;
  }
 
- const scene=assessScene();
- const score=
-  turns*2+
-  (scene.beta>35?2:0)+
-  (scene.nearest.distance<1?3:
-   scene.nearest.distance<2?1:0);
-
+ // Follow the point route with a low-speed pure-pursuit controller while
+ // checking the complete tractor + trailer footprint at every simulation step.
+ const sim={...state};
+ const obstaclesWereVisible=showObstacles;
+ let minClearance=Infinity;
+ let maxBeta=Math.abs(norm(sim.psi-sim.psiT))*180/Math.PI;
+ let collision=false;
+ let reached=false;
+ let pathIndex=1;
+ const dt=0.10;
+ const lookAhead=2.0;
+ const maxSteer=35*Math.PI/180;
+ const maxSteps=Math.min(5000,Math.max(300,Math.ceil(length/(0.6*dt))*4));
+ for(let step=0;step<maxSteps;step++){
+  while(pathIndex<path.length-1 &&
+   Math.hypot(path[pathIndex].x-sim.x,path[pathIndex].y-sim.y)<lookAhead*0.65)pathIndex++;
+  const target=path[Math.min(pathIndex,path.length-1)];
+  const dx=target.x-sim.x,dy=target.y-sim.y;
+  const targetAngle=Math.atan2(dy,dx);
+  const alpha=norm(targetAngle-sim.psi);
+  const steerCmd=clamp(Math.atan2(2*cfg.wheelbase*Math.sin(alpha),Math.max(0.5,Math.hypot(dx,dy))),-maxSteer,maxSteer);
+  const next=rk4(sim,0.6,steerCmd,dt);
+  Object.assign(sim,next);
+  const beta=Math.abs(norm(sim.psi-sim.psiT))*180/Math.PI;
+  maxBeta=Math.max(maxBeta,beta);
+  const vehicle=vehiclePolygons(sim);
+  for(const o of obstacles){
+   const op=obstaclePolygon(o);
+   for(const vp of vehicle){
+    const d=polygonDistance(vp,op);
+    minClearance=Math.min(minClearance,d);
+    if(d===0)collision=true;
+   }
+  }
+  if(collision||beta>=75)break;
+  if(Math.hypot(path[path.length-1].x-sim.x,path[path.length-1].y-sim.y)<1.0){
+   reached=true;
+   break;
+  }
+ }
+ showObstacles=obstaclesWereVisible;
+ const initial=assessScene(state);
+ const score=turns*1.2+(maxBeta>45?3:maxBeta>30?1.5:0)+
+  (minClearance<0.35?4:minClearance<0.75?2:minClearance<1.5?1:0)+
+  (!reached?3:0)+(collision?8:0);
  return{
-  length,
-  turns,
-  level:score>=7?'Высокая':score>=3?'Средняя':'Низкая',
-  beta:scene.beta,
-  clearance:scene.nearest.distance
+  length,turns,
+  level:collision||!reached||maxBeta>=75?'Не пройден':
+   score>=7?'Высокая':score>=3?'Средняя':'Низкая',
+  beta:initial.beta,
+  maxBeta,
+  clearance:minClearance,
+  collision,reached
  };
 }
 
