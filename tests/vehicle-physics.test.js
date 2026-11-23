@@ -86,7 +86,7 @@ test('vehicle geometry validation rejects missing, non-finite and implausible di
  assert.ok(physics.validateVehicleParams(null).length>0);
  const errors=physics.validateVehicleParams({
   wheelbase:0,hitchOffset:-0.1,kingpinAxles:NaN,
-  trailerLength:13.6,trailerWidth:0.5,trailerAxleSpacing:8
+  trailerLength:31,trailerWidth:0.5,trailerAxleSpacing:8
  });
  assert.equal(errors.length,6);
  assert.ok(errors.some(message=>message.startsWith('wheelbase:')));
