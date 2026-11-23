@@ -45,6 +45,8 @@ test('articulated planner routes the complete trailer around an obstacle',()=>{
  const obstacles=[{x:20,y:0,w:1.2,h:1.2,name:'test pallet'}];
  const result=planner.plan({start:{x:0,y:0,psi:0,psiT:0},goal:{x:40,y:0},params,obstacles,integrate,maxExpansions:24000,bounds:{minX:-18,maxX:50,minY:-16,maxY:16}});
  assert.equal(result.ok,true,JSON.stringify(result));
+ assert.ok(result.minimumClearanceLowerBound>=0.30-1e-6,'swept lower bound must preserve the requested clearance');
+ assert.ok(result.minimumClearance>=result.minimumClearanceLowerBound-1e-6,'sampled clearance must not be below its conservative lower bound');
  for(const q of result.states.slice(1)){
   assert.ok(planner.clearance(q,obstacles,params).distance>=0.30-1e-6,'vehicle footprint must remain clear');
  }
@@ -100,6 +102,7 @@ test('articulated planner passes through a two-pallet clearance gate',()=>{
   bounds:{minX:-18,maxX:32,minY:-12,maxY:12}
  });
  assert.equal(result.ok,true,JSON.stringify(result));
+ assert.ok(result.minimumClearanceLowerBound>=0.30-1e-6,'continuous-step bound must preserve the gate clearance');
  for(const q of result.states.slice(1)){
   assert.ok(planner.clearance(q,obstacles,params).distance>=0.30-1e-6,'entire articulated footprint must clear both pallets');
  }
@@ -117,6 +120,47 @@ test('articulated planner rejects an initial tractor or trailer collision',()=>{
  assert.equal(result.reason,'start-collision');
 });
 
+
+test('swept displacement bound covers every tractor, cab and trailer vertex in forward and reverse steps',()=>{
+ const cases=[
+  {q:{x:0,y:0,psi:0.2,psiT:-0.4},steer:Math.PI/7,gear:1},
+  {q:{x:1,y:-2,psi:-0.3,psiT:0.55},steer:-Math.PI/7,gear:-1},
+  {q:{x:-3,y:1,psi:1.1,psiT:-0.1},steer:0.24,gear:1}
+ ];
+ for(const item of cases){
+  const rate=planner.sweptDisplacementPerMeter(item.steer,params);
+  const initial=planner.polygons(item.q,params);
+  for(let sample=1;sample<=8;sample++){
+   const distance=0.05*sample/8;
+   const next=physics.rk4(item.q,item.gear*0.7,item.steer,distance/0.7,params);
+   const moved=planner.polygons(next,params);
+   for(let body=0;body<initial.length;body++)for(let vertex=0;vertex<initial[body].length;vertex++){
+    const a=initial[body][vertex],b=moved[body][vertex];
+    const displacement=Math.hypot(b.x-a.x,b.y-a.y);
+    assert.ok(displacement<=rate*distance+1e-8,
+     'swept bound must cover every body vertex between sampled poses');
+   }
+  }
+ }
+});
+
+test('swept displacement bound rejects incomplete vehicle geometry',()=>{
+ assert.throws(()=>planner.sweptDisplacementPerMeter(0,{...params,kingpinAxles:0}),/invalid/i);
+});
+
+test('planner rejects a start position already inside the requested clearance reserve',()=>{
+ const obstacles=[{x:6,y:0,w:1,h:1,name:'nearby pallet'}];
+ const result=planner.plan({
+  start:{x:0,y:0,psi:0,psiT:0},
+  goal:{x:8,y:0},
+  params,obstacles,integrate,
+  minClearance:0.65,
+  maxExpansions:1000
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'start-clearance-insufficient');
+ assert.ok(result.startClearance<result.requiredClearance);
+});
 
 test('start recommendation identifies the first steering side after a straight lead-in',()=>{
  const states=[
