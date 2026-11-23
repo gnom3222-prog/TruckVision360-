@@ -13,6 +13,7 @@ jobs:
           node-version: 22
       - run: node --test tests/*.test.js
       - run: node --check vehicle-physics.js
+      - run: node --check articulated-planner.js
       - run: node --check truckvision.js
       - run: node --check planner-worker.js
       - run: node --check camera-geometry.js
