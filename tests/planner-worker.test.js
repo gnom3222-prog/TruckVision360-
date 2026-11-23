@@ -15,8 +15,9 @@ test('planner worker returns progress and a reverse-capable articulated route',(
  const context=vm.createContext(sandbox);
  sandbox.importScripts=(...files)=>{
   for(const file of files){
-   const source=fs.readFileSync(path.join(__dirname,'..',file),'utf8');
-   vm.runInContext(source,context,{filename:file});
+   const cleanFile=file.split('?')[0];
+   const source=fs.readFileSync(path.join(__dirname,'..',cleanFile),'utf8');
+   vm.runInContext(source,context,{filename:cleanFile});
   }
  };
  const workerSource=fs.readFileSync(path.join(__dirname,'..','planner-worker.js'),'utf8');
