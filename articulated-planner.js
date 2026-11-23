@@ -46,19 +46,25 @@
   const dy=Math.max(0,a.minY-b.maxY,b.minY-a.maxY);
   return Math.hypot(dx,dy);
  }
- function clearance(q,obstacles,p){
-  const bodies=polygons(q,p),bodyBounds=bodies.map(polygonBounds);
-  let min=Infinity,hit=null;
-  for(const o of obstacles){
-   const op=obstaclePoly(o),ob=polygonBounds(op);
-   for(let i=0;i<bodies.length;i++){
-    if(aabbDistance(bodyBounds[i],ob)>=min)continue;
-    const d=polyDist(bodies[i],op);
-    if(d<min){min=d;hit=o.name||'препятствие';}
+ function createClearanceChecker(obstacles,p){
+  const prepared=obstacles.map(o=>{
+   const poly=obstaclePoly(o);
+   return {poly,bounds:polygonBounds(poly),name:o.name||'препятствие'};
+  });
+  return function(q){
+   const bodies=polygons(q,p),bodyBounds=bodies.map(polygonBounds);
+   let min=Infinity,hit=null;
+   for(const obstacle of prepared){
+    for(let i=0;i<bodies.length;i++){
+     if(aabbDistance(bodyBounds[i],obstacle.bounds)>=min)continue;
+     const d=polyDist(bodies[i],obstacle.poly);
+     if(d<min){min=d;hit=obstacle.name;}
+    }
    }
-  }
-  return {distance:min,hit};
+   return {distance:min,hit};
+  };
  }
+ function clearance(q,obstacles,p){return createClearanceChecker(obstacles,p)(q);}
  function push(heap,n){
   let i=heap.length;heap.push(n);
   while(i){const p=(i-1)>>1;if(heap[p].f<=n.f)break;heap[i]=heap[p];i=p;heap[i]=n;}
@@ -75,12 +81,13 @@
   const step=0.20,angleStep=Math.PI/60,primitive=0.6,ds=0.05;
   const maxSteer=options.maxSteer||Math.PI/7;
   const minClearance=options.minClearance??0.30;
+  const checkClearance=createClearanceChecker(obstacles,params);
   const key=q=>[
    Math.round(q.x/step),Math.round(q.y/step),
    Math.round(norm(q.psi)/angleStep),Math.round(norm(q.psiT)/angleStep)
   ].join(':');
   const h=q=>Math.hypot(goal.x-q.x,goal.y-q.y)+0.35*Math.abs(norm(q.psi-q.psiT));
-  const startClearance=clearance(start,obstacles,params).distance;
+  const startClearance=checkClearance(start).distance;
   if(startClearance===0)return {ok:false,reason:'start-collision',expanded:0};
   const requiredClearance=Math.min(minClearance,startClearance);
   const initial={q:{...start},g:0,f:h(start),parent:null,gear:1,steer:0,samples:[]};
@@ -107,7 +114,7 @@
      q=options.integrate(q,gear*0.7,steer,travel/0.7,params);
      if(q.x<bounds.minX||q.x>bounds.maxX||q.y<bounds.minY||q.y>bounds.maxY||
         Math.abs(norm(q.psi-q.psiT))>Math.PI*0.92){valid=false;break;}
-     const c=clearance(q,obstacles,params);minD=Math.min(minD,c.distance);samples.push({x:q.x,y:q.y,psi:q.psi,psiT:q.psiT,gear,steer});
+     const c=checkClearance(q);minD=Math.min(minD,c.distance);samples.push({x:q.x,y:q.y,psi:q.psi,psiT:q.psiT,gear,steer});
      if(c.distance<requiredClearance){valid=false;break;}
     }
     if(!valid)continue;
@@ -125,7 +132,8 @@
   chain.reverse();
   const states=[{x:start.x,y:start.y,psi:start.psi,psiT:start.psiT,gear:1,steer:0}];
   for(const n of chain)states.push(...n.samples);
-  return {ok:true,states,expanded,length:finish.g,minimumClearance:Math.min(...states.slice(1).map((v)=>clearance(v,obstacles,params).distance))};
+  const pathMinimum=Math.min(startClearance,...chain.map(n=>n.minClearance));
+  return {ok:true,states,expanded,length:finish.g,minimumClearance:pathMinimum};
  }
- return Object.freeze({plan,clearance,polygons});
+ return Object.freeze({plan,clearance,createClearanceChecker,polygons});
 });
