@@ -1,4 +1,182 @@
 
+/* ==========================================
+   TRUCKVISION 360 — VOICE MODULE
+   Независимый голосовой помощник
+========================================== */
+(function () {
+  'use strict';
+
+  if (window.__truckVisionVoiceLoaded) return;
+  window.__truckVisionVoiceLoaded = true;
+
+  let enabled = false;
+  let lastMessage = '';
+  let lastTime = 0;
+
+  function createPanel() {
+    if (document.getElementById('truckVisionVoicePanel')) return;
+
+    const panel = document.createElement('section');
+    panel.id = 'truckVisionVoicePanel';
+
+    panel.style.cssText = `
+      box-sizing:border-box;
+      width:calc(100% - 24px);
+      max-width:900px;
+      margin:16px auto;
+      padding:18px;
+      background:#142b40;
+      border:1px solid #3983a8;
+      border-radius:16px;
+      color:white;
+      font-family:system-ui,sans-serif;
+      position:relative;
+      z-index:1000;
+    `;
+
+    panel.innerHTML = `
+      <div style="font-size:20px;font-weight:bold;margin-bottom:12px">
+        🔊 Голосовой помощник TruckVision 360
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button id="tvVoiceToggle"
+          style="padding:13px;border:0;border-radius:10px;
+          background:#0789ad;color:white;font-weight:bold">
+          Включить голос
+        </button>
+
+        <button id="tvVoiceTest"
+          style="padding:13px;border:0;border-radius:10px;
+          background:#315675;color:white;font-weight:bold">
+          Проверить голос
+        </button>
+      </div>
+
+      <div id="tvVoiceStatus"
+        style="margin-top:12px;color:#b8d9ec">
+        Голос выключен.
+      </div>
+
+      <div id="tvVoiceAdvice"
+        style="margin-top:10px;color:#83d6a8">
+        Ожидание подсказок симулятора.
+      </div>
+    `;
+
+    document.body.appendChild(panel);
+
+    const toggle = panel.querySelector('#tvVoiceToggle');
+    const test = panel.querySelector('#tvVoiceTest');
+    const status = panel.querySelector('#tvVoiceStatus');
+
+    function speak(message) {
+      if (!enabled || !message) return;
+      if (!('speechSynthesis' in window)) return;
+
+      const now = Date.now();
+
+      if (message === lastMessage) return;
+      if (now - lastTime < 2500) return;
+
+      lastMessage = message;
+      lastTime = now;
+
+      window.speechSynthesis.cancel();
+
+      const speech = new SpeechSynthesisUtterance(message);
+      speech.lang = 'ru-RU';
+      speech.rate = 0.92;
+      speech.pitch = 1;
+      speech.volume = 1;
+
+      window.speechSynthesis.speak(speech);
+    }
+
+    toggle.addEventListener('click', function () {
+      if (!('speechSynthesis' in window)) {
+        status.textContent = 'Голос не поддерживается браузером.';
+        return;
+      }
+
+      enabled = !enabled;
+
+      toggle.textContent = enabled
+        ? 'Выключить голос'
+        : 'Включить голос';
+
+      status.textContent = enabled
+        ? 'Голосовой помощник включён.'
+        : 'Голосовой помощник выключен.';
+
+      if (!enabled) {
+        window.speechSynthesis.cancel();
+        lastMessage = '';
+      } else {
+        window.speechSynthesis.cancel();
+
+        const greeting = new SpeechSynthesisUtterance(
+          'Голосовой помощник TruckVision 360 включён.'
+        );
+
+        greeting.lang = 'ru-RU';
+        greeting.rate = 0.92;
+
+        window.speechSynthesis.speak(greeting);
+      }
+    });
+
+    test.addEventListener('click', function () {
+      if (!enabled) {
+        status.textContent = 'Сначала включи голос.';
+        return;
+      }
+
+      lastMessage = '';
+      lastTime = 0;
+
+      speak(
+        'Проверка системы. TruckVision 360 готов к работе.',
+        true
+      );
+    });
+
+    function findAdvice() {
+      return document.getElementById('assistantAdvice');
+    }
+
+    function readAdvice() {
+      const advice = findAdvice();
+
+      if (!advice) return;
+
+      const message = advice.innerText.trim();
+
+      if (!message) return;
+
+      panel.querySelector('#tvVoiceAdvice').textContent = message;
+      speak(message);
+    }
+
+    const observer = new MutationObserver(readAdvice);
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    });
+
+    readAdvice();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', createPanel);
+  } else {
+    createPanel();
+  }
+
+})();
+
 (()=>{
 'use strict';
 
