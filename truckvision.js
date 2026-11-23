@@ -458,13 +458,19 @@ function buildRoute(){
  }
 
  routeGoal={x:gx,y:gy};
+ // Keep the UI responsive on iPhone: the articulated search is CPU-heavy.
+ // Draw the current scene before starting and use a bounded mobile search.
+ $('routeAdvice').textContent='Рассчитываю траекторию автопоезда…';
+ $('difficultyAdvice').textContent='Проверяю тягач, полуприцеп и зазоры до препятствий…';
+ draw();
+ const mobile=window.matchMedia&&window.matchMedia('(max-width: 600px)').matches;
  const result=planner.plan({
   start:{...state},
   goal:routeGoal,
   params:cfg,
   obstacles,
   integrate:(q,v,delta,dt)=>rk4(q,v,delta,dt),
-  maxExpansions:24000,
+  maxExpansions:mobile?4500:12000,
   minClearance:0.65,
   bounds:{minX:-20,maxX:42,minY:-20,maxY:20}
  });
@@ -803,9 +809,20 @@ function frame(timestamp){
  const dt=Math.min((timestamp-lastTime)/1000,0.04);
  lastTime=timestamp;
 
- if(drive!==0||braking||(routePlayback.active&&!routePlayback.paused))simulationStep(dt);
-
- draw();
+ try{
+  if(drive!==0||braking||(routePlayback.active&&!routePlayback.paused))simulationStep(dt);
+  draw();
+ }catch(error){
+  console.error('TruckVision render loop failed:',error);
+  routePlayback.active=false;
+  drive=0;
+  braking=false;
+  const advice=$('routeAdvice');
+  if(advice)advice.textContent='Ошибка отрисовки: '+(error&&error.message?error.message:String(error))+'. Перезагрузите страницу; сообщение сохранено для диагностики.';
+  const status=$('mode');
+  if(status){status.textContent='Ошибка симулятора';status.style.color='#ff8585';}
+  return;
+ }
  requestAnimationFrame(frame);
 }
 
