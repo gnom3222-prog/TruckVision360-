@@ -389,7 +389,7 @@ function planAStar(start,goal){
  return compact;
 }
 
-function routeMetrics(path){
+function routeMetrics(path,minimumClearanceLowerBound=Infinity){
  let length=0,gearChanges=0,steeringChanges=0,reverseDistance=0,reverseSegments=0;
  let minClearance=Infinity,maxBeta=0,collision=false,maxAxleScrubSpeed=0;
  const checkClearance=showObstacles?planner.createClearanceChecker(obstacles,cfg):null;
@@ -421,7 +421,8 @@ function routeMetrics(path){
   }
  }
  const turns=gearChanges+steeringChanges;
- const effectiveClearance=minClearance-2*Math.max(0,cfg.measurementUncertainty);
+ const clearanceForAssessment=Math.min(minClearance,minimumClearanceLowerBound);
+ const effectiveClearance=clearanceForAssessment-2*Math.max(0,cfg.measurementUncertainty);
  const finalErrors=planner.goalErrors(path[path.length-1],routeGoal);
  const terminalHeadingMismatch=finalErrors.headingError!==null&&finalErrors.headingError>routeGoal.headingTolerance;
  const terminalArticulationMismatch=finalErrors.articulation>routeGoal.maxTerminalArticulation;
@@ -444,7 +445,7 @@ function routeMetrics(path){
  if(articulationBlocked)reasons.push('угол сочленения достиг 55°');
  if(clearanceInsufficient)reasons.push('недостаточный зазор после резерва погрешности');
  if(!reasons.length)reasons.push('в проверенной модели препятствия не пересечены');
- return {length,turns,gearChanges,steeringChanges,reverseDistance,reverseSegments,maxAxleScrubSpeed,level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',maxBeta,clearance:minClearance,effectiveClearance,collision,reached,finalHeadingErrorDeg,finalArticulationDeg,clearanceInsufficient,articulationBlocked,reasons};
+ return {length,turns,gearChanges,steeringChanges,reverseDistance,reverseSegments,maxAxleScrubSpeed,level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',maxBeta,clearance:minClearance,clearanceLowerBound:clearanceForAssessment,effectiveClearance,collision,reached,finalHeadingErrorDeg,finalArticulationDeg,clearanceInsufficient,articulationBlocked,reasons};
 }
 
 function cancelPlannerWorker(reason='Расчёт маршрута отменён.'){
@@ -572,6 +573,8 @@ async function buildRoute(){
     ', угол сочленения '+(result.articulationAngle*180/Math.PI).toFixed(1)+'°.':'';
    $('routeAdvice').textContent=result.reason==='start-collision'?
     'Маршрут не построен: текущая модель уже пересекается с препятствием. Сначала измените начальное положение.':
+    result.reason==='start-clearance-insufficient'?
+    'Маршрут не построен: начальный зазор '+result.startClearance.toFixed(2)+' м меньше требуемого резерва '+result.requiredClearance.toFixed(2)+' м. Увеличьте расстояние до препятствий и повторите расчёт.':
     'Не найден путь, который одновременно достигает координат, заданного курса тягача и допустимого угла полуприцепа. Проверено '+result.expanded+
     ' состояний.'+closestText+' Попробуйте изменить конечный курс, допуски или начальное положение.';
    $('difficultyAdvice').textContent='Автопроезд не разрешён: кинематический планировщик не подтвердил траекторию.';
@@ -579,7 +582,7 @@ async function buildRoute(){
    return;
   }
 
-  const m=routeMetrics(plannedRoute);
+  const m=routeMetrics(plannedRoute,result.minimumClearanceLowerBound);
   routeAssessment=m;
   const recommendation=planner.recommendStart(plannedRoute);
   const firstGear=recommendation.initialGear;
@@ -607,6 +610,7 @@ async function buildRoute(){
    '. Максимальный угол сочленения '+m.maxBeta.toFixed(1)+'°; конечная ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+
    '°; конечный угол тягач–полуприцеп '+m.finalArticulationDeg.toFixed(1)+'°; оценка боковой скорости крайних осей при расчётной скорости 0,7 м/с '+m.maxAxleScrubSpeed.toFixed(3)+' м/с; минимальный зазор до тестовых препятствий '+
    (Number.isFinite(m.clearance)?m.clearance.toFixed(2)+' м':'не определён')+
+   '; консервативная нижняя оценка между узлами '+(Number.isFinite(m.clearanceLowerBound)?m.clearanceLowerBound.toFixed(2)+' м':'не ограничена')+
    '; после резерва погрешности: '+(Number.isFinite(m.effectiveClearance)?m.effectiveClearance.toFixed(2)+' м':'не определено')+
    '; столкновение: '+(m.collision?'да':'не выявлено')+
    '. Курс у цели проверен относительно заданного угла и допуска; учебный расчёт, не гарантия безопасности.';
