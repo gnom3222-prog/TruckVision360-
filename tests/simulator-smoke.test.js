@@ -11,8 +11,8 @@ function bootSimulator(){
  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
  const source=fs.readFileSync(path.join(root,'truckvision.js'),'utf8');
  const values={};
- for(const match of html.matchAll(/<input\\b[^>]*\\bid="([^"]+)"[^>]*>/g)){
-  const value=match[0].match(/\\bvalue="([^"]*)"/);
+ for(const match of html.matchAll(/<input\b[^>]*\bid="([^"]+)"[^>]*>/g)){
+  const value=match[0].match(/\bvalue="([^"]*)"/);
   values[match[1]]=value?value[1]:'';
  }
  values.model='hybrid';
