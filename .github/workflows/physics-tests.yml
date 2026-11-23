@@ -16,3 +16,4 @@ jobs:
       - run: node --check truckvision.js
       - run: node --check planner-worker.js
       - run: node --check camera-measure.js
+      - run: node --check sw.js
