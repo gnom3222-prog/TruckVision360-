@@ -82,12 +82,12 @@
    if(dist<Math.hypot(goal.x-closest.q.x,goal.y-closest.q.y))closest=cur;
    if(dist<0.9){finish=cur;break;}
    for(const [gear,steer] of controls){
-    let q={...cur.q},valid=true,minD=Infinity;
+    let q={...cur.q},valid=true,minD=Infinity,samples=[];
     for(let d=0;d<primitive;d+=ds){
      q=options.integrate(q,gear*0.7,steer,Math.min(ds,primitive-d),params);
      if(q.x<bounds.minX||q.x>bounds.maxX||q.y<bounds.minY||q.y>bounds.maxY||
         Math.abs(norm(q.psi-q.psiT))>Math.PI*0.92){valid=false;break;}
-     const c=clearance(q,obstacles,params);minD=Math.min(minD,c.distance);
+     const c=clearance(q,obstacles,params);minD=Math.min(minD,c.distance);samples.push({x:q.x,y:q.y,psi:q.psi,psiT:q.psiT,gear,steer});
      if(c.distance<requiredClearance){valid=false;break;}
     }
     if(!valid)continue;
@@ -97,12 +97,14 @@
     const ng=cur.g+primitive+gearPenalty+steerPenalty;
     if(ng>=(best.get(nk)??Infinity))continue;
     best.set(nk,ng);
-    push(open,{q,g:ng,f:ng+h(q),parent:cur,gear,steer,minClearance:minD,samples:[]});
+    push(open,{q,g:ng,f:ng+h(q),parent:cur,gear,steer,minClearance:minD,samples});
    }
   }
   if(!finish)return {ok:false,reason:'no-path',expanded,closest:{x:closest.q.x,y:closest.q.y},goalDistance:Math.hypot(goal.x-closest.q.x,goal.y-closest.q.y)};
-  const states=[];for(let n=finish;n;n=n.parent)states.push({x:n.q.x,y:n.q.y,psi:n.q.psi,psiT:n.q.psiT,gear:n.gear,steer:n.steer});
-  states.reverse();
+  const chain=[];for(let n=finish;n&&n.parent;n=n.parent)chain.push(n);
+  chain.reverse();
+  const states=[{x:start.x,y:start.y,psi:start.psi,psiT:start.psiT,gear:1,steer:0}];
+  for(const n of chain)states.push(...n.samples);
   return {ok:true,states,expanded,length:finish.g,minimumClearance:Math.min(...states.slice(1).map((v)=>clearance(v,obstacles,params).distance))};
  }
  return Object.freeze({plan,clearance,polygons});
