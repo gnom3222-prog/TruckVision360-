@@ -5,5 +5,13 @@
   "display": "standalone",
   "background_color": "#081321",
   "theme_color": "#091522",
-  "description": "Помощник водителя грузового автопоезда"
+  "description": "Помощник водителя грузового автопоезда",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }
