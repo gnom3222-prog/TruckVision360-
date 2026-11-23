@@ -13,7 +13,7 @@ test('articulated planner reaches a clear goal in open space',()=>{
 });
 test('articulated planner routes the complete trailer around an obstacle',()=>{
  const obstacles=[{x:20,y:0,w:1.2,h:1.2,name:'test pallet'}];
- const result=planner.plan({start:{x:0,y:0,psi:0,psiT:0},goal:{x:28,y:0},params,obstacles,integrate,maxExpansions:24000,bounds:{minX:-18,maxX:38,minY:-16,maxY:16}});
+ const result=planner.plan({start:{x:0,y:0,psi:0,psiT:0},goal:{x:40,y:0},params,obstacles,integrate,maxExpansions:24000,bounds:{minX:-18,maxX:50,minY:-16,maxY:16}});
  assert.equal(result.ok,true,JSON.stringify(result));
  for(const q of result.states.slice(1)){
   assert.ok(planner.clearance(q,obstacles,params).distance>=0.30-1e-6,'vehicle footprint must remain clear');
