@@ -463,28 +463,27 @@ function routeMetrics(path){
  const score=turns*1.2+(maxBeta>45?3:maxBeta>30?1.5:0)+
   (effectiveClearance<0.35?4:effectiveClearance<0.75?2:effectiveClearance<1.5?1:0)+
   (!reached?3:0)+(collision?8:0);
+ const clearanceInsufficient=Number.isFinite(effectiveClearance)&&effectiveClearance<0.75;
+ const articulationBlocked=maxBeta>=55;
  const reasons=[];
  if(turns>0)reasons.push('на маршруте '+turns+' поворот(ов)');
  if(collision)reasons.push('расчётное пересечение с препятствием');
  if(!reached)reasons.push('симуляция не подтвердила достижение цели');
- if(maxBeta>=75)reasons.push('угол сочленения достиг критического учебного порога 75°');
+ if(articulationBlocked)reasons.push('угол сочленения достиг порога блокировки автопроезда 55°');
  else if(maxBeta>45)reasons.push('угол сочленения превышал 45°');
  else if(maxBeta>30)reasons.push('угол сочленения превышал 30°');
- if(Number.isFinite(effectiveClearance)){
-  if(effectiveClearance<0.35)reasons.push('зазор после резерва погрешности меньше 0,35 м');
-  else if(effectiveClearance<0.75)reasons.push('небольшой зазор после резерва погрешности');
-  else if(effectiveClearance<1.5)reasons.push('ограниченный зазор до препятствий');
- }
+ if(clearanceInsufficient)reasons.push('зазор после резерва погрешности меньше порога автопроезда 0,75 м');
+ else if(Number.isFinite(effectiveClearance)&&effectiveClearance<1.5)reasons.push('ограниченный зазор до препятствий');
  if(!reasons.length)reasons.push('в тестовой модели не выявлены выраженные факторы усложнения');
  return{
   length,turns,
-  level:collision||!reached||maxBeta>=75?'Не пройден':
+  level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':
    score>=7?'Высокая':score>=3?'Средняя':'Низкая',
   beta:initial.beta,
   maxBeta,
   clearance:minClearance,
   effectiveClearance,
-  collision,reached,reasons
+  collision,reached,clearanceInsufficient,articulationBlocked,reasons
  };
 }
 
