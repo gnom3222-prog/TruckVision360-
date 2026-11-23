@@ -31,6 +31,7 @@ let braking=false,distance=0,trace=[],showTrace=true;
 let camera={x:0,y:0},lastTime=0;
 let showObstacles=true,helperEnabled=true;
 let plannedRoute=[],routeGoal=null;
+let routePlayback={active:false,paused:false,index:1,stopReason:''};
 
 const obstacles=[
  {x:8.0,y:2.9,w:1.2,h:1.2,name:'Паллет A'},
@@ -743,7 +744,60 @@ function updateSpeed(dt){
  if(Math.abs(speed)<0.005)speed=0;
 }
 
+function stopRoutePlayback(reason){
+ routePlayback.active=false;
+ routePlayback.paused=false;
+ drive=0;
+ braking=false;
+ speed=0;
+ steer=0;
+ $('steer').value='0';
+ $('steerLabel').textContent='0°';
+ $('routePause').textContent='Ⅱ Пауза';
+ $('mode').textContent='Автопроезд остановлен';
+ if(reason){
+  routePlayback.stopReason=reason;
+  $('routeAdvice').textContent=reason;
+ }
+ draw();
+}
+
+function updateRoutePlayback(){
+ if(!routePlayback.active||routePlayback.paused)return;
+ if(plannedRoute.length<2){stopRoutePlayback('Нет рассчитанного маршрута. Сначала постройте путь.');return;}
+ while(routePlayback.index<plannedRoute.length-1 &&
+  Math.hypot(plannedRoute[routePlayback.index].x-state.x,plannedRoute[routePlayback.index].y-state.y)<1.1){
+  routePlayback.index++;
+ }
+ const target=plannedRoute[Math.min(routePlayback.index,plannedRoute.length-1)];
+ const dx=target.x-state.x,dy=target.y-state.y;
+ const distanceToTarget=Math.hypot(dx,dy);
+ if(routePlayback.index>=plannedRoute.length-1&&distanceToTarget<0.65){
+  stopRoutePlayback('Виртуальный автопроезд завершён: модель достигла конечной точки.');
+  return;
+ }
+ const alpha=norm(Math.atan2(dy,dx)-state.psi);
+ const lookAhead=Math.max(1.5,Math.min(3.0,distanceToTarget));
+ const command=Math.atan2(2*cfg.wheelbase*Math.sin(alpha),lookAhead);
+ steer=clamp(command,-30*Math.PI/180,30*Math.PI/180);
+ $('steer').value=String(Math.round(steer*180/Math.PI));
+ drive=1;
+ braking=false;
+ targetSpeed=0.6;
+ $('speedSet').value='0.6';
+ const safety=assessScene(state);
+ const conservativeClearance=safety.nearest.distance-2*Math.max(0,cfg.measurementUncertainty);
+ if(safety.collision){
+  stopRoutePlayback('Автопроезд остановлен: расчётные контуры пересекаются с препятствием '+safety.nearest.name+'.');
+ }else if(safety.beta>60){
+  stopRoutePlayback('Автопроезд остановлен: угол сочленения превысил 60°. Требуется пересмотр манёвра.');
+ }else if(Number.isFinite(conservativeClearance)&&conservativeClearance<0.35){
+  stopRoutePlayback('Автопроезд остановлен: малый расчётный зазор после резерва неопределённости ('+conservativeClearance.toFixed(2)+' м).');
+ }
+}
+
 function simulationStep(dt){
+ if(routePlayback.active&&!routePlayback.paused)updateRoutePlayback();
  updateSpeed(dt);
 
  const oldX=state.x;
@@ -828,6 +882,7 @@ $('speedSet').oninput=()=>{
 };
 
 $('reset').onclick=()=>{
+ stopRoutePlayback('');
  resetState();
  plannedRoute=[];
  routeGoal=null;
@@ -862,6 +917,7 @@ $('helperToggle').onclick=()=>{
 };
 
 $('scenarioReset').onclick=()=>{
+ stopRoutePlayback('');
  resetState();
  showObstacles=true;
  helperEnabled=true;
@@ -891,9 +947,36 @@ $('assess').onclick=()=>{
   ' м. Это только сравнение ширины, не анализ траектории и не гарантия проезда.';
 };
 
-$('planRoute').onclick=buildRoute;
+$('routeStart').onclick=()=>{
+ if(plannedRoute.length<2){
+  $('routeAdvice').textContent='Сначала нажмите «Построить путь» и проверьте результат.';
+  return;
+ }
+ if(routePlayback.active&&routePlayback.paused){
+  routePlayback.paused=false;
+  $('routePause').textContent='Ⅱ Пауза';
+  return;
+ }
+ routePlayback={active:true,paused:false,index:1,stopReason:''};
+ speed=0;drive=0;braking=false;
+ targetSpeed=0.6;
+ $('speedSet').value='0.6';
+ $('routeAdvice').textContent='Виртуальный автопроезд начат на малой скорости. Наблюдайте за моделью; при предупреждении нажмите «Стоп».';
+};
+$('routePause').onclick=()=>{
+ if(!routePlayback.active)return;
+ routePlayback.paused=!routePlayback.paused;
+ if(routePlayback.paused){drive=0;braking=false;speed=0;$('routePause').textContent='▶ Продолжить';}
+ else $('routePause').textContent='Ⅱ Пауза';
+};
+$('routeStop').onclick=()=>stopRoutePlayback('Виртуальный автопроезд остановлен пользователем.');
+$('planRoute').onclick=()=>{
+ stopRoutePlayback('');
+ buildRoute();
+};
 
 $('clearRoute').onclick=()=>{
+ stopRoutePlayback('');
  plannedRoute=[];
  routeGoal=null;
  $('routeAdvice').textContent='Маршрут удалён.';
