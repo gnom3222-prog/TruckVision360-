@@ -54,7 +54,7 @@ test('automatic route remains blocked when obstacle checks are disabled',()=>{
  const elements=bootSimulator();
  elements.obstaclesToggle.onclick();
  elements.planRoute.onclick();
- assert.match(elements.routeAdvice.textContent,/проверка препятствий отключена/);
+ assert.match(elements.difficultyAdvice.textContent,/проверка препятствий отключена/);
  elements.routeStart.onclick();
  assert.match(elements.routeAdvice.textContent,/Автопроезд заблокирован/);
 });
