@@ -1,5 +1,5 @@
 'use strict';
-const CACHE = 'truckvision360-v9';
+const CACHE = 'truckvision360-v10';
 const CORE = ['./', './index.html', './truckvision.js', './voice.js', './camera-measure.js', './manifest.webmanifest', './icon.svg'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
