@@ -1,21 +1,17 @@
 (function(root,factory){
  'use strict';
- const api=factory();
+ const physics=root&&root.TruckVisionPhysics?root.TruckVisionPhysics:
+  (typeof require==='function'?require('./vehicle-physics.js'):null);
+ const api=factory(physics);
  if(typeof module==='object'&&module.exports)module.exports=api;
  if(root)root.TruckVisionPlanner=api;
-})(typeof globalThis!=='undefined'?globalThis:this,function(){
+})(typeof globalThis!=='undefined'?globalThis:this,function(rootPhysics){
  'use strict';
  const norm=a=>Math.atan2(Math.sin(a),Math.cos(a));
  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
- const point=(o,a,l,t=0)=>({x:o.x+l*Math.cos(a)-t*Math.sin(a),y:o.y+l*Math.sin(a)+t*Math.cos(a)});
  function polygons(q,p){
-  const h=point(q,q.psi,-p.hitchOffset);
-  const cab=point(q,q.psi,2.1);
-  return [
-   [point(q,q.psi,5,1.275),point(q,q.psi,-1.2,1.275),point(q,q.psi,-1.2,-1.275),point(q,q.psi,5,-1.275)],
-   [point(cab,q.psi,1.35,1.125),point(cab,q.psi,-0.9,1.125),point(cab,q.psi,-0.9,-1.125),point(cab,q.psi,1.35,-1.125)],
-   [point(h,q.psiT,1.5,p.trailerWidth/2),point(h,q.psiT,-(p.trailerLength-1.5),p.trailerWidth/2),point(h,q.psiT,-(p.trailerLength-1.5),-p.trailerWidth/2),point(h,q.psiT,1.5,-p.trailerWidth/2)]
-  ];
+  if(!rootPhysics||typeof rootPhysics.vehiclePolygons!=='function')throw new Error('Shared vehicle geometry is unavailable.');
+  return rootPhysics.vehiclePolygons(q,p);
  }
  function obstaclePoly(o){return[
   {x:o.x-o.w/2,y:o.y-o.h/2},{x:o.x+o.w/2,y:o.y-o.h/2},
