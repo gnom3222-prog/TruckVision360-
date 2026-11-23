@@ -80,6 +80,25 @@
    return {distance:min,hit};
   };
  }
+ function sweptDisplacementPerMeter(steer,p){
+  if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2)throw new Error('Steering angle is outside the valid range.');
+  const wheelbase=Number(p.wheelbase),hitchOffset=Number(p.hitchOffset);
+  const kingpinAxles=Number(p.kingpinAxles),trailerLength=Number(p.trailerLength),trailerWidth=Number(p.trailerWidth);
+  if(![wheelbase,hitchOffset,kingpinAxles,trailerLength,trailerWidth].every(Number.isFinite)||
+     wheelbase<=0||hitchOffset<0||kingpinAxles<=0||trailerLength<=0||trailerWidth<=0){
+   throw new Error('Vehicle geometry is incomplete or invalid for swept-clearance checking.');
+  }
+  const tractorYawPerMeter=Math.abs(Math.tan(steer)/wheelbase);
+  const tractorRadius=Math.hypot(5,2.55/2);
+  const cabRadiusFromRearAxle=2.1+Math.hypot(1.35,2.25/2);
+  const trailerRadius=Math.hypot(Math.max(1.5,Math.abs(trailerLength-1.5)),trailerWidth/2);
+  const trailerYawPerMeter=(1+hitchOffset*tractorYawPerMeter)/kingpinAxles;
+  return Math.max(
+   1+tractorRadius*tractorYawPerMeter,
+   1+cabRadiusFromRearAxle*tractorYawPerMeter,
+   1+hitchOffset*tractorYawPerMeter+trailerRadius*trailerYawPerMeter
+  );
+ }
  function clearance(q,obstacles,p){return createClearanceChecker(obstacles,p)(q);}
  function push(heap,n){
   let i=heap.length;heap.push(n);
@@ -96,7 +115,7 @@
   const bounds=options.bounds||{minX:-20,maxX:42,minY:-20,maxY:20};
   const step=0.20,angleStep=Math.PI/60,primitive=0.6,ds=0.05;
   const maxSteer=options.maxSteer||Math.PI/7;
-  const minClearance=options.minClearance??0.30;
+  const minClearance=Number.isFinite(options.minClearance)?Math.max(0,options.minClearance):0.30;
   const positionTolerance=options.positionTolerance??0.9;
   const headingTolerance=options.headingTolerance??12*Math.PI/180;
   const maxTerminalArticulation=options.maxTerminalArticulation??12*Math.PI/180;
@@ -112,8 +131,11 @@
   };
   const startClearance=checkClearance(start).distance;
   if(startClearance===0)return {ok:false,reason:'start-collision',expanded:0};
-  const requiredClearance=Math.min(minClearance,startClearance);
-  const initial={q:{...start},g:0,f:h(start),parent:null,gear:1,steer:0,samples:[]};
+  if(Number.isFinite(startClearance)&&startClearance<minClearance-1e-9){
+   return {ok:false,reason:'start-clearance-insufficient',expanded:0,startClearance,requiredClearance:minClearance};
+  }
+  const requiredClearance=minClearance;
+  const initial={q:{...start},g:0,f:h(start),parent:null,gear:1,steer:0,samples:[],clearance:startClearance,sweptLowerBound:startClearance};
   const open=[];push(open,initial);
   const best=new Map([[key(start),0]]);
   let expanded=0,finish=null,closest=initial;
@@ -139,13 +161,29 @@
    if(goalReached(cur.q,goal,goalOptions)){finish=cur;break;}
    for(const [gear,steer] of controls){
     let q={...cur.q},valid=true,minD=Infinity,samples=[];
-    for(let d=0;d<primitive;d+=ds){
-     const travel=Math.min(ds,primitive-d);
-     q=options.integrate(q,gear*0.7,steer,travel/0.7,params);
-     if(q.x<bounds.minX||q.x>bounds.maxX||q.y<bounds.minY||q.y>bounds.maxY||
-        Math.abs(norm(q.psi-q.psiT))>Math.PI*0.92){valid=false;break;}
-     const c=checkClearance(q);minD=Math.min(minD,c.distance);samples.push({x:q.x,y:q.y,psi:q.psi,psiT:q.psiT,gear,steer});
-     if(c.distance<requiredClearance){valid=false;break;}
+    let currentClearance=cur.clearance,sweptLowerBound=cur.sweptLowerBound,travelled=0;
+    const displacementRate=sweptDisplacementPerMeter(steer,params);
+    while(travelled<primitive-1e-9){
+     const remaining=primitive-travelled;
+     let travel=Math.min(ds,remaining);
+     if(Number.isFinite(currentClearance)){
+      const margin=currentClearance-requiredClearance;
+      if(margin<=1e-9){valid=false;break;}
+      travel=Math.min(travel,0.8*margin/displacementRate);
+     }
+     if(travel<1e-4){valid=false;break;}
+     const next=options.integrate(q,gear*0.7,steer,travel/0.7,params);
+     if(next.x<bounds.minX||next.x>bounds.maxX||next.y<bounds.minY||next.y>bounds.maxY||
+        Math.abs(norm(next.psi-next.psiT))>Math.PI*0.92){valid=false;break;}
+     const c=checkClearance(next);
+     if(c.distance<requiredClearance-1e-9){valid=false;break;}
+     const segmentLowerBound=Number.isFinite(currentClearance)?currentClearance-displacementRate*travel:Infinity;
+     sweptLowerBound=Math.min(sweptLowerBound,segmentLowerBound);
+     minD=Math.min(minD,c.distance);
+     q=next;
+     currentClearance=c.distance;
+     travelled+=travel;
+     samples.push({x:q.x,y:q.y,psi:q.psi,psiT:q.psiT,gear,steer});
     }
     if(!valid)continue;
     const nk=key(q);
@@ -154,7 +192,7 @@
     const ng=cur.g+primitive+gearPenalty+steerPenalty;
     if(ng>=(best.get(nk)??Infinity))continue;
     best.set(nk,ng);
-    push(open,{q,g:ng,f:ng+h(q),parent:cur,gear,steer,minClearance:minD,samples});
+    push(open,{q,g:ng,f:ng+h(q),parent:cur,gear,steer,minClearance:minD,samples,clearance:currentClearance,sweptLowerBound});
    }
   }
   if(!finish){
@@ -168,7 +206,7 @@
   const states=[{x:start.x,y:start.y,psi:start.psi,psiT:start.psiT,gear:1,steer:0}];
   for(const n of chain)states.push(...n.samples);
   const pathMinimum=Math.min(startClearance,...chain.map(n=>n.minClearance));
-  return {ok:true,states,expanded,length:finish.g,minimumClearance:pathMinimum,terminalErrors:goalErrors(finish.q,goal)};
+  return {ok:true,states,expanded,length:finish.g,minimumClearance:pathMinimum,minimumClearanceLowerBound:finish.sweptLowerBound,requiredClearance,terminalErrors:goalErrors(finish.q,goal)};
  }
  function recommendStart(states,options={}){
   if(!Array.isArray(states)||states.length<2)return {ok:false,reason:'route-too-short'};
@@ -201,5 +239,5 @@
   };
  }
 
- return Object.freeze({plan,clearance,createClearanceChecker,polygons,goalErrors,goalReached,recommendStart});
+ return Object.freeze({plan,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,recommendStart});
 });
