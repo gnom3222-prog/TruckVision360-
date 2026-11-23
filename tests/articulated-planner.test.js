@@ -162,6 +162,23 @@ test('planner rejects a start position already inside the requested clearance re
  assert.ok(result.startClearance<result.requiredClearance);
 });
 
+test('planner adaptively shortens reverse steps near the requested clearance reserve',()=>{
+ const obstacles=[{x:5.81,y:0,w:1,h:1,name:'front pallet'}];
+ const result=planner.plan({
+  start:{x:0,y:0,psi:0,psiT:0},
+  goal:{x:-2,y:0},
+  params,obstacles,integrate,
+  minClearance:0.30,
+  maxExpansions:5000,
+  bounds:{minX:-18,maxX:18,minY:-12,maxY:12}
+ });
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.ok(Math.hypot(result.states[1].x-result.states[0].x,result.states[1].y-result.states[0].y)<0.01,
+  'the first step should shrink when initial clearance is only slightly above the reserve');
+ assert.ok(result.minimumClearanceLowerBound>=0.30-1e-6);
+ assert.ok(result.states.some((q,i)=>i>0&&q.gear===-1),'the route should use reverse to move away from the obstacle');
+});
+
 test('start recommendation identifies the first steering side after a straight lead-in',()=>{
  const states=[
   {x:0,y:0,gear:1,steer:0},
