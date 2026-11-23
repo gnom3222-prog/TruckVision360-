@@ -46,3 +46,54 @@ test('perspective mapping rejects malformed input and non-finite results',()=>{
  assert.throws(()=>camera.map({x:0,y:0},[1,2]));
  assert.throws(()=>camera.map({x:1,y:0},[0,0,0,0,0,0,-1,0]));
 });
+
+
+const perspectiveReference=[
+ {x:100,y:100},{x:500,y:130},
+ {x:450,y:350},{x:80,y:320}
+];
+const measuredOpening=[
+ {x:160,y:150},{x:430,y:165},
+ {x:415,y:290},{x:145,y:280}
+];
+
+test('camera measurement reports finite point-selection and reference-size uncertainty',()=>{
+ const result=camera.estimateUncertainty({
+  referencePoints:perspectiveReference,
+  referenceWidth:0.297,
+  referenceHeight:0.210,
+  measuredPoints:measuredOpening,
+  sigmaPixels:2,
+  sigmaReferenceWidth:0.001,
+  sigmaReferenceHeight:0.001
+ });
+ assert.ok(Number.isFinite(result.sigmaWidth)&&result.sigmaWidth>0);
+ assert.ok(Number.isFinite(result.sigmaHeight)&&result.sigmaHeight>0);
+ assert.ok(result.sigmaWidth<result.width);
+ assert.ok(result.sigmaHeight<result.height);
+ assert.equal(result.uncertaintyModel,'linearized-independent-coordinate-errors');
+});
+
+test('camera uncertainty scales linearly when all assumed input uncertainties double',()=>{
+ const base={
+  referencePoints:perspectiveReference,
+  referenceWidth:0.297,
+  referenceHeight:0.210,
+  measuredPoints:measuredOpening
+ };
+ const one=camera.estimateUncertainty({...base,sigmaPixels:1,sigmaReferenceWidth:0.001,sigmaReferenceHeight:0.001});
+ const two=camera.estimateUncertainty({...base,sigmaPixels:2,sigmaReferenceWidth:0.002,sigmaReferenceHeight:0.002});
+ near(two.sigmaWidth,one.sigmaWidth*2,1e-7);
+ near(two.sigmaHeight,one.sigmaHeight*2,1e-7);
+});
+
+test('camera uncertainty rejects negative or non-finite assumptions',()=>{
+ assert.throws(()=>camera.estimateUncertainty({
+  referencePoints:perspectiveReference,referenceWidth:0.297,referenceHeight:0.210,
+  measuredPoints:measuredOpening,sigmaPixels:-1
+ }));
+ assert.throws(()=>camera.estimateUncertainty({
+  referencePoints:perspectiveReference,referenceWidth:0.297,referenceHeight:0.210,
+  measuredPoints:measuredOpening,sigmaReferenceWidth:NaN
+ }));
+});
