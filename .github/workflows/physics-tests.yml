@@ -15,3 +15,4 @@ jobs:
       - run: node --check vehicle-physics.js
       - run: node --check truckvision.js
       - run: node --check planner-worker.js
+      - run: node --check camera-measure.js
