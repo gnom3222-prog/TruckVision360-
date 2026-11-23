@@ -891,7 +891,6 @@ window.addEventListener('keyup',event=>{
  if(event.key==='ArrowUp'||event.key==='ArrowDown')drive=0;
 });
 
-createVoiceControls();
 readSettings();
 targetSpeed=Number($('speedSet').value);
 resetState();
