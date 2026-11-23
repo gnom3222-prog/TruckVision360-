@@ -1,4 +1,4 @@
-const CACHE="truckvision360-v1";
-const FILES=["./","./index.html","./manifest.webmanifest","./icon.svg"];
+const CACHE="truckvision360-v2";
+const FILES=["./","./index.html","./parking.html","./truckvision.js","./voice.js","./manifest.webmanifest","./icon.svg"];
 self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES))));
 self.addEventListener("fetch",e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));
