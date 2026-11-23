@@ -65,20 +65,9 @@ function resetState(){
  camera={x:0,y:0};
 }
 
-function hitchPoint(q){
- return{
-  x:q.x-cfg.hitchOffset*Math.cos(q.psi),
-  y:q.y-cfg.hitchOffset*Math.sin(q.psi)
- };
-}
+function hitchPoint(q){return physics.hitchPoint(q,cfg);}
 
-function axlePoint(q){
- const h=hitchPoint(q);
- return{
-  x:h.x-cfg.kingpinAxles*Math.cos(q.psiT),
-  y:h.y-cfg.kingpinAxles*Math.sin(q.psiT)
- };
-}
+function axlePoint(q){return physics.axlePoint(q,cfg);}
 
 function derivative(q,v,delta){
  return physics.derivative(q,v,delta,cfg);
@@ -149,14 +138,7 @@ function bodyCorners(origin,angle,front,rear,width){
  ];
 }
 
-function vehiclePolygons(q){
- const h=hitchPoint(q);
- return[
-  bodyCorners(q,q.psi,5,-1.2,2.55),
-  bodyCorners(localPoint(q,q.psi,2.1),q.psi,1.35,-0.9,2.25),
-  bodyCorners(h,q.psiT,1.5,-(cfg.trailerLength-1.5),cfg.trailerWidth)
- ];
-}
+function vehiclePolygons(q){return physics.vehiclePolygons(q,cfg);}
 
 function obstaclePolygon(o){
  return[
