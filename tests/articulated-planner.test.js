@@ -144,7 +144,8 @@ test('swept displacement bound covers every tractor, cab and trailer vertex in f
  }
 });
 
-test('swept displacement bound rejects incomplete vehicle geometry',()=>{
+test('swept displacement bound rejects missing or incomplete vehicle geometry',()=>{
+ assert.throws(()=>planner.sweptDisplacementPerMeter(0,null),/missing/i);
  assert.throws(()=>planner.sweptDisplacementPerMeter(0,{...params,kingpinAxles:0}),/invalid/i);
 });
 
