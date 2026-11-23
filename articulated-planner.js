@@ -36,9 +36,27 @@
   for(const p of b)for(let i=0;i<a.length;i++)d=Math.min(d,segDist(p,a[i],a[(i+1)%a.length]));
   return d;
  }
+ function polygonBounds(poly){
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for(const p of poly){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y);}
+  return {minX,minY,maxX,maxY};
+ }
+ function aabbDistance(a,b){
+  const dx=Math.max(0,a.minX-b.maxX,b.minX-a.maxX);
+  const dy=Math.max(0,a.minY-b.maxY,b.minY-a.maxY);
+  return Math.hypot(dx,dy);
+ }
  function clearance(q,obstacles,p){
-  const bodies=polygons(q,p);let min=Infinity,hit=null;
-  for(const o of obstacles){const op=obstaclePoly(o);for(const body of bodies){const d=polyDist(body,op);if(d<min){min=d;hit=o.name||'препятствие';}}}
+  const bodies=polygons(q,p),bodyBounds=bodies.map(polygonBounds);
+  let min=Infinity,hit=null;
+  for(const o of obstacles){
+   const op=obstaclePoly(o),ob=polygonBounds(op);
+   for(let i=0;i<bodies.length;i++){
+    if(aabbDistance(bodyBounds[i],ob)>=min)continue;
+    const d=polyDist(bodies[i],op);
+    if(d<min){min=d;hit=o.name||'препятствие';}
+   }
+  }
   return {distance:min,hit};
  }
  function push(heap,n){
