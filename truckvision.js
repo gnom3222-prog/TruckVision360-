@@ -581,19 +581,21 @@ async function buildRoute(){
 
   const m=routeMetrics(plannedRoute);
   routeAssessment=m;
-  const next=plannedRoute[1];
-  const firstGear=next.gear||1;
-  const travelAngle=Math.atan2(next.y-startState.y,next.x-startState.x);
-  const desiredHeading=norm(travelAngle+(firstGear<0?Math.PI:0));
-  const relative=norm(desiredHeading-startState.psi);
-  const steeringDirection=firstGear*relative;
-  const turn=Math.abs(steeringDirection)<0.18?'держать руль прямо':
-   steeringDirection>0?'повернуть руль влево':'повернуть руль вправо';
+  const recommendation=planner.recommendStart(plannedRoute);
+  const firstGear=recommendation.initialGear;
   const gearText=firstGear<0?'начать задним ходом':'начать движением вперёд';
+  let firstTurnText='первый участок пройти прямо; значимого поворота руля в рассчитанном маршруте не найдено';
+  if(recommendation.firstTurn){
+   const side=recommendation.firstTurn==='left'?'повернуть руль влево':'повернуть руль вправо';
+   const timing=recommendation.firstTurnDistance<=0.3?'сразу':'примерно через '+recommendation.firstTurnDistance.toFixed(1)+' м';
+   const turnGear=recommendation.firstTurnGear<0?'задним ходом':'вперёд';
+   const gearNote=recommendation.firstTurnAfterGearChange?' после переключения на движение '+turnGear:' при движении '+turnGear;
+   firstTurnText=side+' '+timing+gearNote;
+  }
 
   $('routeAdvice').textContent=
-   'Начало манёвра: '+gearText+', '+turn+
-   ' (расчётное изменение курса '+(relative*180/Math.PI).toFixed(0)+'°). Маршрут до точки ('+
+   'Начало манёвра: '+gearText+'; первое рулевое действие: '+firstTurnText+
+   '. Сторона определяется по первому значимому управляющему углу планировщика (порог 0,08 рад), а не по одному лишь направлению на цель. Маршрут до точки ('+
    gx.toFixed(1)+', '+gy.toFixed(1)+') м; длина '+m.length.toFixed(1)+
    ' м; переключений передачи: '+m.gearChanges+'; изменений руля: '+m.steeringChanges+
    '; задний ход: '+m.reverseDistance.toFixed(1)+' м. Заданный конечный курс '+headingDegrees.toFixed(0)+
