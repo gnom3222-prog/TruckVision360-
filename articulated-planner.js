@@ -58,7 +58,7 @@
   const {start,goal,params,obstacles}=options;
   const maxExpansions=options.maxExpansions||24000;
   const bounds=options.bounds||{minX:-20,maxX:42,minY:-20,maxY:20};
-  const step=0.25,angleStep=Math.PI/18,primitive=0.35,ds=0.05;
+  const step=0.20,angleStep=Math.PI/60,primitive=0.35,ds=0.05;
   const maxSteer=options.maxSteer||Math.PI/7;
   const minClearance=options.minClearance??0.30;
   const key=q=>[
