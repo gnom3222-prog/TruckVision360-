@@ -62,7 +62,73 @@
   const dy=Math.max(0,a.minY-b.maxY,b.minY-a.maxY);
   return Math.hypot(dx,dy);
  }
+ function validateObstacles(obstacles){
+  const errors=[];
+  if(!Array.isArray(obstacles))return ['Список препятствий должен быть массивом.'];
+  obstacles.forEach((o,index)=>{
+   if(!o||typeof o!=='object'){
+    errors.push('Препятствие '+(index+1)+' имеет неверный формат.');
+    return;
+   }
+   if(!Number.isFinite(o.x)||!Number.isFinite(o.y)||
+      !Number.isFinite(o.w)||!Number.isFinite(o.h)||o.w<=0||o.h<=0){
+    errors.push('Препятствие '+(index+1)+' должно иметь конечные координаты и положительные ширину/высоту.');
+   }
+  });
+  return errors;
+ }
+ function validatePlanOptions(options){
+  const errors=[];
+  if(!options||typeof options!=='object')return ['Параметры планировщика отсутствуют.'];
+  const {start,goal,params,obstacles,integrate}=options;
+  if(!start||![start.x,start.y,start.psi,start.psiT].every(Number.isFinite)){
+   errors.push('Начальное состояние должно содержать конечные x, y, psi и psiT.');
+  }
+  if(!goal||!Number.isFinite(goal.x)||!Number.isFinite(goal.y)||
+     (goal.heading!==undefined&&goal.heading!==null&&!Number.isFinite(goal.heading))){
+   errors.push('Цель должна содержать конечные координаты и корректный курс, если он задан.');
+  }
+  if(typeof integrate!=='function')errors.push('Функция интегрирования движения отсутствует.');
+  const geometryErrors=rootPhysics&&typeof rootPhysics.validateVehicleParams==='function'?
+   rootPhysics.validateVehicleParams(params):['Модуль проверки геометрии недоступен.'];
+  errors.push(...geometryErrors);
+  errors.push(...validateObstacles(obstacles));
+  if(options.maxExpansions!==undefined&&(!Number.isInteger(options.maxExpansions)||options.maxExpansions<1||options.maxExpansions>500000)){
+   errors.push('Лимит расширений должен быть целым числом от 1 до 500000.');
+  }
+  if(options.maxSteer!==undefined&&(!Number.isFinite(options.maxSteer)||options.maxSteer<=0||options.maxSteer>=Math.PI/2)){
+   errors.push('Максимальный угол поворота должен быть больше нуля и меньше 90°.');
+  }
+  if(options.minClearance!==undefined&&(!Number.isFinite(options.minClearance)||options.minClearance<0||options.minClearance>10)){
+   errors.push('Требуемый зазор должен быть числом от 0 до 10 м.');
+  }
+  const positionTolerance=options.positionTolerance??0.9;
+  const headingTolerance=options.headingTolerance??12*Math.PI/180;
+  const maxTerminalArticulation=options.maxTerminalArticulation??12*Math.PI/180;
+  if(!Number.isFinite(positionTolerance)||positionTolerance<=0||positionTolerance>10){
+   errors.push('Допуск положения должен быть больше нуля и не превышать 10 м.');
+  }
+  if(!Number.isFinite(headingTolerance)||headingTolerance<0||headingTolerance>Math.PI){
+   errors.push('Допуск курса должен находиться в диапазоне 0–180°.');
+  }
+  if(!Number.isFinite(maxTerminalArticulation)||maxTerminalArticulation<0||maxTerminalArticulation>Math.PI){
+   errors.push('Допуск угла сочленения должен находиться в диапазоне 0–180°.');
+  }
+  if(options.bounds!==undefined){
+   const b=options.bounds;
+   if(!b||![b.minX,b.maxX,b.minY,b.maxY].every(Number.isFinite)||
+      b.minX>=b.maxX||b.minY>=b.maxY){
+    errors.push('Границы поиска должны иметь конечные минимумы меньше максимумов.');
+   }
+  }
+  return errors;
+ }
  function createClearanceChecker(obstacles,p){
+  const geometryErrors=rootPhysics&&typeof rootPhysics.validateVehicleParams==='function'?
+   rootPhysics.validateVehicleParams(p):['Модуль проверки геометрии недоступен.'];
+  if(geometryErrors.length)throw new Error('Некорректная геометрия автопоезда: '+geometryErrors.join(' '));
+  const obstacleErrors=validateObstacles(obstacles);
+  if(obstacleErrors.length)throw new Error('Некорректные препятствия: '+obstacleErrors.join(' '));
   const prepared=obstacles.map(o=>{
    const poly=obstaclePoly(o);
    return {poly,bounds:polygonBounds(poly),name:o.name||'препятствие'};
@@ -83,12 +149,11 @@
  function sweptDisplacementPerMeter(steer,p,q=null,maxDistance=0.05){
   if(!p||typeof p!=='object')throw new Error('Vehicle geometry is missing for swept-clearance checking.');
   if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2)throw new Error('Steering angle is outside the valid range.');
+  const geometryErrors=rootPhysics&&typeof rootPhysics.validateVehicleParams==='function'?
+   rootPhysics.validateVehicleParams(p):['Vehicle geometry validation is unavailable.'];
+  if(geometryErrors.length)throw new Error('Vehicle geometry is incomplete or invalid for swept-clearance checking: '+geometryErrors.join(' '));
   const wheelbase=Number(p.wheelbase),hitchOffset=Number(p.hitchOffset);
   const kingpinAxles=Number(p.kingpinAxles),trailerLength=Number(p.trailerLength),trailerWidth=Number(p.trailerWidth);
-  if(![wheelbase,hitchOffset,kingpinAxles,trailerLength,trailerWidth].every(Number.isFinite)||
-     wheelbase<=0||hitchOffset<0||kingpinAxles<=0||trailerLength<=0||trailerWidth<=0){
-   throw new Error('Vehicle geometry is incomplete or invalid for swept-clearance checking.');
-  }
   if(!Number.isFinite(maxDistance)||maxDistance<=0)throw new Error('Swept-check distance must be positive.');
   const tractorYawPerMeter=Math.abs(Math.tan(steer)/wheelbase);
   const tractorRadius=Math.hypot(5,2.55/2);
@@ -124,7 +189,9 @@
   if(heap.length){let i=0;heap[0]=last;for(;;){let l=i*2+1,r=l+1,m=i;if(l<heap.length&&heap[l].f<heap[m].f)m=l;if(r<heap.length&&heap[r].f<heap[m].f)m=r;if(m===i)break;[heap[i],heap[m]]=[heap[m],heap[i]];i=m;}}
   return top;
  }
- function plan(options){
+ function plan(options={}){
+  const inputErrors=validatePlanOptions(options);
+  if(inputErrors.length)return {ok:false,reason:'invalid-input',errors:inputErrors,expanded:0};
   const {start,goal,params,obstacles}=options;
   const maxExpansions=options.maxExpansions||24000;
   const bounds=options.bounds||{minX:-20,maxX:42,minY:-20,maxY:20};
@@ -254,5 +321,5 @@
   };
  }
 
- return Object.freeze({plan,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,recommendStart});
+ return Object.freeze({plan,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,recommendStart,validatePlanOptions});
 });
