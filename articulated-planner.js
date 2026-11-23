@@ -66,7 +66,10 @@
    Math.round(norm(q.psi)/angleStep),Math.round(norm(q.psiT)/angleStep)
   ].join(':');
   const h=q=>Math.hypot(goal.x-q.x,goal.y-q.y)+0.35*Math.abs(norm(q.psi-q.psiT));
-  const initial={q:{...start},g:0,f:h(start),parent:null,gear:1,steer:0};
+  const startClearance=clearance(start,obstacles,params).distance;
+  if(startClearance===0)return {ok:false,reason:'start-collision',expanded:0};
+  const requiredClearance=Math.min(minClearance,startClearance);
+  const initial={q:{...start},g:0,f:h(start),parent:null,gear:1,steer:0,samples:[]};
   const open=[];push(open,initial);
   const best=new Map([[key(start),0]]);
   let expanded=0,finish=null,closest=initial;
@@ -85,7 +88,7 @@
      if(q.x<bounds.minX||q.x>bounds.maxX||q.y<bounds.minY||q.y>bounds.maxY||
         Math.abs(norm(q.psi-q.psiT))>Math.PI*0.92){valid=false;break;}
      const c=clearance(q,obstacles,params);minD=Math.min(minD,c.distance);
-     if(c.distance<minClearance){valid=false;break;}
+     if(c.distance<requiredClearance){valid=false;break;}
     }
     if(!valid)continue;
     const nk=key(q);
@@ -94,7 +97,7 @@
     const ng=cur.g+primitive+gearPenalty+steerPenalty;
     if(ng>=(best.get(nk)??Infinity))continue;
     best.set(nk,ng);
-    push(open,{q,g:ng,f:ng+h(q),parent:cur,gear,steer,minClearance:minD});
+    push(open,{q,g:ng,f:ng+h(q),parent:cur,gear,steer,minClearance:minD,samples:[]});
    }
   }
   if(!finish)return {ok:false,reason:'no-path',expanded,closest:{x:closest.q.x,y:closest.q.y},goalDistance:Math.hypot(goal.x-closest.q.x,goal.y-closest.q.y)};
