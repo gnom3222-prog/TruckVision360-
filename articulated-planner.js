@@ -73,7 +73,9 @@
   const open=[];push(open,initial);
   const best=new Map([[key(start),0]]);
   let expanded=0,finish=null,closest=initial;
-  const controls=[[-1,-maxSteer],[-1,0],[-1,maxSteer],[1,-maxSteer],[1,0],[1,maxSteer]];
+  const steering=[-maxSteer,-0.24,-0.12,0,0.12,0.24,maxSteer];
+  const controls=[];
+  for(const gear of [-1,1])for(const steer of steering)controls.push([gear,steer]);
   while(open.length&&expanded<maxExpansions){
    const cur=pop(open),ck=key(cur.q);
    if(cur.g>(best.get(ck)??Infinity)+1e-8)continue;
