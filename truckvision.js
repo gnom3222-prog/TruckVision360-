@@ -16,6 +16,7 @@ const cfg={
  trailerLength:13.6,
  trailerWidth:2.55,
  kingpinAxles:8,
+ trailerAxleSpacing:1.3,
  trailerMass:30000,
  mu:0.7,
  crr:0.008,
@@ -390,12 +391,14 @@ function planAStar(start,goal){
 
 function routeMetrics(path){
  let length=0,gearChanges=0,steeringChanges=0,reverseDistance=0,reverseSegments=0;
- let minClearance=Infinity,maxBeta=0,collision=false;
+ let minClearance=Infinity,maxBeta=0,collision=false,maxAxleScrubSpeed=0;
  const checkClearance=showObstacles?planner.createClearanceChecker(obstacles,cfg):null;
  let previousGear=path[0]?.gear||1,previousSteer=path[0]?.steer||0,wasReverse=false;
  for(let i=0;i<path.length;i++){
   const q=path[i];
   maxBeta=Math.max(maxBeta,Math.abs(norm(q.psi-q.psiT))*180/Math.PI);
+  const scrub=physics.trailerAxleDiagnostics(q,(q.gear||1)*0.7,q.steer||0,cfg);
+  maxAxleScrubSpeed=Math.max(maxAxleScrubSpeed,scrub.maxAbsLateralVelocity);
   if(i>0){
    const prev=path[i-1];
    const segmentLength=Math.hypot(q.x-prev.x,q.y-prev.y);
@@ -441,7 +444,7 @@ function routeMetrics(path){
  if(articulationBlocked)reasons.push('угол сочленения достиг 55°');
  if(clearanceInsufficient)reasons.push('недостаточный зазор после резерва погрешности');
  if(!reasons.length)reasons.push('в проверенной модели препятствия не пересечены');
- return {length,turns,gearChanges,steeringChanges,reverseDistance,reverseSegments,level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',maxBeta,clearance:minClearance,effectiveClearance,collision,reached,finalHeadingErrorDeg,finalArticulationDeg,clearanceInsufficient,articulationBlocked,reasons};
+ return {length,turns,gearChanges,steeringChanges,reverseDistance,reverseSegments,maxAxleScrubSpeed,level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',maxBeta,clearance:minClearance,effectiveClearance,collision,reached,finalHeadingErrorDeg,finalArticulationDeg,clearanceInsufficient,articulationBlocked,reasons};
 }
 
 function cancelPlannerWorker(reason='Расчёт маршрута отменён.'){
@@ -600,7 +603,7 @@ async function buildRoute(){
   $('difficultyAdvice').textContent=
    'Сложность: '+m.level+'. Причины: '+m.reasons.join('; ')+
    '. Максимальный угол сочленения '+m.maxBeta.toFixed(1)+'°; конечная ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+
-   '°; конечный угол тягач–полуприцеп '+m.finalArticulationDeg.toFixed(1)+'°; минимальный зазор до тестовых препятствий '+
+   '°; конечный угол тягач–полуприцеп '+m.finalArticulationDeg.toFixed(1)+'°; оценка боковой скорости крайних осей при расчётной скорости 0,7 м/с '+m.maxAxleScrubSpeed.toFixed(3)+' м/с; минимальный зазор до тестовых препятствий +
    (Number.isFinite(m.clearance)?m.clearance.toFixed(2)+' м':'не определён')+
    '; после резерва погрешности: '+(Number.isFinite(m.effectiveClearance)?m.effectiveClearance.toFixed(2)+' м':'не определено')+
    '; столкновение: '+(m.collision?'да':'не выявлено')+
@@ -693,8 +696,7 @@ function draw(){
   cfg.trailerWidth,'#315b78'
  );
 
- for(const offset of [-0.65,0,0.65]){
-  const p=localPoint(axle,state.psiT,offset);
+ for(const p of physics.trailerAxlePoints(state,cfg)){
   drawLine([
    localPoint(p,state.psiT,0,cfg.trailerWidth/2+0.13),
    localPoint(p,state.psiT,0,-cfg.trailerWidth/2-0.13)
@@ -730,6 +732,7 @@ function draw(){
 
 function updateReadouts(){
  const beta=norm(state.psi-state.psiT);
+ const axleDiagnostics=physics.trailerAxleDiagnostics(state,speed,steer,cfg);
  const lateral=Math.abs(
   speed*speed/cfg.wheelbase*Math.tan(steer)
  );
@@ -749,6 +752,7 @@ function updateReadouts(){
  $('gripOut').textContent=
   lateral>gripLimit?'Предел превышен':'В пределах заданного μ';
  $('distanceOut').textContent=distance.toFixed(1)+' м';
+ $('axleScrubOut').textContent=axleDiagnostics.maxAbsLateralVelocity.toFixed(3)+' м/с';
 
  $('mode').textContent=braking?'Торможение':
   drive>0?'Движение вперёд':
