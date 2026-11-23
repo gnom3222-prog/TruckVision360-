@@ -157,7 +157,8 @@ canvas{max-width:100%}
 <div class="grid">
 <div><label for="trailerLength">Длина, м</label><input id="trailerLength" type="number" value="13.60" step="0.1"></div>
 <div><label for="trailerWidth">Ширина, м</label><input id="trailerWidth" type="number" value="2.55" step="0.05"></div>
-<div><label for="kingpinAxles">Шкворень — центр осей, м</label><input id="kingpinAxles" type="number" value="8.00" step="0.1"></div>
+<div><label for="kingpinAxles">Шкворень — центр группы осей, м</label><input id="kingpinAxles" type="number" value="8.00" step="0.1"></div>
+<div><label for="trailerAxleSpacing">Шаг соседних осей, м</label><input id="trailerAxleSpacing" type="number" min="0.8" max="2.0" value="1.30" step="0.05"></div>
 <div><label for="trailerMass">Масса с грузом, кг</label><input id="trailerMass" type="number" value="30000" step="500"></div>
 </div>
 
@@ -191,6 +192,7 @@ canvas{max-width:100%}
 <div class="metric"><span>Тормозной путь (оценка)</span><strong id="stopOut">0,0 м</strong></div>
 <div class="metric"><span>Запас сцепления</span><strong id="gripOut">—</strong></div>
 <div class="metric"><span>Пройденный путь</span><strong id="distanceOut">0,0 м</strong></div>
+<div class="metric"><span>Боковая скорость крайних осей · оценка</span><strong id="axleScrubOut">0,000 м/с</strong></div>
 </div>
 
 <div class="assistant-box camera-panel">
@@ -220,9 +222,9 @@ canvas{max-width:100%}
 </section>
 </main>
 
-<script src="vehicle-physics.js?v=20261123-4"></script>
+<script src="vehicle-physics.js?v=20261123-5"></script>
 <script src="articulated-planner.js?v=20261123-5"></script>
-<script src="truckvision.js?v=20261123-6"></script>
+<script src="truckvision.js?v=20261123-7"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261123-2"></script>
 <script src="camera-measure.js?v=20261123-7"></script>
