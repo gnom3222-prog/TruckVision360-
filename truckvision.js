@@ -603,7 +603,7 @@ async function buildRoute(){
   $('difficultyAdvice').textContent=
    'Сложность: '+m.level+'. Причины: '+m.reasons.join('; ')+
    '. Максимальный угол сочленения '+m.maxBeta.toFixed(1)+'°; конечная ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+
-   '°; конечный угол тягач–полуприцеп '+m.finalArticulationDeg.toFixed(1)+'°; оценка боковой скорости крайних осей при расчётной скорости 0,7 м/с '+m.maxAxleScrubSpeed.toFixed(3)+' м/с; минимальный зазор до тестовых препятствий +
+   '°; конечный угол тягач–полуприцеп '+m.finalArticulationDeg.toFixed(1)+'°; оценка боковой скорости крайних осей при расчётной скорости 0,7 м/с '+m.maxAxleScrubSpeed.toFixed(3)+' м/с; минимальный зазор до тестовых препятствий '+
    (Number.isFinite(m.clearance)?m.clearance.toFixed(2)+' м':'не определён')+
    '; после резерва погрешности: '+(Number.isFinite(m.effectiveClearance)?m.effectiveClearance.toFixed(2)+' м':'не определено')+
    '; столкновение: '+(m.collision?'да':'не выявлено')+
@@ -688,8 +688,6 @@ function draw(){
  }
 
  const h=hitchPoint(state);
- const axle=axlePoint(state);
-
  drawBody(
   h,state.psiT,1.5,
   -(cfg.trailerLength-1.5),
