@@ -73,3 +73,22 @@ test('three-axle lateral scrub proxy is zero straight and symmetric in forward a
  const reverse=physics.trailerAxleDiagnostics(q,-3,0.18,{...params,trailerAxleSpacing:1.3});
  near(forward.axles[0].lateralVelocity,-reverse.axles[0].lateralVelocity);
 });
+
+test('vehicle geometry validation accepts the documented Volvo and trailer baseline',()=>{
+ const errors=physics.validateVehicleParams({
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3
+ });
+ assert.deepEqual(errors,[]);
+});
+
+test('vehicle geometry validation rejects missing, non-finite and implausible dimensions',()=>{
+ assert.ok(physics.validateVehicleParams(null).length>0);
+ const errors=physics.validateVehicleParams({
+  wheelbase:0,hitchOffset:-0.1,kingpinAxles:NaN,
+  trailerLength:13.6,trailerWidth:0.5,trailerAxleSpacing:8
+ });
+ assert.equal(errors.length,6);
+ assert.ok(errors.some(message=>message.startsWith('wheelbase:')));
+ assert.ok(errors.some(message=>message.startsWith('kingpinAxles:')));
+});
