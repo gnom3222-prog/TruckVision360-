@@ -55,3 +55,34 @@ test('prepared clearance checker matches direct collision-distance queries',()=>
  const check=planner.createClearanceChecker(obstacles,params);
  assert.deepEqual(check(q),planner.clearance(q,obstacles,params));
 });
+
+test('articulated planner passes through a two-pallet clearance gate',()=>{
+ const obstacles=[
+  {x:12,y:3,w:1.2,h:2,name:'upper pallet'},
+  {x:12,y:-3,w:1.2,h:2,name:'lower pallet'}
+ ];
+ const result=planner.plan({
+  start:{x:0,y:0,psi:0,psiT:0},
+  goal:{x:25,y:0},
+  params,obstacles,integrate,
+  maxExpansions:5000,
+  minClearance:0.30,
+  bounds:{minX:-18,maxX:32,minY:-12,maxY:12}
+ });
+ assert.equal(result.ok,true,JSON.stringify(result));
+ for(const q of result.states.slice(1)){
+  assert.ok(planner.clearance(q,obstacles,params).distance>=0.30-1e-6,'entire articulated footprint must clear both pallets');
+ }
+});
+
+test('articulated planner rejects an initial tractor or trailer collision',()=>{
+ const obstacles=[{x:0,y:0,w:1,h:1,name:'blocking pallet'}];
+ const result=planner.plan({
+  start:{x:0,y:0,psi:0,psiT:0},
+  goal:{x:8,y:0},
+  params,obstacles,integrate,
+  maxExpansions:1000
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'start-collision');
+});
