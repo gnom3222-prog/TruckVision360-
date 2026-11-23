@@ -81,6 +81,7 @@
   };
  }
  function sweptDisplacementPerMeter(steer,p){
+  if(!p||typeof p!=='object')throw new Error('Vehicle geometry is missing for swept-clearance checking.');
   if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2)throw new Error('Steering angle is outside the valid range.');
   const wheelbase=Number(p.wheelbase),hitchOffset=Number(p.hitchOffset);
   const kingpinAxles=Number(p.kingpinAxles),trailerLength=Number(p.trailerLength),trailerWidth=Number(p.trailerWidth);
@@ -171,7 +172,7 @@
       if(margin<=1e-9){valid=false;break;}
       travel=Math.min(travel,0.8*margin/displacementRate);
      }
-     if(travel<1e-4){valid=false;break;}
+     if(travel<1e-3){valid=false;break;}
      const next=options.integrate(q,gear*0.7,steer,travel/0.7,params);
      if(next.x<bounds.minX||next.x>bounds.maxX||next.y<bounds.minY||next.y>bounds.maxY||
         Math.abs(norm(next.psi-next.psiT))>Math.PI*0.92){valid=false;break;}
