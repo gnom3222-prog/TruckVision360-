@@ -43,3 +43,32 @@ test('angle normalization remains bounded across a full turn',()=>{
  assert.ok(a>=-Math.PI&&a<=Math.PI);
  near(Math.abs(a),Math.PI);
 });
+
+ 
+test('three trailer axle centers use the configured spacing around the equivalent group center',()=>{
+ const p={...params,trailerAxleSpacing:1.3,trailerLength:13.6,trailerWidth:2.55};
+ const q={x:4,y:-2,psi:0.28,psiT:-0.16};
+ const points=physics.trailerAxlePoints(q,p);
+ const center=physics.axlePoint(q,p);
+ assert.equal(points.length,3);
+ near(points[1].x,center.x);
+ near(points[1].y,center.y);
+ near(Math.hypot(points[0].x-points[1].x,points[0].y-points[1].y),1.3);
+ near(Math.hypot(points[1].x-points[2].x,points[1].y-points[2].y),1.3);
+});
+
+test('three-axle lateral scrub proxy is zero straight and symmetric in forward and reverse turns',()=>{
+ const q={x:0,y:0,psi:0.31,psiT:-0.12};
+ for(const v of [3,-3]){
+  const straight=physics.trailerAxleDiagnostics(q,v,0,params);
+  near(straight.maxAbsLateralVelocity,0);
+  const turning=physics.trailerAxleDiagnostics(q,v,0.18,{...params,trailerAxleSpacing:1.3});
+  assert.equal(turning.axles.length,3);
+  near(turning.axles[1].lateralVelocity,0);
+  near(turning.axles[0].lateralVelocity,-turning.axles[2].lateralVelocity);
+  assert.ok(turning.maxAbsLateralVelocity>0);
+ }
+ const forward=physics.trailerAxleDiagnostics(q,3,0.18,{...params,trailerAxleSpacing:1.3});
+ const reverse=physics.trailerAxleDiagnostics(q,-3,0.18,{...params,trailerAxleSpacing:1.3});
+ near(forward.axles[0].lateralVelocity,-reverse.axles[0].lateralVelocity);
+});
