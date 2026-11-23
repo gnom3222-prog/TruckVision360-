@@ -63,5 +63,85 @@
   return result;
  }
 
- return Object.freeze({validQuad,solve,homography,map});
+ function measureQuad(referencePoints,referenceWidth,referenceHeight,measuredPoints){
+  if(!validQuad(referencePoints,0,0)||!validQuad(measuredPoints,0,0))throw new Error('Четыре угла эталона и проёма должны образовывать правильные четырёхугольники.');
+  const transform=homography(referencePoints,referenceWidth,referenceHeight);
+  const points=measuredPoints.map(point=>map(point,transform));
+  const width=(dist(points[0],points[1])+dist(points[3],points[2]))/2;
+  const height=(dist(points[0],points[3])+dist(points[1],points[2]))/2;
+  if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)throw new Error('Не удалось рассчитать размеры проёма.');
+  return {width,height,points};
+ }
+
+ // First-order uncertainty propagation. sigmaPixels is the assumed independent
+ // one-standard-deviation error for each manually selected x/y coordinate.
+ // This is sensitivity to point selection, not total camera measurement accuracy.
+ function estimateUncertainty(options){
+  const {
+   referencePoints,referenceWidth,referenceHeight,measuredPoints,
+   sigmaPixels=2,sigmaReferenceWidth=0,sigmaReferenceHeight=0
+  }=options||{};
+  if(!Number.isFinite(sigmaPixels)||sigmaPixels<0||sigmaPixels>20||
+     !Number.isFinite(sigmaReferenceWidth)||sigmaReferenceWidth<0||
+     !Number.isFinite(sigmaReferenceHeight)||sigmaReferenceHeight<0){
+   throw new Error('Параметры оценки неопределённости должны быть неотрицательными числами.');
+  }
+  const base=measureQuad(referencePoints,referenceWidth,referenceHeight,measuredPoints);
+  let varianceWidth=0,varianceHeight=0;
+  const add=(plus,minus,epsilon,sigma)=>{
+   const dw=(plus.width-minus.width)/(2*epsilon);
+   const dh=(plus.height-minus.height)/(2*epsilon);
+   varianceWidth+=(dw*sigma)**2;
+   varianceHeight+=(dh*sigma)**2;
+  };
+  const pixelStep=0.25;
+  if(sigmaPixels>0){
+   for(let i=0;i<4;i++){
+    for(const axis of ['x','y']){
+     const refPlus=referencePoints.map(p=>({...p}));
+     const refMinus=referencePoints.map(p=>({...p}));
+     refPlus[i][axis]+=pixelStep;
+     refMinus[i][axis]-=pixelStep;
+     add(
+      measureQuad(refPlus,referenceWidth,referenceHeight,measuredPoints),
+      measureQuad(refMinus,referenceWidth,referenceHeight,measuredPoints),
+      pixelStep,sigmaPixels
+     );
+     const gatePlus=measuredPoints.map(p=>({...p}));
+     const gateMinus=measuredPoints.map(p=>({...p}));
+     gatePlus[i][axis]+=pixelStep;
+     gateMinus[i][axis]-=pixelStep;
+     add(
+      measureQuad(referencePoints,referenceWidth,referenceHeight,gatePlus),
+      measureQuad(referencePoints,referenceWidth,referenceHeight,gateMinus),
+      pixelStep,sigmaPixels
+     );
+    }
+   }
+  }
+  if(sigmaReferenceWidth>0){
+   const epsilon=Math.min(Math.max(referenceWidth*1e-5,1e-6),referenceWidth*0.25);
+   add(
+    measureQuad(referencePoints,referenceWidth+epsilon,referenceHeight,measuredPoints),
+    measureQuad(referencePoints,referenceWidth-epsilon,referenceHeight,measuredPoints),
+    epsilon,sigmaReferenceWidth
+   );
+  }
+  if(sigmaReferenceHeight>0){
+   const epsilon=Math.min(Math.max(referenceHeight*1e-5,1e-6),referenceHeight*0.25);
+   add(
+    measureQuad(referencePoints,referenceWidth,referenceHeight+epsilon,measuredPoints),
+    measureQuad(referencePoints,referenceWidth,referenceHeight-epsilon,measuredPoints),
+    epsilon,sigmaReferenceHeight
+   );
+  }
+  return {
+   ...base,
+   sigmaWidth:Math.sqrt(varianceWidth),
+   sigmaHeight:Math.sqrt(varianceHeight),
+   uncertaintyModel:'linearized-independent-coordinate-errors'
+  };
+ }
+
+ return Object.freeze({validQuad,solve,homography,map,measureQuad,estimateUncertainty});
 });
