@@ -58,7 +58,7 @@
   const {start,goal,params,obstacles}=options;
   const maxExpansions=options.maxExpansions||24000;
   const bounds=options.bounds||{minX:-20,maxX:42,minY:-20,maxY:20};
-  const step=0.20,angleStep=Math.PI/60,primitive=0.35,ds=0.05;
+  const step=0.20,angleStep=Math.PI/60,primitive=0.6,ds=0.05;
   const maxSteer=options.maxSteer||Math.PI/7;
   const minClearance=options.minClearance??0.30;
   const key=q=>[
@@ -86,7 +86,8 @@
    for(const [gear,steer] of controls){
     let q={...cur.q},valid=true,minD=Infinity,samples=[];
     for(let d=0;d<primitive;d+=ds){
-     q=options.integrate(q,gear*0.7,steer,Math.min(ds,primitive-d),params);
+     const travel=Math.min(ds,primitive-d);
+     q=options.integrate(q,gear*0.7,steer,travel/0.7,params);
      if(q.x<bounds.minX||q.x>bounds.maxX||q.y<bounds.minY||q.y>bounds.maxY||
         Math.abs(norm(q.psi-q.psiT))>Math.PI*0.92){valid=false;break;}
      const c=clearance(q,obstacles,params);minD=Math.min(minD,c.distance);samples.push({x:q.x,y:q.y,psi:q.psi,psiT:q.psiT,gear,steer});
