@@ -48,5 +48,41 @@
   };
  }
 
- return Object.freeze({norm,derivative,rk4});
+ 
+ function localPoint(origin,angle,longitudinal,lateral=0){
+  return{
+   x:origin.x+longitudinal*Math.cos(angle)-lateral*Math.sin(angle),
+   y:origin.y+longitudinal*Math.sin(angle)+lateral*Math.cos(angle)
+  };
+ }
+
+ function hitchPoint(q,params){
+  return localPoint(q,q.psi,-params.hitchOffset);
+ }
+
+ function axlePoint(q,params){
+  const h=hitchPoint(q,params);
+  return localPoint(h,q.psiT,-params.kingpinAxles);
+ }
+
+ function bodyCorners(origin,angle,front,rear,width){
+  return[
+   localPoint(origin,angle,front,width/2),
+   localPoint(origin,angle,rear,width/2),
+   localPoint(origin,angle,rear,-width/2),
+   localPoint(origin,angle,front,-width/2)
+  ];
+ }
+
+ function vehiclePolygons(q,params){
+  const h=hitchPoint(q,params);
+  const cab=localPoint(q,q.psi,2.1);
+  return[
+   bodyCorners(q,q.psi,5,-1.2,2.55),
+   bodyCorners(cab,q.psi,1.35,-0.9,2.25),
+   bodyCorners(h,q.psiT,1.5,-(params.trailerLength-1.5),params.trailerWidth)
+  ];
+ }
+
+ return Object.freeze({norm,derivative,rk4,hitchPoint,axlePoint,vehiclePolygons});
 });
