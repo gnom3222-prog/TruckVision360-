@@ -110,3 +110,13 @@ test('canvas keeps rendering after a route-planning worker error',async()=>{
  assert.ok(simulator.drawCalls>afterPlanning,'the animation loop should continue drawing after the worker error');
  assert.ok(simulator.frames.length>0,'the next animation frame should be scheduled');
 });
+
+test('invalid model settings fail closed without replacing the last valid geometry',()=>{
+ const {elements}=bootSimulator();
+ elements.wheelbase.value='0';
+ elements.apply.onclick();
+ assert.match(elements.routeAdvice.textContent,/Параметры не применены/);
+ assert.match(elements.routeAdvice.textContent,/wheelbase/);
+ elements.routeStart.onclick();
+ assert.match(elements.routeAdvice.textContent,/Автопроезд заблокирован/);
+});
