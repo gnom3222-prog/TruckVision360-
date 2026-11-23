@@ -391,6 +391,7 @@ function planAStar(start,goal){
 function routeMetrics(path){
  let length=0,gearChanges=0,steeringChanges=0,reverseDistance=0,reverseSegments=0;
  let minClearance=Infinity,maxBeta=0,collision=false;
+ const checkClearance=showObstacles?planner.createClearanceChecker(obstacles,cfg):null;
  let previousGear=path[0]?.gear||1,previousSteer=path[0]?.steer||0,wasReverse=false;
  for(let i=0;i<path.length;i++){
   const q=path[i];
@@ -411,7 +412,7 @@ function routeMetrics(path){
   previousGear=q.gear||previousGear;
   previousSteer=q.steer||0;
   if(showObstacles){
-   const c=planner.clearance(q,obstacles,cfg);
+   const c=checkClearance(q);
    minClearance=Math.min(minClearance,c.distance);
    if(c.distance<=1e-9)collision=true;
   }
