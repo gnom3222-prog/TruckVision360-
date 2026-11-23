@@ -45,3 +45,13 @@ test('planner and simulator use exactly the same articulated collision geometry'
  assert.ok(Math.hypot(hitch.x-(q.x-params.hitchOffset*Math.cos(q.psi)),hitch.y-(q.y-params.hitchOffset*Math.sin(q.psi)))<1e-10);
  assert.ok(Math.hypot(axle.x-(hitch.x-params.kingpinAxles*Math.cos(q.psiT)),axle.y-(hitch.y-params.kingpinAxles*Math.sin(q.psiT)))<1e-10);
 });
+
+test('prepared clearance checker matches direct collision-distance queries',()=>{
+ const q={x:2.3,y:1.1,psi:-0.17,psiT:0.09};
+ const obstacles=[
+  {x:7,y:3,w:1.2,h:1.2,name:'A'},
+  {x:-4,y:-2,w:0.8,h:2.0,name:'B'}
+ ];
+ const check=planner.createClearanceChecker(obstacles,params);
+ assert.deepEqual(check(q),planner.clearance(q,obstacles,params));
+});
