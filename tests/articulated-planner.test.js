@@ -116,3 +116,61 @@ test('articulated planner rejects an initial tractor or trailer collision',()=>{
  assert.equal(result.ok,false);
  assert.equal(result.reason,'start-collision');
 });
+
+
+test('start recommendation identifies the first steering side after a straight lead-in',()=>{
+ const states=[
+  {x:0,y:0,gear:1,steer:0},
+  {x:0.2,y:0,gear:1,steer:0},
+  {x:0.4,y:0,gear:1,steer:0.12},
+  {x:0.6,y:0.02,gear:1,steer:0.12}
+ ];
+ const result=planner.recommendStart(states);
+ assert.equal(result.ok,true);
+ assert.equal(result.initialGear,1);
+ assert.equal(result.firstTurn,'left');
+ assert.equal(result.firstTurnGear,1);
+ assert.equal(result.firstTurnAfterGearChange,false);
+ assert.ok(Math.abs(result.firstTurnDistance-0.4)<1e-9);
+});
+
+test('start recommendation keeps steering-wheel direction explicit during reverse',()=>{
+ const result=planner.recommendStart([
+  {x:0,y:0,gear:1,steer:0},
+  {x:-0.1,y:0,gear:-1,steer:-0.16},
+  {x:-0.2,y:-0.01,gear:-1,steer:-0.16}
+ ]);
+ assert.equal(result.initialGear,-1);
+ assert.equal(result.firstTurn,'right');
+ assert.equal(result.firstTurnGear,-1);
+ assert.equal(result.firstTurnAfterGearChange,false);
+});
+
+test('start recommendation reports a turn that begins after a gear change',()=>{
+ const result=planner.recommendStart([
+  {x:0,y:0,gear:1,steer:0},
+  {x:0.3,y:0,gear:1,steer:0},
+  {x:0.3,y:0,gear:-1,steer:0},
+  {x:0.2,y:0,gear:-1,steer:0.12}
+ ]);
+ assert.equal(result.initialGear,1);
+ assert.equal(result.firstTurn,'left');
+ assert.equal(result.firstTurnGear,-1);
+ assert.equal(result.firstTurnAfterGearChange,true);
+ assert.ok(Math.abs(result.firstTurnDistance-0.4)<1e-9);
+});
+
+test('start recommendation reports straight travel when no steering input is planned',()=>{
+ const result=planner.recommendStart([
+  {x:0,y:0,gear:1,steer:0},
+  {x:0.5,y:0,gear:1,steer:0},
+  {x:1,y:0,gear:1,steer:0}
+ ]);
+ assert.equal(result.initialGear,1);
+ assert.equal(result.firstTurn,null);
+ assert.equal(result.firstTurnDistance,null);
+});
+
+test('start recommendation rejects a route without movement samples',()=>{
+ assert.equal(planner.recommendStart([{x:0,y:0}]).reason,'route-too-short');
+});
