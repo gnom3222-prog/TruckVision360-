@@ -297,7 +297,7 @@ function routeBlocked(ix,iy){
  if(!showObstacles)return false;
  const x=ix*0.5;
  const y=iy*0.5;
- const pad=1.7;
+ const pad=2.2;
 
  return obstacles.some(o=>
   x>=o.x-o.w/2-pad&&
@@ -826,7 +826,7 @@ function updateRoutePlayback(){
   stopRoutePlayback('Автопроезд остановлен: расчётные контуры пересекаются с препятствием '+safety.nearest.name+'.');
  }else if(safety.beta>55){
   stopRoutePlayback('Автопроезд остановлен: опасный расчётный угол сочленения '+safety.beta.toFixed(1)+'°. Перестройте манёвр.');
- }else if(Number.isFinite(conservativeClearance)&&conservativeClearance<0.35){
+ }else if(Number.isFinite(conservativeClearance)&&conservativeClearance<0.75){
   stopRoutePlayback('Автопроезд остановлен: малый расчётный зазор после резерва неопределённости ('+conservativeClearance.toFixed(2)+' м).');
  }
 }
@@ -846,7 +846,7 @@ function simulationStep(dt){
   if(routePlayback.active){
    const safety=assessScene(state);
    const effective=safety.nearest.distance-2*Math.max(0,cfg.measurementUncertainty);
-   if(safety.collision||safety.beta>55||(Number.isFinite(effective)&&effective<0.35)){
+   if(safety.collision||safety.beta>55||(Number.isFinite(effective)&&effective<0.75)){
     state=previous;
     stopRoutePlayback(safety.collision?
      'Автопроезд остановлен перед расчётным столкновением с препятствием '+safety.nearest.name+'.':
@@ -1014,7 +1014,7 @@ $('routeStart').onclick=()=>{
  }
  const clearance=routeAssessment.effectiveClearance;
  if(routeAssessment.collision||!routeAssessment.reached||routeAssessment.maxBeta>=55||
-    (Number.isFinite(clearance)&&clearance<0.35)){
+    (Number.isFinite(clearance)&&clearance<0.75)){
   $('routeAdvice').textContent='Автопроезд не запущен: предварительная проверка маршрута выявила риск или не смогла подтвердить прохождение. Перестройте маршрут и проверьте препятствия, угол сочленения и зазоры.';
   return;
  }
