@@ -501,6 +501,13 @@ function routeMetrics(path){
 }
 
 function buildRoute(){
+ if(!showObstacles){
+  routeAssessment=null;
+  $('routeAdvice').textContent='Нельзя рассчитать готовность к автопроезду: включите «Препятствия» и повторно постройте маршрут.';
+  $('difficultyAdvice').textContent='Сложность не рассчитана: проверка препятствий отключена.';
+  draw();
+  return;
+ }
  const gx=Number($('goalX').value);
  const gy=Number($('goalY').value);
 
@@ -960,6 +967,12 @@ $('obstaclesToggle').onclick=()=>{
  showObstacles=!showObstacles;
  $('obstaclesToggle').textContent=
   'Препятствия: '+(showObstacles?'вкл.':'выкл.');
+ if(!showObstacles){
+  stopRoutePlayback('');
+  routeAssessment=null;
+  $('routeAdvice').textContent='Препятствия отключены. Автопроезд заблокирован; включите препятствия и заново постройте маршрут.';
+  $('difficultyAdvice').textContent='Сложность не подтверждена: препятствия отключены.';
+ }
  draw();
 };
 
@@ -1002,6 +1015,10 @@ $('assess').onclick=()=>{
 };
 
 $('routeStart').onclick=()=>{
+ if(!showObstacles){
+  $('routeAdvice').textContent='Автопроезд заблокирован: сначала включите отображение и проверку препятствий.';
+  return;
+ }
  if(plannedRoute.length<2||!routeAssessment){
   $('routeAdvice').textContent='Сначала нажмите «Построить путь» и дождитесь оценки маршрута.';
   return;
