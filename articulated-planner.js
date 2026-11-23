@@ -80,7 +80,7 @@
    return {distance:min,hit};
   };
  }
- function sweptDisplacementPerMeter(steer,p){
+ function sweptDisplacementPerMeter(steer,p,q=null,maxDistance=0.05){
   if(!p||typeof p!=='object')throw new Error('Vehicle geometry is missing for swept-clearance checking.');
   if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2)throw new Error('Steering angle is outside the valid range.');
   const wheelbase=Number(p.wheelbase),hitchOffset=Number(p.hitchOffset);
@@ -89,11 +89,25 @@
      wheelbase<=0||hitchOffset<0||kingpinAxles<=0||trailerLength<=0||trailerWidth<=0){
    throw new Error('Vehicle geometry is incomplete or invalid for swept-clearance checking.');
   }
+  if(!Number.isFinite(maxDistance)||maxDistance<=0)throw new Error('Swept-check distance must be positive.');
   const tractorYawPerMeter=Math.abs(Math.tan(steer)/wheelbase);
   const tractorRadius=Math.hypot(5,2.55/2);
   const cabRadiusFromRearAxle=2.1+Math.hypot(1.35,2.25/2);
   const trailerRadius=Math.hypot(Math.max(1.5,Math.abs(trailerLength-1.5)),trailerWidth/2);
-  const trailerYawPerMeter=(1+hitchOffset*tractorYawPerMeter)/kingpinAxles;
+  const globalTrailerYawPerMeter=(1+hitchOffset*tractorYawPerMeter)/kingpinAxles;
+  let maxSin=1,maxCos=1;
+  if(q){
+   if(!Number.isFinite(q.psi)||!Number.isFinite(q.psiT))throw new Error('Articulation state is invalid for swept-clearance checking.');
+   const beta=q.psi-q.psiT;
+   const betaRate=tractorYawPerMeter+globalTrailerYawPerMeter;
+   const halfRange=betaRate*maxDistance;
+   const lo=beta-halfRange,hi=beta+halfRange;
+   maxSin=Math.max(Math.abs(Math.sin(lo)),Math.abs(Math.sin(hi)));
+   if(Math.ceil((lo-Math.PI/2)/Math.PI)<=Math.floor((hi-Math.PI/2)/Math.PI))maxSin=1;
+   maxCos=Math.max(Math.abs(Math.cos(lo)),Math.abs(Math.cos(hi)));
+   if(Math.ceil(lo/Math.PI)<=Math.floor(hi/Math.PI))maxCos=1;
+  }
+  const trailerYawPerMeter=(maxSin+hitchOffset*tractorYawPerMeter*maxCos)/kingpinAxles;
   return Math.max(
    1+tractorRadius*tractorYawPerMeter,
    1+cabRadiusFromRearAxle*tractorYawPerMeter,
@@ -163,13 +177,13 @@
    for(const [gear,steer] of controls){
     let q={...cur.q},valid=true,minD=Infinity,samples=[];
     let currentClearance=cur.clearance,sweptLowerBound=cur.sweptLowerBound,travelled=0;
-    const displacementRate=sweptDisplacementPerMeter(steer,params);
     while(travelled<primitive-1e-9){
      const remaining=primitive-travelled;
-     let travel=Math.min(ds,remaining);
+     let travel=Math.min(ds,remaining),displacementRate=0;
      if(Number.isFinite(currentClearance)){
       const margin=currentClearance-requiredClearance;
       if(margin<=1e-9){valid=false;break;}
+      displacementRate=sweptDisplacementPerMeter(steer,params,q,travel);
       travel=Math.min(travel,0.8*margin/displacementRate);
      }
      if(travel<5e-3){valid=false;break;}
