@@ -128,3 +128,12 @@ test('changing a valid model setting invalidates the old route before playback',
  assert.match(elements.routeAdvice.textContent,/параметры изменились/);
  assert.match(elements.difficultyAdvice.textContent,/прежняя оценка маршрута недействительна/);
 });
+
+test('negative measurement uncertainty blocks route playback instead of weakening clearance checks',()=>{
+ const {elements}=bootSimulator();
+ elements.measurementUncertainty.value='-0.01';
+ elements.apply.onclick();
+ assert.match(elements.routeAdvice.textContent,/measurementUncertainty/);
+ elements.routeStart.onclick();
+ assert.match(elements.routeAdvice.textContent,/Автопроезд заблокирован/);
+});
