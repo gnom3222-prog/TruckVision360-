@@ -22,7 +22,8 @@ const cfg={
  brakeDecel:4.5,
  maxAccel:0.8,
  gateWidth:3.5,
- margin:0.2
+ margin:0.2,
+ measurementUncertainty:0.15
 };
 
 let state,steer=0,targetSpeed=2,speed=0,drive=0;
@@ -264,6 +265,7 @@ function updateAssistant(){
   color='#a9bacb';
  }else{
   const a=assessScene();
+  const effectiveClearance=a.nearest.distance-2*Math.max(0,cfg.measurementUncertainty);
 
   if(a.collision){
    message='Стоп! Расчётные контуры автопоезда пересекаются с препятствием '+
@@ -274,15 +276,13 @@ function updateAssistant(){
     a.beta.toFixed(0)+
     ' градусов. Уменьшите угол складывания. Не продолжайте резкий задний ход.';
    color='#ffd18b';
-  }else if(a.nearest.distance<0.45){
+  }else if(effectiveClearance<0.45){
    message='Очень близко к объекту '+a.nearest.name+
-    ': примерно '+a.nearest.distance.toFixed(2)+
-    ' метра по упрощённой оценке. Остановитесь и проверьте пространство.';
+    ': геометрический зазор '+a.nearest.distance.toFixed(2)+' м; после резерва неопределённости остаётся '+Math.max(0,effectiveClearance).toFixed(2)+' м. Остановитесь и проверьте пространство.';
    color='#ff8585';
-  }else if(a.nearest.distance<1.0){
+  }else if(effectiveClearance<1.0){
    message='Внимание! Препятствие '+a.nearest.name+
-    ' на расстоянии около '+a.nearest.distance.toFixed(2)+
-    ' метра. Маневрируйте медленно.';
+    ' на расстоянии '+a.nearest.distance.toFixed(2)+' м; после резерва остаётся '+Math.max(0,effectiveClearance).toFixed(2)+' м. Маневрируйте медленно.';
    color='#ffd18b';
   }else{
    message='Путь по текущему положению свободен в пределах тестовой карты. Ближайший объект: '+
@@ -483,8 +483,9 @@ function routeMetrics(path){
  }
  showObstacles=obstaclesWereVisible;
  const initial=assessScene(state);
+ const effectiveClearance=minClearance-2*Math.max(0,cfg.measurementUncertainty);
  const score=turns*1.2+(maxBeta>45?3:maxBeta>30?1.5:0)+
-  (minClearance<0.35?4:minClearance<0.75?2:minClearance<1.5?1:0)+
+  (effectiveClearance<0.35?4:effectiveClearance<0.75?2:effectiveClearance<1.5?1:0)+
   (!reached?3:0)+(collision?8:0);
  return{
   length,turns,
@@ -493,6 +494,7 @@ function routeMetrics(path){
   beta:initial.beta,
   maxBeta,
   clearance:minClearance,
+  effectiveClearance,
   collision,reached
  };
 }
@@ -542,6 +544,7 @@ function buildRoute(){
   'Сложность: '+m.level+'. При моделировании всего автопоезда: максимальный угол сочленения '+
   m.maxBeta.toFixed(1)+'°; минимальный зазор до тестовых препятствий '+
   (Number.isFinite(m.clearance)?m.clearance.toFixed(2)+' м':'не определён')+
+  '; после резерва погрешности: '+(Number.isFinite(m.effectiveClearance)?m.effectiveClearance.toFixed(2)+' м':'не определено')+
   '; столкновение: '+(m.collision?'да':'не выявлено')+
   '. Оценка учебная, не гарантия безопасности.';
 
@@ -870,7 +873,8 @@ $('scenarioReset').onclick=()=>{
 $('assess').onclick=()=>{
  readSettings();
 
- const usable=cfg.gateWidth-2*cfg.margin;
+ const uncertainty=Math.max(0,cfg.measurementUncertainty);
+ const usable=cfg.gateWidth-2*(cfg.margin+uncertainty);
  const difference=usable-cfg.trailerWidth;
 
  let result;
@@ -883,7 +887,7 @@ $('assess').onclick=()=>{
  $('gateResult').textContent=
   result+'. Полезная ширина: '+usable.toFixed(2)+
   ' м; ширина полуприцепа: '+cfg.trailerWidth.toFixed(2)+
-  ' м; суммарный запас: '+difference.toFixed(2)+
+  ' м; дополнительный резерв неопределённости: '+uncertainty.toFixed(2)+' м с каждой стороны; остаточный запас: '+difference.toFixed(2)+
   ' м. Это только сравнение ширины, не анализ траектории и не гарантия проезда.';
 };
 
