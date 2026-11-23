@@ -59,8 +59,9 @@ test('three trailer axle centers use the configured spacing around the equivalen
 
 test('three-axle lateral scrub proxy is zero straight and symmetric in forward and reverse turns',()=>{
  const q={x:0,y:0,psi:0.31,psiT:-0.12};
+ const aligned={x:0,y:0,psi:0.31,psiT:0.31};
  for(const v of [3,-3]){
-  const straight=physics.trailerAxleDiagnostics(q,v,0,params);
+  const straight=physics.trailerAxleDiagnostics(aligned,v,0,params);
   near(straight.maxAbsLateralVelocity,0);
   const turning=physics.trailerAxleDiagnostics(q,v,0.18,{...params,trailerAxleSpacing:1.3});
   assert.equal(turning.axles.length,3);
