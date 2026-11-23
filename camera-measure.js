@@ -1,71 +1,14 @@
-(()=>{
-'use strict';
-const $=id=>document.getElementById(id);
-const video=$('measureVideo'),canvas=$('measureOverlay'),ctx=canvas.getContext('2d'),status=$('cameraStatus');
-let stream=null,mode=null,points=[],calibration=null,lastWidth=0,lastHeight=0;
-const say=message=>{status.textContent=message;};
-const distance=(a,b)=>Math.hypot(b.x-a.x,b.y-a.y);
-function draw(){
- if(!video.videoWidth||!video.videoHeight)return;
- const w=video.videoWidth,h=video.videoHeight;
- if(canvas.width!==w||canvas.height!==h){
-  if(lastWidth&&calibration&&(w!==lastWidth||h!==lastHeight)){calibration=null;mode=null;points=[];say('Разрешение или ориентация видео изменились. Выполните калибровку заново.');}
-  canvas.width=w;canvas.height=h;lastWidth=w;lastHeight=h;
- }
- ctx.clearRect(0,0,w,h);
- if(points.length){
-  ctx.lineWidth=Math.max(3,w/320);ctx.strokeStyle='#ffe082';ctx.fillStyle='#ffe082';
-  if(points.length===2){ctx.beginPath();ctx.moveTo(points[0].x,points[0].y);ctx.lineTo(points[1].x,points[1].y);ctx.stroke();}
-  points.forEach((p,i)=>{ctx.beginPath();ctx.arc(p.x,p.y,Math.max(7,w/180),0,Math.PI*2);ctx.fill();ctx.fillStyle='#081321';ctx.font='bold '+Math.max(14,w/45)+'px system-ui';ctx.fillText(String(i+1),p.x+8,p.y-8);ctx.fillStyle='#ffe082';});
- }
-}
-function clearCalibration(){calibration=null;mode=null;points=[];draw();say('Калибровка сброшена. Для измерения сначала задайте эталон известной длины.');}
-async function startCamera(){
- if(stream)return;
- if(!window.isSecureContext||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){say('Камера недоступна: откройте сайт по HTTPS в Safari и проверьте поддержку доступа к камере.');return;}
- try{
-  stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'}}});
-  video.srcObject=stream;await video.play();calibration=null;mode=null;points=[];
-  say('Камера включена. Держите телефон неподвижно. Нажмите «Задать эталон» и коснитесь двух концов объекта с известной длиной.');draw();
- }catch(error){
-  stream=null;
-  const reason=error&&error.name==='NotAllowedError'?'Доступ запрещён. Разрешите камеру для этого сайта в настройках Safari.':error&&error.name==='NotFoundError'?'Камера не найдена на устройстве.':'Не удалось включить камеру: '+(error&&error.message?error.message:'неизвестная ошибка');
-  say(reason);
- }
-}
-function stopCamera(){
- if(stream)stream.getTracks().forEach(track=>track.stop());
- stream=null;video.srcObject=null;calibration=null;mode=null;points=[];ctx.clearRect(0,0,canvas.width,canvas.height);
- say('Камера выключена. Калибровка удалена; при следующем запуске выполните её заново.');
-}
-function chooseMode(next){
- if(!stream||!video.videoWidth){say('Сначала включите камеру.');return;}
- if(next==='gate'&&!calibration){say('Сначала выполните калибровку по эталону известной длины.');return;}
- mode=next;points=[];draw();
- say(next==='reference'?'Коснитесь двух концов эталона известной длины. Эталон должен быть в той же плоскости, что и ворота.':'Коснитесь двух краёв ворот на одной линии измерения.');
-}
-canvas.addEventListener('pointerdown',event=>{
- if(!stream||!mode)return;
- const rect=canvas.getBoundingClientRect();
- const p={x:(event.clientX-rect.left)*canvas.width/rect.width,y:(event.clientY-rect.top)*canvas.height/rect.height};
- points.push(p);draw();if(points.length<2)return;
- const pixels=distance(points[0],points[1]);
- if(pixels<8){points=[];draw();say('Точки слишком близко. Повторите измерение.');return;}
- if(mode==='reference'){
-  const known=Number($('cameraReferenceLength').value);
-  if(!Number.isFinite(known)||known<0.05||known>100){points=[];draw();say('Введите длину эталона от 0,05 до 100 метров.');return;}
-  calibration={metersPerPixel:known/pixels,videoWidth:canvas.width,videoHeight:canvas.height};mode=null;points=[];draw();
-  say('Калибровка выполнена. Масштаб: '+calibration.metersPerPixel.toFixed(5)+' м/пиксель. Не перемещайте камеру и измеряйте объекты в той же плоскости.');
- }else if(mode==='gate'){
-  const width=pixels*calibration.metersPerPixel;mode=null;points=[];draw();
-  say('Предварительная ширина между отмеченными точками: '+width.toFixed(2)+' м. Погрешность не определена; проверьте ширину рулеткой и учтите запас по краям.');
- }
-});
-$('cameraStart').addEventListener('click',startCamera);
-$('cameraStop').addEventListener('click',stopCamera);
-$('cameraCalibrate').addEventListener('click',()=>chooseMode('reference'));
-$('cameraMeasureGate').addEventListener('click',()=>chooseMode('gate'));
-$('cameraReset').addEventListener('click',clearCalibration);
-video.addEventListener('loadedmetadata',draw);
-window.addEventListener('pagehide',stopCamera);
+(()=>{'use strict';
+const $=id=>document.getElementById(id),v=$('measureVideo'),c=$('measureOverlay'),ctx=c.getContext('2d'),status=$('cameraStatus');
+let stream=null,mode=null,pts=[],Hcal=null,fw=0,fh=0;
+const say=s=>status.textContent=s,dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function draw(){if(!v.videoWidth)return;const w=v.videoWidth,h=v.videoHeight;if(c.width!==w||c.height!==h){if(fw&&(w!==fw||h!==fh)){Hcal=null;mode=null;pts=[];say('Изменился кадр. Повторите калибровку.');}c.width=w;c.height=h;fw=w;fh=h;}ctx.clearRect(0,0,w,h);if(pts.length){ctx.strokeStyle='#ffe082';ctx.fillStyle='#ffe082';ctx.lineWidth=Math.max(3,w/500);ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));if(pts.length===4)ctx.closePath();ctx.stroke();pts.forEach((p,i)=>{ctx.beginPath();ctx.arc(p.x,p.y,Math.max(8,w/160),0,7);ctx.fill();ctx.fillStyle='#081321';ctx.font='bold '+Math.max(16,w/40)+'px system-ui';ctx.fillText((mode==='reference'?['1','2','3','4']:['A','B','C','D'])[i],p.x+8,p.y-8);ctx.fillStyle='#ffe082';});}}
+function solve(A,b){const m=A.map((r,i)=>r.concat(b[i]));for(let j=0;j<8;j++){let p=j;for(let r=j+1;r<8;r++)if(Math.abs(m[r][j])>Math.abs(m[p][j]))p=r;if(Math.abs(m[p][j])<1e-10)throw Error('Калибровочные точки расположены неправильно.');[m[j],m[p]]=[m[p],m[j]];let z=m[j][j];for(let k=j;k<9;k++)m[j][k]/=z;for(let r=0;r<8;r++)if(r!==j){z=m[r][j];for(let k=j;k<9;k++)m[r][k]-=z*m[j][k];}}return m.map(r=>r[8]);}
+function homography(src,W,H){let A=[],b=[],dst=[{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}];for(let i=0;i<4;i++){let {x,y}=src[i],{x:X,y:Y}=dst[i];A.push([x,y,1,0,0,0,-X*x,-X*y]);b.push(X);A.push([0,0,0,x,y,1,-Y*x,-Y*y]);b.push(Y);}return solve(A,b);}
+function map(p,h){let [a,b,c,d,e,f,g,k]=h,z=g*p.x+k*p.y+1;if(Math.abs(z)<1e-9)throw Error('Невозможно исправить перспективу.');return{x:(a*p.x+b*p.y+c)/z,y:(d*p.x+e*p.y+f)/z};}
+async function start(){if(stream)return;if(!isSecureContext||!navigator.mediaDevices?.getUserMedia){say('Камера доступна только на защищённой HTTPS-странице в Safari.');return;}try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});v.srcObject=stream;await v.play();Hcal=null;mode=null;pts=[];say('Камера включена. Установите прямоугольный эталон (например, лист A4) в плоскость ворот. Введите его реальные размеры и нажмите «Калибровать».');draw();}catch(e){stream=null;say(e.name==='NotAllowedError'?'Разрешите доступ к камере для сайта в настройках Safari.':'Не удалось включить камеру: '+(e.message||e.name));}}
+function stop(){stream?.getTracks().forEach(t=>t.stop());stream=null;v.srcObject=null;Hcal=null;mode=null;pts=[];ctx.clearRect(0,0,c.width,c.height);say('Камера выключена. При следующем запуске нужна новая калибровка.');}
+function choose(m){if(!stream||!v.videoWidth){say('Сначала включите камеру.');return;}if(m==='gate'&&!Hcal){say('Сначала выполните калибровку.');return;}mode=m;pts=[];draw();say(m==='reference'?'Коснитесь четырёх углов эталона по часовой стрелке: верхний левый, верхний правый, нижний правый, нижний левый.':'Коснитесь четырёх углов проёма в том же порядке.');}
+c.addEventListener('pointerdown',e=>{if(!stream||!mode)return;let r=c.getBoundingClientRect();pts.push({x:(e.clientX-r.left)*c.width/r.width,y:(e.clientY-r.top)*c.height/r.height});draw();if(pts.length!==4)return;try{if(mode==='reference'){let W=+$('cameraReferenceWidth').value,H=+$('cameraReferenceHeight').value;if(!(W>.05&&H>.05&&W<=20&&H<=20))throw Error('Введите ширину и высоту эталона от 0,05 до 20 м.');Hcal=homography(pts,W,H);mode=null;pts=[];say('Плоскость откалибрована. Не двигайте телефон и эталон. Теперь измерьте ворота.');}else{if(c.width!==fw||c.height!==fh)throw Error('Размер кадра изменился. Повторите калибровку.');let q=pts.map(p=>map(p,Hcal)),w=(dist(q[0],q[1])+dist(q[3],q[2]))/2,h=(dist(q[0],q[3])+dist(q[1],q[2]))/2;if(!Number.isFinite(w+h)||w<=0||h<=0)throw Error('Не удалось рассчитать размеры.');$('gateWidth').value=w.toFixed(2);$('gateResult').textContent='Предварительное измерение с коррекцией перспективы: ширина ≈ '+w.toFixed(2)+' м; высота ≈ '+h.toFixed(2)+' м. Проверьте рулеткой.';mode=null;pts=[];say('Готово. Ширина передана в настройки симулятора. Высота: '+h.toFixed(2)+' м.');}}catch(err){mode=null;pts=[];say(err.message||'Ошибка измерения. Повторите калибровку.');}draw();});
+$('cameraStart').addEventListener('click',start);$('cameraStop').addEventListener('click',stop);$('cameraCalibrate').addEventListener('click',()=>choose('reference'));$('cameraMeasureGate').addEventListener('click',()=>choose('gate'));$('cameraReset').addEventListener('click',()=>{Hcal=null;mode=null;pts=[];draw();say('Калибровка сброшена.');});v.addEventListener('loadedmetadata',draw);window.addEventListener('pagehide',stop);
 })();
