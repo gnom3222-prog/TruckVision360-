@@ -11,6 +11,36 @@ test('articulated planner reaches a clear goal in open space',()=>{
  assert.ok(result.states.length>10);
  assert.ok(Math.hypot(result.states.at(-1).x-7,result.states.at(-1).y)<0.9);
 });
+test('articulated planner satisfies the requested terminal tractor heading and trailer alignment',()=>{
+ const result=planner.plan({
+  start:{x:0,y:0,psi:0,psiT:0},
+  goal:{x:2,y:0,heading:0},
+  params,obstacles:[],integrate,
+  maxExpansions:1000,
+  positionTolerance:0.9,
+  headingTolerance:5*Math.PI/180,
+  maxTerminalArticulation:5*Math.PI/180
+ });
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.ok(result.terminalErrors.position<=0.9);
+ assert.ok(result.terminalErrors.headingError<=5*Math.PI/180);
+ assert.ok(result.terminalErrors.articulation<=5*Math.PI/180);
+});
+
+test('articulated planner does not accept a position-only match with the wrong final heading',()=>{
+ const result=planner.plan({
+  start:{x:0,y:0,psi:0,psiT:0},
+  goal:{x:0.5,y:0,heading:Math.PI},
+  params,obstacles:[],integrate,
+  maxExpansions:1,
+  headingTolerance:5*Math.PI/180,
+  maxTerminalArticulation:5*Math.PI/180
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'no-path');
+ assert.ok(result.headingError>Math.PI-1e-9);
+});
+
 test('articulated planner routes the complete trailer around an obstacle',()=>{
  const obstacles=[{x:20,y:0,w:1.2,h:1.2,name:'test pallet'}];
  const result=planner.plan({start:{x:0,y:0,psi:0,psiT:0},goal:{x:40,y:0},params,obstacles,integrate,maxExpansions:24000,bounds:{minX:-18,maxX:50,minY:-16,maxY:16}});

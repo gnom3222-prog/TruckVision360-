@@ -28,6 +28,7 @@ function bootSimulator(){
   }
   return elements[id];
  };
+ for(const id of Object.keys(values))getElementById(id);
  const canvas=getElementById('view');
  canvas.width=1000;
  canvas.height=650;
