@@ -174,3 +174,10 @@ test('start recommendation reports straight travel when no steering input is pla
 test('start recommendation rejects a route without movement samples',()=>{
  assert.equal(planner.recommendStart([{x:0,y:0}]).reason,'route-too-short');
 });
+
+
+test('start recommendation ignores zero and invalid steering thresholds',()=>{
+ const states=[{x:0,y:0,gear:1,steer:0},{x:0.5,y:0,gear:1,steer:0}];
+ assert.equal(planner.recommendStart(states,{steeringThreshold:0}).firstTurn,null);
+ assert.equal(planner.recommendStart(states,{steeringThreshold:-1}).firstTurn,null);
+});
