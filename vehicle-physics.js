@@ -8,6 +8,35 @@
 
  const norm=angle=>Math.atan2(Math.sin(angle),Math.cos(angle));
 
+ const VEHICLE_PARAMETER_LIMITS=Object.freeze({
+  wheelbase:{min:1,max:15},
+  hitchOffset:{min:0,max:5},
+  kingpinAxles:{min:0.5,max:30},
+  trailerLength:{min:4,max:30},
+  trailerWidth:{min:1.5,max:5},
+  trailerAxleSpacing:{min:0.3,max:5,optional:true}
+ });
+
+ function validateVehicleParams(params){
+  const errors=[];
+  if(!params||typeof params!=='object'){
+   return ['Параметры автопоезда отсутствуют.'];
+  }
+  for(const [key,limits] of Object.entries(VEHICLE_PARAMETER_LIMITS)){
+   const value=params[key];
+   if(limits.optional&&(value===undefined||value===null))continue;
+   if(!Number.isFinite(value)){
+    errors.push(key+': значение должно быть конечным числом.');
+    continue;
+   }
+   if(value<limits.min||value>limits.max){
+    errors.push(key+': значение вне допустимого диапазона '+limits.min+'–'+limits.max+'.');
+   }
+  }
+  return errors;
+ }
+
+
  function derivative(q,v,delta,params){
   const yawRate=v/params.wheelbase*Math.tan(delta);
   const beta=norm(q.psi-q.psiT);
@@ -112,5 +141,5 @@
   };
  }
 
- return Object.freeze({norm,derivative,rk4,hitchPoint,axlePoint,trailerAxlePoints,trailerAxleDiagnostics,vehiclePolygons});
+ return Object.freeze({norm,validateVehicleParams,derivative,rk4,hitchPoint,axlePoint,trailerAxlePoints,trailerAxleDiagnostics,vehiclePolygons});
 });
