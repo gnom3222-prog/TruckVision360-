@@ -44,6 +44,8 @@ const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const norm=a=>Math.atan2(Math.sin(a),Math.cos(a));
 const physics=window.TruckVisionPhysics;
 if(!physics)throw new Error('TruckVision physics module failed to load.');
+const planner=window.TruckVisionPlanner;
+if(!planner)throw new Error('TruckVision articulated planner module failed to load.');
 
 function readSettings(){
  for(const key of Object.keys(cfg)){
@@ -404,87 +406,39 @@ function planAStar(start,goal){
 }
 
 function routeMetrics(path){
- let length=0;
- let turns=0;
- for(let i=1;i<path.length;i++){
-  length+=Math.hypot(path[i].x-path[i-1].x,path[i].y-path[i-1].y);
- }
- for(let i=1;i<path.length-1;i++){
-  const a=Math.atan2(path[i].y-path[i-1].y,path[i].x-path[i-1].x);
-  const b=Math.atan2(path[i+1].y-path[i].y,path[i+1].x-path[i].x);
-  if(Math.abs(norm(b-a))>0.18)turns++;
- }
-
- // Follow the point route with a low-speed pure-pursuit controller while
- // checking the complete tractor + trailer footprint at every simulation step.
- const sim={...state};
- const obstaclesWereVisible=showObstacles;
- let minClearance=Infinity;
- let maxBeta=Math.abs(norm(sim.psi-sim.psiT))*180/Math.PI;
- let collision=false;
- let reached=false;
- let pathIndex=1;
- const dt=0.10;
- const lookAhead=2.0;
- const maxSteer=35*Math.PI/180;
- const maxSteps=Math.min(5000,Math.max(300,Math.ceil(length/(0.6*dt))*4));
- for(let step=0;step<maxSteps;step++){
-  while(pathIndex<path.length-1 &&
-   Math.hypot(path[pathIndex].x-sim.x,path[pathIndex].y-sim.y)<lookAhead*0.65)pathIndex++;
-  const target=path[Math.min(pathIndex,path.length-1)];
-  const dx=target.x-sim.x,dy=target.y-sim.y;
-  const targetAngle=Math.atan2(dy,dx);
-  const alpha=norm(targetAngle-sim.psi);
-  const steerCmd=clamp(Math.atan2(2*cfg.wheelbase*Math.sin(alpha),Math.max(0.5,Math.hypot(dx,dy))),-maxSteer,maxSteer);
-  const next=rk4(sim,0.6,steerCmd,dt);
-  Object.assign(sim,next);
-  const beta=Math.abs(norm(sim.psi-sim.psiT))*180/Math.PI;
-  maxBeta=Math.max(maxBeta,beta);
-  const vehicle=vehiclePolygons(sim);
-  if(obstaclesWereVisible){
-   for(const o of obstacles){
-    const op=obstaclePolygon(o);
-    for(const vp of vehicle){
-     const d=polygonDistance(vp,op);
-     minClearance=Math.min(minClearance,d);
-     if(d===0)collision=true;
-    }
-   }
+ let length=0,turns=0,minClearance=Infinity,maxBeta=0,collision=false;
+ let previousGear=path[1]?.gear||1,previousSteer=path[1]?.steer||0;
+ for(let i=0;i<path.length;i++){
+  const q=path[i];
+  maxBeta=Math.max(maxBeta,Math.abs(norm(q.psi-q.psiT))*180/Math.PI);
+  if(i>0){
+   const prev=path[i-1];
+   length+=Math.hypot(q.x-prev.x,q.y-prev.y);
+   if(q.gear!==previousGear||Math.abs(q.steer-previousSteer)>0.12)turns++;
+   previousGear=q.gear;previousSteer=q.steer;
   }
-  if(collision||beta>=75)break;
-  if(Math.hypot(path[path.length-1].x-sim.x,path[path.length-1].y-sim.y)<1.0){
-   reached=true;
-   break;
+  if(showObstacles){
+   const c=planner.clearance(q,obstacles,cfg);
+   minClearance=Math.min(minClearance,c.distance);
+   if(c.distance===0)collision=true;
   }
  }
- showObstacles=obstaclesWereVisible;
- const initial=assessScene(state);
  const effectiveClearance=minClearance-2*Math.max(0,cfg.measurementUncertainty);
- const score=turns*1.2+(maxBeta>45?3:maxBeta>30?1.5:0)+
-  (effectiveClearance<0.35?4:effectiveClearance<0.75?2:effectiveClearance<1.5?1:0)+
-  (!reached?3:0)+(collision?8:0);
- const clearanceInsufficient=Number.isFinite(effectiveClearance)&&effectiveClearance<0.75;
+ const reached=path.length>1&&Math.hypot(path[path.length-1].x-routeGoal.x,path[path.length-1].y-routeGoal.y)<0.9;
+ const clearanceInsufficient=Number.isFinite(effectiveClearance)&&effectiveClearance<0.35;
  const articulationBlocked=maxBeta>=55;
+ const reverseSegments=path.filter(p=>p.gear<0).length;
+ const score=turns*0.8+(reverseSegments>0?1.5:0)+(maxBeta>45?3:maxBeta>30?1.5:0)+
+  (effectiveClearance<0.35?4:effectiveClearance<0.75?2:effectiveClearance<1.5?1:0)+(!reached?3:0)+(collision?8:0);
  const reasons=[];
- if(turns>0)reasons.push('на маршруте '+turns+' поворот(ов)');
- if(collision)reasons.push('расчётное пересечение с препятствием');
- if(!reached)reasons.push('симуляция не подтвердила достижение цели');
- if(articulationBlocked)reasons.push('угол сочленения достиг порога блокировки автопроезда 55°');
- else if(maxBeta>45)reasons.push('угол сочленения превышал 45°');
- else if(maxBeta>30)reasons.push('угол сочленения превышал 30°');
- if(clearanceInsufficient)reasons.push('зазор после резерва погрешности меньше порога автопроезда 0,75 м');
- else if(Number.isFinite(effectiveClearance)&&effectiveClearance<1.5)reasons.push('ограниченный зазор до препятствий');
- if(!reasons.length)reasons.push('в тестовой модели не выявлены выраженные факторы усложнения');
- return{
-  length,turns,
-  level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':
-   score>=7?'Высокая':score>=3?'Средняя':'Низкая',
-  beta:initial.beta,
-  maxBeta,
-  clearance:minClearance,
-  effectiveClearance,
-  collision,reached,clearanceInsufficient,articulationBlocked,reasons
- };
+ if(reverseSegments)reasons.push('задний ход на '+(reverseSegments*0.1).toFixed(1)+' м пути');
+ if(turns)reasons.push('смены передачи/рулевого режима: '+turns);
+ if(collision)reasons.push('пересечение с препятствием');
+ if(!reached)reasons.push('цель не достигнута');
+ if(articulationBlocked)reasons.push('угол сочленения достиг 55°');
+ if(clearanceInsufficient)reasons.push('недостаточный зазор после резерва погрешности');
+ if(!reasons.length)reasons.push('в проверенной модели препятствия не пересечены');
+ return {length,turns,level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',maxBeta,clearance:minClearance,effectiveClearance,collision,reached,clearanceInsufficient,articulationBlocked,reverseSegments,reasons};
 }
 
 function buildRoute(){
