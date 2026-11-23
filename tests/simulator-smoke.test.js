@@ -120,3 +120,11 @@ test('invalid model settings fail closed without replacing the last valid geomet
  elements.routeStart.onclick();
  assert.match(elements.routeAdvice.textContent,/Автопроезд заблокирован/);
 });
+
+test('changing a valid model setting invalidates the old route before playback',()=>{
+ const {elements}=bootSimulator();
+ elements.wheelbase.value='4.00';
+ elements.routeStart.onclick();
+ assert.match(elements.routeAdvice.textContent,/параметры изменились/);
+ assert.match(elements.difficultyAdvice.textContent,/прежняя оценка маршрута недействительна/);
+});
