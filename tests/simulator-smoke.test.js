@@ -59,3 +59,12 @@ test('automatic route remains blocked when obstacle checks are disabled',()=>{
  elements.routeStart.onclick();
  assert.match(elements.routeAdvice.textContent,/Автопроезд заблокирован/);
 });
+
+test('route planning reports missing Web Worker support without blanking the simulator',async()=>{
+ const elements=bootSimulator();
+ elements.planRoute.onclick();
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.match(elements.routeAdvice.textContent,/не поддерживает фоновый расчёт маршрута/);
+ assert.equal(elements.planRoute.disabled,false);
+ assert.equal(typeof elements.routeStart.onclick,'function');
+});
