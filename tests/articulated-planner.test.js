@@ -164,7 +164,7 @@ test('planner rejects a start position already inside the requested clearance re
 });
 
 test('planner adaptively shortens reverse steps near the requested clearance reserve',()=>{
- const obstacles=[{x:5.81,y:0,w:1,h:1,name:'front pallet'}];
+ const obstacles=[{x:5.82,y:0,w:1,h:1,name:'front pallet'}];
  const result=planner.plan({
   start:{x:0,y:0,psi:0,psiT:0},
   goal:{x:-2,y:0},
