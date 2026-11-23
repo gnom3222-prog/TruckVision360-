@@ -37,6 +37,15 @@ input[type=number],select{width:100%;background:#0e2031;color:#fff;border:1px so
 .assistant-box strong{display:block;color:var(--cyan);margin-bottom:5px}
 .assistant-box p{margin:0;line-height:1.45}.obstacle-legend{font-size:11px;color:var(--muted);margin-top:6px}
 @media(max-width:800px){main{grid-template-columns:1fr}header{padding-top:12px}}
+
+.camera-panel{margin-top:12px}
+.camera-stage{position:relative;width:100%;background:#06101b;border:1px solid #36516a;border-radius:10px;overflow:hidden;min-height:180px}
+.camera-stage video{display:block;width:100%;height:auto;max-height:55vh;object-fit:contain;background:#06101b}
+.camera-stage canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
+.camera-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.camera-actions button{flex:1;min-width:130px}
+.camera-status{margin-top:8px;padding:9px;border-radius:8px;background:#0e2031;color:#dceaf5;font-size:12px;line-height:1.45;white-space:pre-wrap}
+.camera-warning{color:#ffd18b}
 </style>
 </head>
 <body>
@@ -148,6 +157,24 @@ input[type=number],select{width:100%;background:#0e2031;color:#fff;border:1px so
 <div class="metric"><span>Запас сцепления</span><strong id="gripOut">—</strong></div>
 <div class="metric"><span>Пройденный путь</span><strong id="distanceOut">0,0 м</strong></div>
 </div>
+
+<div class="assistant-box camera-panel">
+<strong>📷 Измерение ворот камерой iPhone</strong>
+<p class="small">Камера запускается только после нажатия кнопки. Изображение обрабатывается локально в браузере и не отправляется на сервер.</p>
+<div class="camera-stage">
+ <video id="measureVideo" playsinline muted autoplay></video>
+ <canvas id="measureOverlay" aria-label="Коснитесь двух точек для измерения"></canvas>
+</div>
+<div class="camera-actions"><button id="cameraStart" class="primary">Включить камеру</button><button id="cameraStop">Выключить камеру</button></div>
+<div class="grid" style="margin-top:8px">
+ <div><label for="cameraReferenceLength">Известная длина эталона, м</label><input id="cameraReferenceLength" type="number" min="0.05" max="100" step="0.01" value="1.00"></div>
+ <div><label>Порядок измерения</label><div class="small">1. Выберите эталон и отметьте его концы. 2. Отметьте края ворот.</div></div>
+</div>
+<div class="camera-actions"><button id="cameraCalibrate">1 · Задать эталон</button><button id="cameraMeasureGate" class="primary">2 · Измерить ворота</button><button id="cameraReset">Сбросить калибровку</button></div>
+<div id="cameraStatus" class="camera-status" aria-live="polite">Камера выключена. Нажмите «Включить камеру», затем выполните калибровку по известному размеру.</div>
+<p class="small camera-warning">Ограничение: это ручное измерение по двум точкам, а не 3D-сканер. Эталон и ворота должны находиться в одной плоскости и на сопоставимом расстоянии от камеры. Перспектива, наклон телефона и неточность касания влияют на результат. Погрешность автоматически не сертифицируется; используйте дополнительный запас и рулетку для проверки. Не используйте результат как подтверждение безопасного проезда.</p>
+</div>
+
 <div id="gateResult" class="notice">Задай ширину ворот и нажми «Оценить проём». Сейчас это только сравнение ширины, а не проверка всей траектории.</div>
 <div class="notice">
 <strong>Ограничения модели.</strong> Здесь реализованы кинематическое движение сочленённого автопоезда и упрощённая продольная динамика. Нет полной динамики шин, подвески, переноса нагрузки, крена, реальных характеристик двигателя и пневматических тормозов ABS/EBS. Значения по умолчанию предварительные, а не спецификация конкретного VIN. Препятствия и помощник работают по условной тестовой карте и упрощённой геометрии. Это учебный симулятор, не датчики и не система предотвращения столкновений; программа не предназначена для управления реальным грузовиком или подтверждения безопасности манёвра.
@@ -157,6 +184,7 @@ input[type=number],select{width:100%;background:#0e2031;color:#fff;border:1px so
 
 <script src="truckvision.js?v=20261123-2"></script>
 <script src="voice.js?v=20261123-2"></script>
+<script src="camera-measure.js?v=20261123-1"></script>
 
 <script>
 // PWA: register only on secure origins supported by iOS Safari.
