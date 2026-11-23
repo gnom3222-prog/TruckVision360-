@@ -50,10 +50,49 @@ const planner=window.TruckVisionPlanner;
 if(!planner)throw new Error('TruckVision articulated planner module failed to load.');
 
 function readSettings(){
- for(const key of Object.keys(cfg)){
+ const candidate={...cfg};
+ for(const key of Object.keys(candidate)){
   const input=$(key);
-  if(input)cfg[key]=Number(input.value);
+  if(input){
+   if(String(input.value).trim()==='')return {ok:false,changed:false,errors:[key+': поле не должно быть пустым.']};
+   candidate[key]=Number(input.value);
+  }
  }
+ const errors=physics.validateVehicleParams(candidate);
+ const limits={
+  tractorMass:[1000,50000],
+  engineForce:[1000,200000],
+  trailerMass:[1000,100000],
+  mu:[0.05,1.5],
+  crr:[0,0.1],
+  brakeDecel:[0.1,12],
+  maxAccel:[0.1,3],
+  gateWidth:[1,20],
+  margin:[0,5],
+  measurementUncertainty:[0,5]
+ };
+ for(const [key,range] of Object.entries(limits)){
+  const value=candidate[key];
+  if(!Number.isFinite(value)||value<range[0]||value>range[1]){
+   errors.push(key+': допустимый диапазон '+range[0]+'–'+range[1]+'.');
+  }
+ }
+ if(errors.length)return {ok:false,changed:false,errors};
+ const changed=Object.keys(cfg).some(key=>!Object.is(cfg[key],candidate[key]));
+ Object.assign(cfg,candidate);
+ return {ok:true,changed,errors:[]};
+}
+
+function invalidateRouteForSettingsChange(){
+ routeBuildToken++;
+ cancelPlannerWorker('Параметры модели изменены; прежний расчёт отменён.');
+ $('planRoute').disabled=false;
+ if(routePlayback.active)stopRoutePlayback('Автопроезд остановлен: параметры модели изменились.');
+ plannedRoute=[];
+ routeGoal=null;
+ routeAssessment=null;
+ $('routeAdvice').textContent='Параметры модели изменены. Постройте маршрут заново.';
+ $('difficultyAdvice').textContent='Сложность не рассчитана: прежняя оценка маршрута недействительна.';
 }
 
 function resetState(){
@@ -497,9 +536,17 @@ function runPlannerWorker(options,onProgress){
 }
 
 async function buildRoute(){
+ const settings=readSettings();
  const token=++routeBuildToken;
  cancelPlannerWorker('Предыдущий расчёт заменён новым.');
  $('planRoute').disabled=false;
+ if(!settings.ok){
+  plannedRoute=[];routeGoal=null;routeAssessment=null;
+  $('routeAdvice').textContent='Расчёт заблокирован: проверьте параметры модели. '+settings.errors.join(' ');
+  $('difficultyAdvice').textContent='Сложность не рассчитана из-за некорректных параметров.';
+  draw();
+  return;
+ }
  if(!showObstacles){
   routeAssessment=null;
   $('routeAdvice').textContent='Нельзя рассчитать готовность к автопроезду: включите «Препятствия» и повторно постройте маршрут.';
@@ -970,7 +1017,15 @@ function startDrive(direction){
 }
 
 function applySettings(){
- readSettings();
+ const result=readSettings();
+ if(!result.ok){
+  $('routeAdvice').textContent='Параметры не применены: '+result.errors.join(' ');
+  $('difficultyAdvice').textContent='Построение маршрута заблокировано до исправления параметров.';
+  draw();
+  return;
+ }
+ if(result.changed)invalidateRouteForSettingsChange();
+ else $('routeAdvice').textContent='Параметры модели проверены. Предыдущий маршрут сохраняет актуальность.';
  draw();
 }
 
@@ -1067,7 +1122,12 @@ $('scenarioReset').onclick=()=>{
 };
 
 $('assess').onclick=()=>{
- readSettings();
+ const settings=readSettings();
+ if(!settings.ok){
+  $('gateResult').textContent='Оценка заблокирована: '+settings.errors.join(' ');
+  return;
+ }
+ if(settings.changed)invalidateRouteForSettingsChange();
 
  const uncertainty=Math.max(0,cfg.measurementUncertainty);
  const usable=cfg.gateWidth-2*(cfg.margin+uncertainty);
@@ -1088,6 +1148,17 @@ $('assess').onclick=()=>{
 };
 
 $('routeStart').onclick=()=>{
+ const settings=readSettings();
+ if(!settings.ok){
+  stopRoutePlayback('Автопроезд заблокирован: '+settings.errors.join(' '));
+  $('difficultyAdvice').textContent='Сложность не подтверждена из-за некорректных параметров модели.';
+  return;
+ }
+ if(settings.changed){
+  invalidateRouteForSettingsChange();
+  $('routeAdvice').textContent='Автопроезд не запущен: параметры изменились. Постройте маршрут заново.';
+  return;
+ }
  if(!showObstacles){
   $('routeAdvice').textContent='Автопроезд заблокирован: сначала включите отображение и проверку препятствий.';
   return;
@@ -1160,7 +1231,8 @@ window.addEventListener('keyup',event=>{
  if(event.key==='ArrowUp'||event.key==='ArrowDown')drive=0;
 });
 
-readSettings();
+const initialSettings=readSettings();
+if(!initialSettings.ok)console.error('Invalid initial TruckVision configuration:',initialSettings.errors);
 targetSpeed=Number($('speedSet').value);
 resetState();
 draw();
