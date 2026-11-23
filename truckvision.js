@@ -875,7 +875,7 @@ function frame(timestamp){
  const dt=Math.min((timestamp-lastTime)/1000,0.04);
  lastTime=timestamp;
 
- if(drive!==0||braking)simulationStep(dt);
+ if(drive!==0||braking||(routePlayback.active&&!routePlayback.paused))simulationStep(dt);
 
  draw();
  requestAnimationFrame(frame);
