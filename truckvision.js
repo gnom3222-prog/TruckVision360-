@@ -465,12 +465,14 @@ function routeMetrics(path){
   const beta=Math.abs(norm(sim.psi-sim.psiT))*180/Math.PI;
   maxBeta=Math.max(maxBeta,beta);
   const vehicle=vehiclePolygons(sim);
-  for(const o of obstacles){
-   const op=obstaclePolygon(o);
-   for(const vp of vehicle){
-    const d=polygonDistance(vp,op);
-    minClearance=Math.min(minClearance,d);
-    if(d===0)collision=true;
+  if(obstaclesWereVisible){
+   for(const o of obstacles){
+    const op=obstaclePolygon(o);
+    for(const vp of vehicle){
+     const d=polygonDistance(vp,op);
+     minClearance=Math.min(minClearance,d);
+     if(d===0)collision=true;
+    }
    }
   }
   if(collision||beta>=75)break;
@@ -531,18 +533,17 @@ function buildRoute(){
   relative>0?'начать поворот влево':'начать поворот вправо';
 
  $('routeAdvice').textContent=
-  'Путь построен до точки ('+gx.toFixed(1)+', '+
-  gy.toFixed(1)+') м. Первый ориентир: '+first+
-  '. Длина: '+m.length.toFixed(1)+
-  ' м; поворотов: '+m.turns+
-  '. Двигайтесь медленно и контролируйте зеркала.';
+  'Маршрут до точки ('+gx.toFixed(1)+', '+
+  gy.toFixed(1)+') м. Начать: '+first+
+  '. Длина: '+m.length.toFixed(1)+' м; поворотов: '+m.turns+
+  '. Симуляция всего автопоезда: '+(m.reached?'цель достигнута':'цель не достигнута')+'.';
 
  $('difficultyAdvice').textContent=
-  'Сложность манёвра: '+m.level+
-  '. Учтены повороты маршрута, текущий угол сочленения '+
-  m.beta.toFixed(0)+'° и ближайшее препятствие '+
-  (Number.isFinite(m.clearance)?
-   m.clearance.toFixed(2)+' м':'не определено')+'.';
+  'Сложность: '+m.level+'. При моделировании всего автопоезда: максимальный угол сочленения '+
+  m.maxBeta.toFixed(1)+'°; минимальный зазор до тестовых препятствий '+
+  (Number.isFinite(m.clearance)?m.clearance.toFixed(2)+' м':'не определён')+
+  '; столкновение: '+(m.collision?'да':'не выявлено')+
+  '. Оценка учебная, не гарантия безопасности.';
 
  draw();
 }
