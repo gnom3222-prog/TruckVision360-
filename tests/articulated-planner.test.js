@@ -246,3 +246,34 @@ test('start recommendation ignores zero and invalid steering thresholds',()=>{
  assert.equal(planner.recommendStart(states,{steeringThreshold:0}).firstTurn,null);
  assert.equal(planner.recommendStart(states,{steeringThreshold:-1}).firstTurn,null);
 });
+
+test('planner rejects invalid vehicle geometry before collision checking or search',()=>{
+ const result=planner.plan({
+  start:{x:0,y:0,psi:0,psiT:0},goal:{x:5,y:0},
+  params:{...params,trailerWidth:NaN},obstacles:[],integrate,
+  maxExpansions:1000
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'invalid-input');
+ assert.equal(result.expanded,0);
+ assert.ok(result.errors.some(message=>message.includes('trailerWidth')));
+});
+
+test('planner rejects malformed start states and zero-size obstacles',()=>{
+ const badStart=planner.plan({
+  start:{x:0,y:0,psi:Infinity,psiT:0},goal:{x:5,y:0},
+  params,obstacles:[],integrate,maxExpansions:1000
+ });
+ assert.equal(badStart.reason,'invalid-input');
+ assert.ok(badStart.errors.some(message=>message.includes('Начальное состояние')));
+ const badObstacle=planner.plan({
+  start:{x:0,y:0,psi:0,psiT:0},goal:{x:5,y:0},
+  params,obstacles:[{x:2,y:0,w:0,h:1}],integrate,maxExpansions:1000
+ });
+ assert.equal(badObstacle.reason,'invalid-input');
+ assert.ok(badObstacle.errors.some(message=>message.includes('положительные ширину/высоту')));
+});
+
+test('direct clearance checks fail closed for malformed obstacles',()=>{
+ assert.throws(()=>planner.createClearanceChecker([{x:1,y:2,w:1,h:0}],params),/Некорректные препятствия/);
+});
