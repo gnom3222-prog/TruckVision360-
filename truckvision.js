@@ -491,6 +491,9 @@ function runPlannerWorker(options,onProgress){
 }
 
 async function buildRoute(){
+ const token=++routeBuildToken;
+ cancelPlannerWorker('Предыдущий расчёт заменён новым.');
+ $('planRoute').disabled=false;
  if(!showObstacles){
   routeAssessment=null;
   $('routeAdvice').textContent='Нельзя рассчитать готовность к автопроезду: включите «Препятствия» и повторно постройте маршрут.';
@@ -505,7 +508,6 @@ async function buildRoute(){
   return;
  }
 
- const token=++routeBuildToken;
  const startState={...state};
  const goal={x:gx,y:gy};
  routeGoal=goal;
