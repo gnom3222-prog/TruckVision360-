@@ -347,6 +347,10 @@ function planAStar(start,goal){
   for(const [dx,dy] of dirs){
    const n={x:cur.x+dx,y:cur.y+dy};
 
+   // Prevent diagonal moves that squeeze through the corner of blocked cells.
+   if(dx!==0&&dy!==0&&
+      (routeBlocked(cur.x+dx,cur.y)||routeBlocked(cur.x,cur.y+dy)))continue;
+
    if(n.x< -24||n.x>120||n.y< -56||n.y>56||
       routeBlocked(n.x,n.y))continue;
 
@@ -459,6 +463,19 @@ function routeMetrics(path){
  const score=turns*1.2+(maxBeta>45?3:maxBeta>30?1.5:0)+
   (effectiveClearance<0.35?4:effectiveClearance<0.75?2:effectiveClearance<1.5?1:0)+
   (!reached?3:0)+(collision?8:0);
+ const reasons=[];
+ if(turns>0)reasons.push('на маршруте '+turns+' поворот(ов)');
+ if(collision)reasons.push('расчётное пересечение с препятствием');
+ if(!reached)reasons.push('симуляция не подтвердила достижение цели');
+ if(maxBeta>=75)reasons.push('угол сочленения достиг критического учебного порога 75°');
+ else if(maxBeta>45)reasons.push('угол сочленения превышал 45°');
+ else if(maxBeta>30)reasons.push('угол сочленения превышал 30°');
+ if(Number.isFinite(effectiveClearance)){
+  if(effectiveClearance<0.35)reasons.push('зазор после резерва погрешности меньше 0,35 м');
+  else if(effectiveClearance<0.75)reasons.push('небольшой зазор после резерва погрешности');
+  else if(effectiveClearance<1.5)reasons.push('ограниченный зазор до препятствий');
+ }
+ if(!reasons.length)reasons.push('в тестовой модели не выявлены выраженные факторы усложнения');
  return{
   length,turns,
   level:collision||!reached||maxBeta>=75?'Не пройден':
@@ -467,7 +484,7 @@ function routeMetrics(path){
   maxBeta,
   clearance:minClearance,
   effectiveClearance,
-  collision,reached
+  collision,reached,reasons
  };
 }
 
@@ -513,16 +530,17 @@ function buildRoute(){
  const first=Math.abs(relative)<0.18?
   'держать прямо':
   relative>0?'начать поворот влево':'начать поворот вправо';
+ const firstAngle=relative*180/Math.PI;
 
  $('routeAdvice').textContent=
-  'Маршрут до точки ('+gx.toFixed(1)+', '+
-  gy.toFixed(1)+') м. Начать: '+first+
-  '. Длина: '+m.length.toFixed(1)+' м; поворотов: '+m.turns+
+  'Рекомендация: '+first+' относительно текущего курса (первый участок отклоняется на '+
+  firstAngle.toFixed(0)+'°). Маршрут до точки ('+gx.toFixed(1)+', '+
+  gy.toFixed(1)+') м; длина '+m.length.toFixed(1)+' м; поворотов: '+m.turns+
   '. Симуляция всего автопоезда: '+(m.reached?'цель достигнута':'цель не достигнута')+'.';
 
  $('difficultyAdvice').textContent=
-  'Сложность: '+m.level+'. При моделировании всего автопоезда: максимальный угол сочленения '+
-  m.maxBeta.toFixed(1)+'°; минимальный зазор до тестовых препятствий '+
+  'Сложность: '+m.level+'. Причины: '+m.reasons.join('; ')+
+  '. Максимальный угол сочленения '+m.maxBeta.toFixed(1)+'°; минимальный зазор до тестовых препятствий '+
   (Number.isFinite(m.clearance)?m.clearance.toFixed(2)+' м':'не определён')+
   '; после резерва погрешности: '+(Number.isFinite(m.effectiveClearance)?m.effectiveClearance.toFixed(2)+' м':'не определено')+
   '; столкновение: '+(m.collision?'да':'не выявлено')+
