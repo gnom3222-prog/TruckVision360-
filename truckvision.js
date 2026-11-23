@@ -32,6 +32,7 @@ let camera={x:0,y:0},lastTime=0;
 let showObstacles=true,helperEnabled=true;
 let plannedRoute=[],routeGoal=null,routeAssessment=null;
 let routePlayback={active:false,paused:false,index:1,stopReason:''};
+let plannerWorker=null,plannerRequestId=0,plannerReject=null,routeBuildToken=0;
 
 const obstacles=[
  {x:8.0,y:2.9,w:1.2,h:1.2,name:'Паллет A'},
@@ -441,7 +442,55 @@ function routeMetrics(path){
  return {length,turns,level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',maxBeta,clearance:minClearance,effectiveClearance,collision,reached,clearanceInsufficient,articulationBlocked,reverseSegments,reasons};
 }
 
-function buildRoute(){
+function cancelPlannerWorker(reason='Расчёт маршрута отменён.'){
+ const reject=plannerReject;
+ plannerReject=null;
+ if(plannerWorker){plannerWorker.terminate();plannerWorker=null;}
+ plannerRequestId++;
+ if(reject)reject(new Error(reason));
+}
+
+function runPlannerWorker(options,onProgress){
+ cancelPlannerWorker('Запущен новый расчёт маршрута.');
+ if(typeof Worker==='undefined')return Promise.reject(new Error('Этот браузер не поддерживает фоновый расчёт маршрута. Сцена симулятора сохранена; путь не построен.'));
+ const requestId=plannerRequestId;
+ return new Promise((resolve,reject)=>{
+  let settled=false;
+  let worker;
+  let timeout;
+  const finish=(error,value)=>{
+   if(settled)return;
+   settled=true;
+   clearTimeout(timeout);
+   if(worker)worker.terminate();
+   if(plannerWorker===worker)plannerWorker=null;
+   if(plannerReject===cancel)plannerReject=null;
+   if(error)reject(error);else resolve(value);
+  };
+  const cancel=reason=>finish(new Error(reason));
+  try{
+   worker=new Worker('./planner-worker.js?v=20261123-5');
+   plannerWorker=worker;
+   plannerReject=cancel;
+   timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
+   worker.onmessage=event=>{
+    const data=event.data||{};
+    if(data.id!==requestId)return;
+    if(data.type==='progress'){
+     if(onProgress)onProgress(data.progress);
+    }else if(data.type==='result')finish(null,data.result);
+    else if(data.type==='error')finish(new Error(data.message||'Ошибка фонового планировщика.'));
+   };
+   worker.onerror=event=>finish(new Error('Ошибка фонового расчёта: '+(event.message||'не удалось запустить worker.')));
+   worker.onmessageerror=()=>finish(new Error('Не удалось прочитать ответ планировщика.'));
+   worker.postMessage({id:requestId,options});
+  }catch(error){
+   finish(error);
+  }
+ });
+}
+
+async function buildRoute(){
  if(!showObstacles){
   routeAssessment=null;
   $('routeAdvice').textContent='Нельзя рассчитать готовность к автопроезду: включите «Препятствия» и повторно постройте маршрут.';
@@ -451,69 +500,97 @@ function buildRoute(){
  }
  const gx=Number($('goalX').value);
  const gy=Number($('goalY').value);
-
  if(!Number.isFinite(gx)||!Number.isFinite(gy)){
   $('routeAdvice').textContent='Проверьте координаты конечной точки.';
   return;
  }
 
- routeGoal={x:gx,y:gy};
- // Keep the UI responsive on iPhone: the articulated search is CPU-heavy.
- // Draw the current scene before starting and use a bounded mobile search.
- $('routeAdvice').textContent='Рассчитываю траекторию автопоезда…';
- $('difficultyAdvice').textContent='Проверяю тягач, полуприцеп и зазоры до препятствий…';
+ const token=++routeBuildToken;
+ const startState={...state};
+ const goal={x:gx,y:gy};
+ routeGoal=goal;
+ plannedRoute=[];
+ routeAssessment=null;
+ $('planRoute').disabled=true;
+ $('routeAdvice').textContent='Запускаю фоновый расчёт траектории…';
+ $('difficultyAdvice').textContent='Проверяю полный контур тягача и полуприцепа, включая задний ход…';
  draw();
+
  const mobile=window.matchMedia&&window.matchMedia('(max-width: 600px)').matches;
- const result=planner.plan({
-  start:{...state},
-  goal:routeGoal,
-  params:cfg,
-  obstacles,
-  integrate:(q,v,delta,dt)=>rk4(q,v,delta,dt),
-  maxExpansions:mobile?4500:12000,
-  minClearance:0.65,
-  bounds:{minX:-20,maxX:42,minY:-20,maxY:20}
- });
- plannedRoute=result.ok?result.states:[];
- if(plannedRoute.length<2){
-  routeAssessment=null;
-  $('routeAdvice').textContent=result.reason==='start-collision'?
-   'Маршрут не построен: текущая модель уже пересекается с препятствием. Сначала измените начальное положение.':
-   'Не найден путь для всего автопоезда с текущими ограничениями. Поиск проверил '+result.expanded+' состояний. Попробуйте другую конечную точку или измените начальное положение.';
-  $('difficultyAdvice').textContent='Автопроезд не разрешён: кинематический планировщик не подтвердил безопасную траекторию.';
+ try{
+  const result=await runPlannerWorker({
+   start:startState,
+   goal,
+   params:{...cfg},
+   obstacles:obstacles.map(o=>({...o})),
+   maxExpansions:mobile?4500:12000,
+   minClearance:0.65,
+   bounds:{minX:-20,maxX:42,minY:-20,maxY:20}
+  },progress=>{
+   if(token!==routeBuildToken)return;
+   $('routeAdvice').textContent='Рассчитываю траекторию… проверено '+progress.expanded+
+    ' из '+progress.maxExpansions+' состояний; ближайшее расстояние до цели '+
+    progress.goalDistance.toFixed(1)+' м.';
+  });
+  if(token!==routeBuildToken)return;
+
+  const positionChange=Math.hypot(state.x-startState.x,state.y-startState.y);
+  const headingChange=Math.abs(norm(state.psi-startState.psi));
+  if(positionChange>0.05||headingChange>0.01){
+   $('routeAdvice').textContent='Расчёт отменён: положение или курс тягача изменились во время поиска. Остановите модель и постройте путь заново.';
+   $('difficultyAdvice').textContent='Сложность не рассчитана: исходное положение изменилось.';
+   return;
+  }
+
+  plannedRoute=result.ok?result.states:[];
+  if(plannedRoute.length<2){
+   routeAssessment=null;
+   $('routeAdvice').textContent=result.reason==='start-collision'?
+    'Маршрут не построен: текущая модель уже пересекается с препятствием. Сначала измените начальное положение.':
+    'Не найден путь для всего автопоезда с текущими ограничениями. Поиск проверил '+result.expanded+
+    ' состояний. Попробуйте другую конечную точку или измените начальное положение.';
+   $('difficultyAdvice').textContent='Автопроезд не разрешён: кинематический планировщик не подтвердил траекторию.';
+   draw();
+   return;
+  }
+
+  const m=routeMetrics(plannedRoute);
+  routeAssessment=m;
+  const next=plannedRoute[1];
+  const firstGear=next.gear||1;
+  const travelAngle=Math.atan2(next.y-startState.y,next.x-startState.x);
+  const desiredHeading=norm(travelAngle+(firstGear<0?Math.PI:0));
+  const relative=norm(desiredHeading-startState.psi);
+  const steeringDirection=firstGear*relative;
+  const turn=Math.abs(steeringDirection)<0.18?'держать руль прямо':
+   steeringDirection>0?'повернуть руль влево':'повернуть руль вправо';
+  const gearText=firstGear<0?'начать задним ходом':'начать движением вперёд';
+
+  $('routeAdvice').textContent=
+   'Начало манёвра: '+gearText+', '+turn+
+   ' (расчётное изменение курса '+(relative*180/Math.PI).toFixed(0)+'°). Маршрут до точки ('+
+   gx.toFixed(1)+', '+gy.toFixed(1)+') м; длина '+m.length.toFixed(1)+
+   ' м; переключений режима: '+m.turns+'. Цель достигнута по координатам; конечный курс не задан и не проверен.';
+
+  $('difficultyAdvice').textContent=
+   'Сложность: '+m.level+'. Причины: '+m.reasons.join('; ')+
+   '. Максимальный угол сочленения '+m.maxBeta.toFixed(1)+'°; минимальный зазор до тестовых препятствий '+
+   (Number.isFinite(m.clearance)?m.clearance.toFixed(2)+' м':'не определён')+
+   '; после резерва погрешности: '+(Number.isFinite(m.effectiveClearance)?m.effectiveClearance.toFixed(2)+' м':'не определено')+
+   '; столкновение: '+(m.collision?'да':'не выявлено')+
+   '. Конечная ориентация к воротам не оценена. Учебный расчёт, не гарантия безопасности.';
   draw();
-  return;
+ }catch(error){
+  if(token!==routeBuildToken)return;
+  routeAssessment=null;
+  plannedRoute=[];
+  $('routeAdvice').textContent='Фоновый расчёт не завершён: '+(error&&error.message?error.message:String(error));
+  $('difficultyAdvice').textContent='Сложность не рассчитана; автоматический проезд заблокирован.';
+  draw();
+ }finally{
+  if(token===routeBuildToken)$('planRoute').disabled=false;
  }
- const m=routeMetrics(plannedRoute);
- routeAssessment=m;
- const next=plannedRoute[1];
-
- const relative=norm(
-  Math.atan2(next.y-state.y,next.x-state.x)-state.psi
- );
-
- const first=Math.abs(relative)<0.18?
-  'держать прямо':
-  relative>0?'начать поворот влево':'начать поворот вправо';
- const firstAngle=relative*180/Math.PI;
-
- $('routeAdvice').textContent=
-  'Рекомендация: '+first+' относительно текущего курса (первый участок отклоняется на '+
-  firstAngle.toFixed(0)+'°). Маршрут до точки ('+gx.toFixed(1)+', '+
-  gy.toFixed(1)+') м; длина '+m.length.toFixed(1)+' м; поворотов: '+m.turns+
-  '. Симуляция всего автопоезда: '+(m.reached?'цель достигнута':'цель не достигнута')+'.';
-
- $('difficultyAdvice').textContent=
-  'Сложность: '+m.level+'. Причины: '+m.reasons.join('; ')+
-  '. Максимальный угол сочленения '+m.maxBeta.toFixed(1)+'°; минимальный зазор до тестовых препятствий '+
-  (Number.isFinite(m.clearance)?m.clearance.toFixed(2)+' м':'не определён')+
-  '; после резерва погрешности: '+(Number.isFinite(m.effectiveClearance)?m.effectiveClearance.toFixed(2)+' м':'не определено')+
-  '; столкновение: '+(m.collision?'да':'не выявлено')+
-  '. Оценка учебная, не гарантия безопасности.';
-
- draw();
 }
-
 function drawRoute(){
  if(plannedRoute.length<2)return;
 
@@ -879,6 +956,7 @@ $('speedSet').oninput=()=>{
 };
 
 $('reset').onclick=()=>{
+ routeBuildToken++;cancelPlannerWorker('Расчёт отменён сбросом симулятора.');
  stopRoutePlayback('');
  resetState();
  plannedRoute=[];
@@ -905,6 +983,7 @@ $('obstaclesToggle').onclick=()=>{
  $('obstaclesToggle').textContent=
   'Препятствия: '+(showObstacles?'вкл.':'выкл.');
  if(!showObstacles){
+  routeBuildToken++;cancelPlannerWorker('Расчёт отменён: препятствия отключены.');
   stopRoutePlayback('');
   routeAssessment=null;
   $('routeAdvice').textContent='Препятствия отключены. Автопроезд заблокирован; включите препятствия и заново постройте маршрут.';
@@ -921,6 +1000,7 @@ $('helperToggle').onclick=()=>{
 };
 
 $('scenarioReset').onclick=()=>{
+ routeBuildToken++;cancelPlannerWorker('Расчёт отменён сбросом площадки.');
  stopRoutePlayback('');
  resetState();
  showObstacles=true;
@@ -990,6 +1070,7 @@ $('planRoute').onclick=()=>{
 };
 
 $('clearRoute').onclick=()=>{
+ routeBuildToken++;cancelPlannerWorker('Расчёт отменён: маршрут удалён.');
  stopRoutePlayback('');
  plannedRoute=[];
  routeGoal=null;
