@@ -43,9 +43,32 @@ function bootSimulator(){
  return elements;
 }
 
+test('planner goal pose checks wrapped heading and trailer articulation',()=>{
+ const q={x:0.2,y:-0.1,psi:-179*Math.PI/180,psiT:171*Math.PI/180};
+ const goal={x:0,y:0,heading:179*Math.PI/180};
+ const errors=planner.goalErrors(q,goal);
+ assert.ok(Math.abs(errors.headingError-2*Math.PI/180)<1e-10);
+ assert.ok(Math.abs(errors.articulation-10*Math.PI/180)<1e-10);
+ assert.equal(planner.goalReached(q,goal,{
+  positionTolerance:0.5,
+  headingTolerance:5*Math.PI/180,
+  maxTerminalArticulation:12*Math.PI/180
+ }),true);
+});
+
+test('planner rejects a positional match with incorrect terminal course or trailer alignment',()=>{
+ const goal={x:0,y:0,heading:0};
+ const tolerances={positionTolerance:0.5,headingTolerance:10*Math.PI/180,maxTerminalArticulation:10*Math.PI/180};
+ assert.equal(planner.goalReached({x:0.1,y:0,psi:30*Math.PI/180,psiT:30*Math.PI/180},goal,tolerances),false);
+ assert.equal(planner.goalReached({x:0.1,y:0,psi:0,psiT:-20*Math.PI/180},goal,tolerances),false);
+});
+
 test('simulator starts and exposes route controls',()=>{
  const elements=bootSimulator();
  assert.equal(typeof elements.planRoute.onclick,'function');
+ assert.equal(elements.goalHeading.value,'0');
+ assert.equal(elements.goalHeadingTolerance.value,'12');
+ assert.equal(elements.goalArticulationLimit.value,'12');
  assert.equal(typeof elements.routeStart.onclick,'function');
  assert.equal(typeof elements.routePause.onclick,'function');
  assert.equal(typeof elements.routeStop.onclick,'function');

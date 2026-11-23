@@ -111,6 +111,9 @@ canvas{max-width:100%}
 <div class="grid" style="margin-top:8px">
  <div><label for="goalX">Цель по X, м</label><input id="goalX" type="number" value="22" step="1"></div>
  <div><label for="goalY">Цель по Y, м</label><input id="goalY" type="number" value="0" step="1"></div>
+ <div><label for="goalHeading">Курс тягача у цели, °</label><input id="goalHeading" type="number" min="-180" max="180" value="0" step="1"></div>
+ <div><label for="goalHeadingTolerance">Допуск курса, °</label><input id="goalHeadingTolerance" type="number" min="1" max="45" value="12" step="1"></div>
+ <div><label for="goalArticulationLimit">Допустимый угол тягач–прицеп у цели, °</label><input id="goalArticulationLimit" type="number" min="1" max="45" value="12" step="1"></div>
 </div>
 <div class="row">
  <button id="planRoute" class="primary">Построить путь</button>
@@ -122,7 +125,7 @@ canvas{max-width:100%}
  <button id="clearRoute">Убрать путь</button>
 </div>
 <p class="small">Автопроезд управляет только виртуальной моделью на экране. Это демонстрация алгоритма, не подключение к настоящему грузовику.</p>
-<p class="small">Планировщик ищет путь по координатам и углам тягача и полуприцепа, включая движение вперёд и задним ходом. Конечный курс к воротам пока не задаётся. Расчёт выполняется в фоновом потоке браузера и требует проверки на площадке.</p>
+<p class="small">Планировщик ищет траекторию сочленённого автопоезда вперёд и назад, проверяя контуры тягача, кабины и полуприцепа. Для завершения задайте курс тягача у цели и допуски конечного курса и угла сочленения. Положительный курс отсчитывается против часовой стрелки от оси +X. Расчёт выполняется в фоновом потоке и требует проверки на площадке.</p>
 <p id="routeAdvice">Задайте конечную точку и нажмите «Построить путь».</p>
 <p id="difficultyAdvice" style="margin-top:8px;color:#ffd18b">Сложность: пока не рассчитана.</p>
 </div>
@@ -216,8 +219,8 @@ canvas{max-width:100%}
 </main>
 
 <script src="vehicle-physics.js?v=20261123-4"></script>
-<script src="articulated-planner.js?v=20261123-4"></script>
-<script src="truckvision.js?v=20261123-4"></script>
+<script src="articulated-planner.js?v=20261123-5"></script>
+<script src="truckvision.js?v=20261123-6"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-measure.js?v=20261123-4"></script>
 

@@ -419,7 +419,13 @@ function routeMetrics(path){
  }
  const turns=gearChanges+steeringChanges;
  const effectiveClearance=minClearance-2*Math.max(0,cfg.measurementUncertainty);
- const reached=path.length>1&&Math.hypot(path[path.length-1].x-routeGoal.x,path[path.length-1].y-routeGoal.y)<0.9;
+ const finalErrors=planner.goalErrors(path[path.length-1],routeGoal);
+ const terminalHeadingMismatch=finalErrors.headingError!==null&&finalErrors.headingError>routeGoal.headingTolerance;
+ const terminalArticulationMismatch=finalErrors.articulation>routeGoal.maxTerminalArticulation;
+ const reached=path.length>1&&finalErrors.position<=routeGoal.positionTolerance&&
+  !terminalHeadingMismatch&&!terminalArticulationMismatch;
+ const finalHeadingErrorDeg=(finalErrors.headingError??0)*180/Math.PI;
+ const finalArticulationDeg=finalErrors.articulation*180/Math.PI;
  const clearanceInsufficient=Number.isFinite(effectiveClearance)&&effectiveClearance<0.35;
  const articulationBlocked=maxBeta>=55;
  const score=gearChanges*1.2+steeringChanges*0.4+(reverseDistance>0?1.5:0)+(maxBeta>45?3:maxBeta>30?1.5:0)+
@@ -429,11 +435,13 @@ function routeMetrics(path){
  if(gearChanges)reasons.push('переключений передачи: '+gearChanges);
  if(steeringChanges)reasons.push('изменений рулевого режима: '+steeringChanges);
  if(collision)reasons.push('пересечение с препятствием');
- if(!reached)reasons.push('цель не достигнута');
+ if(!reached)reasons.push('конечное положение не достигнуто в заданных допусках');
+ if(terminalHeadingMismatch)reasons.push('конечный курс тягача вне допуска');
+ if(terminalArticulationMismatch)reasons.push('полуприцеп не выровнен в заданном допуске');
  if(articulationBlocked)reasons.push('угол сочленения достиг 55°');
  if(clearanceInsufficient)reasons.push('недостаточный зазор после резерва погрешности');
  if(!reasons.length)reasons.push('в проверенной модели препятствия не пересечены');
- return {length,turns,gearChanges,steeringChanges,reverseDistance,reverseSegments,level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',maxBeta,clearance:minClearance,effectiveClearance,collision,reached,clearanceInsufficient,articulationBlocked,reasons};
+ return {length,turns,gearChanges,steeringChanges,reverseDistance,reverseSegments,level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',maxBeta,clearance:minClearance,effectiveClearance,collision,reached,finalHeadingErrorDeg,finalArticulationDeg,clearanceInsufficient,articulationBlocked,reasons};
 }
 
 function cancelPlannerWorker(reason='Расчёт маршрута отменён.'){
@@ -463,7 +471,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261123-5');
+   worker=new Worker('./planner-worker.js?v=20261123-6');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
@@ -497,14 +505,23 @@ async function buildRoute(){
  }
  const gx=Number($('goalX').value);
  const gy=Number($('goalY').value);
- if(!Number.isFinite(gx)||!Number.isFinite(gy)){
-  $('routeAdvice').textContent='Проверьте координаты конечной точки.';
+ const headingDegrees=Number($('goalHeading').value);
+ const headingToleranceDegrees=Number($('goalHeadingTolerance').value);
+ const articulationLimitDegrees=Number($('goalArticulationLimit').value);
+ if(![gx,gy,headingDegrees,headingToleranceDegrees,articulationLimitDegrees].every(Number.isFinite)||
+    headingDegrees< -180||headingDegrees>180||
+    headingToleranceDegrees<1||headingToleranceDegrees>45||
+    articulationLimitDegrees<1||articulationLimitDegrees>45){
+  $('routeAdvice').textContent='Проверьте координаты и допуски конечного положения: курс от −180° до 180°, допуски от 1° до 45°.';
   return;
  }
 
  const startState={...state};
- const goal={x:gx,y:gy};
- routeGoal=goal;
+ const heading=headingDegrees*Math.PI/180;
+ const headingTolerance=headingToleranceDegrees*Math.PI/180;
+ const maxTerminalArticulation=articulationLimitDegrees*Math.PI/180;
+ const goal={x:gx,y:gy,heading};
+ routeGoal={...goal,positionTolerance:0.9,headingTolerance,maxTerminalArticulation};
  plannedRoute=[];
  routeAssessment=null;
  $('planRoute').disabled=true;
@@ -517,6 +534,9 @@ async function buildRoute(){
   const result=await runPlannerWorker({
    start:startState,
    goal,
+   positionTolerance:routeGoal.positionTolerance,
+   headingTolerance:routeGoal.headingTolerance,
+   maxTerminalArticulation:routeGoal.maxTerminalArticulation,
    params:{...cfg},
    obstacles:obstacles.map(o=>({...o})),
    maxExpansions:mobile?4500:12000,
@@ -525,8 +545,10 @@ async function buildRoute(){
   },progress=>{
    if(token!==routeBuildToken)return;
    $('routeAdvice').textContent='Рассчитываю траекторию… проверено '+progress.expanded+
-    ' из '+progress.maxExpansions+' состояний; ближайшее расстояние до цели '+
-    progress.goalDistance.toFixed(1)+' м.';
+    ' из '+progress.maxExpansions+' состояний; до цели '+
+    progress.goalDistance.toFixed(1)+' м; ошибка курса '+
+    (Number.isFinite(progress.headingError)?(progress.headingError*180/Math.PI).toFixed(1)+'°':'не задана')+
+    '; угол сочленения '+(progress.articulationAngle*180/Math.PI).toFixed(1)+'°.';
   });
   if(token!==routeBuildToken)return;
 
@@ -541,10 +563,14 @@ async function buildRoute(){
   plannedRoute=result.ok?result.states:[];
   if(plannedRoute.length<2){
    routeAssessment=null;
+   const closestText=result.closest?
+    ' Ближайшее найденное положение: '+result.goalDistance.toFixed(1)+' м до цели'+
+    (Number.isFinite(result.headingError)?', ошибка курса '+(result.headingError*180/Math.PI).toFixed(1)+'°':'')+
+    ', угол сочленения '+(result.articulationAngle*180/Math.PI).toFixed(1)+'°.':'';
    $('routeAdvice').textContent=result.reason==='start-collision'?
     'Маршрут не построен: текущая модель уже пересекается с препятствием. Сначала измените начальное положение.':
-    'Не найден путь для всего автопоезда с текущими ограничениями. Поиск проверил '+result.expanded+
-    ' состояний. Попробуйте другую конечную точку или измените начальное положение.';
+    'Не найден путь, который одновременно достигает координат, заданного курса тягача и допустимого угла полуприцепа. Проверено '+result.expanded+
+    ' состояний.'+closestText+' Попробуйте изменить конечный курс, допуски или начальное положение.';
    $('difficultyAdvice').textContent='Автопроезд не разрешён: кинематический планировщик не подтвердил траекторию.';
    draw();
    return;
@@ -567,15 +593,18 @@ async function buildRoute(){
    ' (расчётное изменение курса '+(relative*180/Math.PI).toFixed(0)+'°). Маршрут до точки ('+
    gx.toFixed(1)+', '+gy.toFixed(1)+') м; длина '+m.length.toFixed(1)+
    ' м; переключений передачи: '+m.gearChanges+'; изменений руля: '+m.steeringChanges+
-   '; задний ход: '+m.reverseDistance.toFixed(1)+' м. Цель достигнута по координатам; конечный курс не задан и не проверен.';
+   '; задний ход: '+m.reverseDistance.toFixed(1)+' м. Заданный конечный курс '+headingDegrees.toFixed(0)+
+   '°; ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+'°; угол сочленения у цели '+
+   m.finalArticulationDeg.toFixed(1)+'° (допуск '+articulationLimitDegrees.toFixed(0)+'°).';
 
   $('difficultyAdvice').textContent=
    'Сложность: '+m.level+'. Причины: '+m.reasons.join('; ')+
-   '. Максимальный угол сочленения '+m.maxBeta.toFixed(1)+'°; минимальный зазор до тестовых препятствий '+
+   '. Максимальный угол сочленения '+m.maxBeta.toFixed(1)+'°; конечная ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+
+   '°; конечный угол тягач–полуприцеп '+m.finalArticulationDeg.toFixed(1)+'°; минимальный зазор до тестовых препятствий '+
    (Number.isFinite(m.clearance)?m.clearance.toFixed(2)+' м':'не определён')+
    '; после резерва погрешности: '+(Number.isFinite(m.effectiveClearance)?m.effectiveClearance.toFixed(2)+' м':'не определено')+
    '; столкновение: '+(m.collision?'да':'не выявлено')+
-   '. Конечная ориентация к воротам не оценена. Учебный расчёт, не гарантия безопасности.';
+   '. Курс у цели проверен относительно заданного угла и допуска; учебный расчёт, не гарантия безопасности.';
   draw();
  }catch(error){
   if(token!==routeBuildToken)return;
@@ -606,6 +635,9 @@ function drawRoute(){
   ctx.fillStyle='#fff';
   ctx.font='13px system-ui';
   ctx.fillText('ЦЕЛЬ',z.x+12,z.y-10);
+  if(Number.isFinite(routeGoal.heading)){
+   drawLine([routeGoal,{x:routeGoal.x+1.5*Math.cos(routeGoal.heading),y:routeGoal.y+1.5*Math.sin(routeGoal.heading)}],'#ffe082',3);
+  }
  }
 }
 
@@ -824,7 +856,14 @@ function updateRoutePlayback(){
  }
  const goal=plannedRoute[plannedRoute.length-1];
  if(Math.hypot(goal.x-state.x,goal.y-state.y)<0.65&&nearest<0.8){
-  stopRoutePlayback('Виртуальный автопроезд завершён: контрольная точка достигнута.');
+  const terminal=planner.goalErrors(state,routeGoal);
+  if(terminal.headingError!==null&&terminal.headingError>routeGoal.headingTolerance){
+   stopRoutePlayback('Автопроезд остановлен: конечная точка близка, но курс тягача не попал в заданный допуск ('+(terminal.headingError*180/Math.PI).toFixed(1)+'° ошибки).');
+  }else if(terminal.articulation>routeGoal.maxTerminalArticulation){
+   stopRoutePlayback('Автопроезд остановлен: конечная точка близка, но полуприцеп не выровнен ('+(terminal.articulation*180/Math.PI).toFixed(1)+'°).');
+  }else{
+   stopRoutePlayback('Виртуальный автопроезд завершён: конечные координаты и ориентация достигнуты в заданных допусках.');
+  }
   return;
  }
  let targetIndex=Math.min(plannedRoute.length-1,index+6);

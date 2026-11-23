@@ -9,6 +9,22 @@
  'use strict';
  const norm=a=>Math.atan2(Math.sin(a),Math.cos(a));
  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+ function goalErrors(q,goal){
+  return {
+   position:Math.hypot(goal.x-q.x,goal.y-q.y),
+   headingError:Number.isFinite(goal.heading)?Math.abs(norm(q.psi-goal.heading)):null,
+   articulation:Math.abs(norm(q.psi-q.psiT))
+  };
+ }
+ function goalReached(q,goal,options={}){
+  const errors=goalErrors(q,goal);
+  const positionTolerance=options.positionTolerance??0.9;
+  const headingTolerance=options.headingTolerance??12*Math.PI/180;
+  const maxTerminalArticulation=options.maxTerminalArticulation??12*Math.PI/180;
+  return errors.position<=positionTolerance&&
+   (errors.headingError===null||errors.headingError<=headingTolerance)&&
+   errors.articulation<=maxTerminalArticulation;
+ }
  function polygons(q,p){
   if(!rootPhysics||typeof rootPhysics.vehiclePolygons!=='function')throw new Error('Shared vehicle geometry is unavailable.');
   return rootPhysics.vehiclePolygons(q,p);
@@ -81,12 +97,19 @@
   const step=0.20,angleStep=Math.PI/60,primitive=0.6,ds=0.05;
   const maxSteer=options.maxSteer||Math.PI/7;
   const minClearance=options.minClearance??0.30;
+  const positionTolerance=options.positionTolerance??0.9;
+  const headingTolerance=options.headingTolerance??12*Math.PI/180;
+  const maxTerminalArticulation=options.maxTerminalArticulation??12*Math.PI/180;
+  const goalOptions={positionTolerance,headingTolerance,maxTerminalArticulation};
   const checkClearance=createClearanceChecker(obstacles,params);
   const key=q=>[
    Math.round(q.x/step),Math.round(q.y/step),
    Math.round(norm(q.psi)/angleStep),Math.round(norm(q.psiT)/angleStep)
   ].join(':');
-  const h=q=>Math.hypot(goal.x-q.x,goal.y-q.y)+0.35*Math.abs(norm(q.psi-q.psiT));
+  const h=q=>{
+   const e=goalErrors(q,goal);
+   return e.position+0.45*(e.headingError??0)+0.35*e.articulation;
+  };
   const startClearance=checkClearance(start).distance;
   if(startClearance===0)return {ok:false,reason:'start-collision',expanded:0};
   const requiredClearance=Math.min(minClearance,startClearance);
@@ -94,6 +117,11 @@
   const open=[];push(open,initial);
   const best=new Map([[key(start),0]]);
   let expanded=0,finish=null,closest=initial;
+  const quality=q=>{
+   const e=goalErrors(q,goal);
+   return e.position+0.5*(e.headingError??0)+0.5*Math.max(0,e.articulation-maxTerminalArticulation);
+  };
+  let closestQuality=quality(start);
   const steering=[-maxSteer,-0.24,-0.12,0,0.12,0.24,maxSteer];
   const controls=[];
   for(const gear of [-1,1])for(const steer of steering)controls.push([gear,steer]);
@@ -101,12 +129,14 @@
    const cur=pop(open),ck=key(cur.q);
    if(cur.g>(best.get(ck)??Infinity)+1e-8)continue;
    expanded++;
-   const dist=Math.hypot(goal.x-cur.q.x,goal.y-cur.q.y);
-   if(dist<Math.hypot(goal.x-closest.q.x,goal.y-closest.q.y))closest=cur;
+   const errors=goalErrors(cur.q,goal);
+   const dist=errors.position;
+   const currentQuality=quality(cur.q);
+   if(currentQuality<closestQuality){closest=cur;closestQuality=currentQuality;}
    if(options.onProgress&&(expanded===1||expanded%250===0)){
-    try{options.onProgress({expanded,maxExpansions,goalDistance:dist,closest:{x:closest.q.x,y:closest.q.y}});}catch(_){}
+    try{options.onProgress({expanded,maxExpansions,goalDistance:dist,headingError:errors.headingError,articulationAngle:errors.articulation,closest:{x:closest.q.x,y:closest.q.y}});}catch(_){}
    }
-   if(dist<0.9){finish=cur;break;}
+   if(goalReached(cur.q,goal,goalOptions)){finish=cur;break;}
    for(const [gear,steer] of controls){
     let q={...cur.q},valid=true,minD=Infinity,samples=[];
     for(let d=0;d<primitive;d+=ds){
@@ -127,13 +157,18 @@
     push(open,{q,g:ng,f:ng+h(q),parent:cur,gear,steer,minClearance:minD,samples});
    }
   }
-  if(!finish)return {ok:false,reason:'no-path',expanded,closest:{x:closest.q.x,y:closest.q.y},goalDistance:Math.hypot(goal.x-closest.q.x,goal.y-closest.q.y)};
+  if(!finish){
+   const errors=goalErrors(closest.q,goal);
+   return {ok:false,reason:'no-path',expanded,
+    closest:{x:closest.q.x,y:closest.q.y,psi:closest.q.psi,psiT:closest.q.psiT},
+    goalDistance:errors.position,headingError:errors.headingError,articulationAngle:errors.articulation};
+  }
   const chain=[];for(let n=finish;n&&n.parent;n=n.parent)chain.push(n);
   chain.reverse();
   const states=[{x:start.x,y:start.y,psi:start.psi,psiT:start.psiT,gear:1,steer:0}];
   for(const n of chain)states.push(...n.samples);
   const pathMinimum=Math.min(startClearance,...chain.map(n=>n.minClearance));
-  return {ok:true,states,expanded,length:finish.g,minimumClearance:pathMinimum};
+  return {ok:true,states,expanded,length:finish.g,minimumClearance:pathMinimum,terminalErrors:goalErrors(finish.q,goal)};
  }
- return Object.freeze({plan,clearance,createClearanceChecker,polygons});
+ return Object.freeze({plan,clearance,createClearanceChecker,polygons,goalErrors,goalReached});
 });
