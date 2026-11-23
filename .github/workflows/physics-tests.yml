@@ -14,3 +14,4 @@ jobs:
       - run: node --test tests/*.test.js
       - run: node --check vehicle-physics.js
       - run: node --check truckvision.js
+      - run: node --check planner-worker.js
