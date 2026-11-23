@@ -40,7 +40,25 @@ input[type=number],select{width:100%;background:#0e2031;color:#fff;border:1px so
 .assistant-box{margin-top:10px;padding:11px;border:1px solid #36718a;border-radius:10px;background:#0d2638}
 .assistant-box strong{display:block;color:var(--cyan);margin-bottom:5px}
 .assistant-box p{margin:0;line-height:1.45}.obstacle-legend{font-size:11px;color:var(--muted);margin-top:6px}
-@media(max-width:800px){main{grid-template-columns:1fr}header{padding-top:12px}}
+@media(max-width:800px){main{grid-template-columns:minmax(0,1fr)}header{padding-top:12px}}
+/* Keep the simulator inside narrow phone viewports. */
+html,body{max-width:100%;overflow-x:hidden}
+main,.panel{width:100%;min-width:0}
+.row{min-width:0}
+.row>*{min-width:0;max-width:100%;overflow-wrap:anywhere}
+button{min-width:0;white-space:normal;overflow-wrap:anywhere}
+canvas{max-width:100%}
+@media(max-width:600px){
+ main{padding-left:8px;padding-right:8px;gap:8px}
+ .panel{padding:9px}
+ .row{gap:6px}
+ .row>*{flex:1 1 calc(50% - 6px)}
+ button{padding:10px 5px;font-size:clamp(12px,3.7vw,15px);line-height:1.25}
+ .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .metric strong{font-size:16px}
+ .assistant-box{padding:9px}
+}
+
 
 .camera-panel{margin-top:12px}
 .camera-stage{position:relative;width:100%;background:#06101b;border:1px solid #36516a;border-radius:10px;overflow:hidden;min-height:180px}
