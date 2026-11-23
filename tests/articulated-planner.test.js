@@ -19,3 +19,20 @@ test('articulated planner routes the complete trailer around an obstacle',()=>{
   assert.ok(planner.clearance(q,obstacles,params).distance>=0.30-1e-6,'vehicle footprint must remain clear');
  }
 });
+
+test('articulated planner can select reverse gear and reports progress',()=>{
+ const progress=[];
+ const result=planner.plan({
+  start:{x:0,y:0,psi:0,psiT:0},
+  goal:{x:-3,y:0},
+  params,
+  obstacles:[],
+  integrate,
+  maxExpansions:5000,
+  onProgress:p=>progress.push(p.expanded)
+ });
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.ok(result.states.some((q,i)=>i>0&&q.gear===-1),'reverse motion should be represented in the route');
+ assert.ok(progress.length>0,'planner should report progress');
+ assert.ok(progress.every((n,i)=>i===0||n>progress[i-1]),'progress counters should increase');
+});
