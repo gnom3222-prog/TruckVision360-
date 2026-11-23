@@ -82,6 +82,9 @@
    expanded++;
    const dist=Math.hypot(goal.x-cur.q.x,goal.y-cur.q.y);
    if(dist<Math.hypot(goal.x-closest.q.x,goal.y-closest.q.y))closest=cur;
+   if(options.onProgress&&(expanded===1||expanded%250===0)){
+    try{options.onProgress({expanded,maxExpansions,goalDistance:dist,closest:{x:closest.q.x,y:closest.q.y}});}catch(_){}
+   }
    if(dist<0.9){finish=cur;break;}
    for(const [gear,steer] of controls){
     let q={...cur.q},valid=true,minD=Infinity,samples=[];
