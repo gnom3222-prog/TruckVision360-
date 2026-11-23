@@ -2,80 +2,158 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#091522">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="TruckVision 360">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon.svg">
-<title>TruckVision 360</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#081321">
+<title>TruckVision 360 — ALL-IN-ONE v4.4</title>
 <style>
-:root{color-scheme:dark;--bg:#081321;--panel:#102238;--panel2:#142b42;--cyan:#42c9ef;--muted:#a8b8c8;--orange:#ffad54}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top right,#17344e 0,#081321 42%);color:#f4f8fc;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
-header{display:flex;align-items:center;gap:12px;padding:18px 18px 12px}.logo{width:46px;height:46px;border-radius:14px;background:#1b4962;display:grid;place-items:center;color:var(--cyan);font-size:25px}
-h1{font-size:17px;letter-spacing:1px;margin:0}header small{color:var(--muted)}
-main{padding:10px 16px 32px;max-width:760px;margin:auto}.card{background:linear-gradient(145deg,var(--panel2),var(--panel));border:1px solid #25435c;border-radius:20px;padding:17px;margin:0 0 15px;box-shadow:0 12px 30px #0003}
-.eyebrow{font-size:10px;letter-spacing:1.2px;color:var(--cyan);font-weight:800}.vehicle{display:flex;justify-content:space-between;align-items:center;gap:10px}.vehicle h2{font-size:25px;margin:8px 0 4px}.vehicle p{margin:5px 0;color:var(--muted);font-size:13px}.truck{font-size:56px;color:var(--cyan)}
-.pills{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.pill{font-size:10px;padding:7px 10px;border-radius:99px;background:#42c9ef18;color:var(--cyan)}.pill.warn{background:#ffad5418;color:var(--orange)}
-.section{display:flex;justify-content:space-between;align-items:center;margin:20px 2px 10px;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:1px}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.mode{border:1px solid #29445c;background:var(--panel);border-radius:16px;padding:14px;min-height:112px;color:white;text-align:left}.mode.active{background:var(--cyan);color:#071522;border-color:var(--cyan)}.mode .sym{font-size:23px;display:block;margin-bottom:10px}.mode b{font-size:15px;display:block}.mode small{display:block;margin-top:5px;font-size:10px;opacity:.75;line-height:1.35}
-.info{display:flex;gap:11px;align-items:flex-start}.info .sym{font-size:24px;color:var(--cyan)}.info p{margin:6px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
-button.primary{border:0;background:var(--cyan);color:#061522;font-weight:800;padding:14px 16px;border-radius:14px;width:100%;font-size:15px}
-label{display:block;font-size:12px;color:var(--muted);margin:14px 0 7px}input[type=range]{width:100%;accent-color:var(--cyan)}.value{float:right;color:var(--cyan);font-weight:700}
-.result{font-size:42px;font-weight:800;margin:8px 0}.metric{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #ffffff12;font-size:12px}.metric:last-child{border:0}.warning{color:var(--orange);font-size:11px;line-height:1.5}
-footer{text-align:center;color:#7f93a6;font-size:10px;padding:8px 20px 22px}
+:root{color-scheme:dark;--bg:#081321;--panel:#13283d;--line:#29445e;--cyan:#35c8ef;--muted:#a9bacb;--amber:#ffd18b;--red:#ff8585;--green:#83d6a8}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:#f3f7fb;font:14px system-ui,-apple-system,sans-serif}
+header{max-width:1200px;margin:auto;padding:16px 14px 8px}
+h1{font-size:22px;margin:0 0 4px}
+header p{margin:0;color:var(--muted);font-size:13px}
+main{max-width:1200px;margin:auto;padding:8px 12px 28px;display:grid;grid-template-columns:minmax(0,1.45fr) minmax(290px,1fr);gap:12px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:12px;min-width:0}
+canvas{display:block;width:100%;height:auto;background:#102235;border:1px solid #36516a;border-radius:10px;touch-action:pan-y}
+.row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.row>*{flex:1}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.metric{background:#0e2031;border:1px solid var(--line);border-radius:9px;padding:8px}
+.metric span{display:block;color:var(--muted);font-size:11px}
+.metric strong{display:block;color:var(--cyan);font-size:18px;font-variant-numeric:tabular-nums}
+button,input,select{font:inherit}
+button{background:#1c3b55;color:#fff;border:1px solid #45627c;border-radius:9px;padding:10px 7px;font-weight:650;touch-action:manipulation}
+button.primary{background:#087fa5;border-color:#21b9e4}
+button.stop{background:#853b42}
+label{display:block;color:var(--muted);font-size:12px;margin:10px 0 4px}
+input[type=range]{width:100%;accent-color:var(--cyan)}
+input[type=number],select{width:100%;background:#0e2031;color:#fff;border:1px solid #45627c;border-radius:7px;padding:8px}
+.section{font-weight:700;margin:13px 0 5px}
+.small{font-size:11px;color:var(--muted);line-height:1.45}
+.notice{font-size:12px;line-height:1.45;color:var(--amber);padding:9px;background:#30291c;border-radius:8px;margin-top:10px}
+.status{font-weight:700;color:var(--green)}
+.assistant-box{margin-top:10px;padding:11px;border:1px solid #36718a;border-radius:10px;background:#0d2638}
+.assistant-box strong{display:block;color:var(--cyan);margin-bottom:5px}
+.assistant-box p{margin:0;line-height:1.45}.obstacle-legend{font-size:11px;color:var(--muted);margin-top:6px}
+@media(max-width:800px){main{grid-template-columns:1fr}header{padding-top:12px}}
 </style>
 </head>
 <body>
-<header><div class="logo">🚛</div><div><h1>TRUCKVISION 360</h1><small>Помощник водителя · iPhone</small></div></header>
+<header>
+<h1>🚛 TruckVision 360 · ALL-IN-ONE v4.4</h1>
+<p>Volvo FH 4×2 · седельный трёхосный полуприцеп · учебный симулятор маневрирования</p>
+</header>
+
 <main>
-<section class="card">
- <div class="eyebrow">АКТИВНЫЙ ПРОФИЛЬ · 001</div>
- <div class="vehicle"><div><h2>Volvo FH</h2><p>2015–2019 · 4×2</p><p>Полуприцеп · 3 оси · ABS / EBS</p></div><div class="truck">🚛</div></div>
- <div class="pills"><span class="pill">Профиль выбран</span><span class="pill warn">Параметры не измерены</span></div>
-</section>
-<div class="section"><span>РЕЖИМЫ РАБОТЫ</span><span>5 РЕЖИМОВ</span></div>
-<div class="grid" id="modes">
- <button class="mode active" data-mode="entry"><span class="sym">↪</span><b>Заезд</b><small>Оценка проезда через ворота</small></button>
- <button class="mode" data-mode="parking"><span class="sym">🅿</span><b>Парковка</b><small>Постановка на место</small></button>
- <button class="mode" data-mode="turn"><span class="sym">⤺</span><b>Разворот</b><small>Траектория автопоезда</small></button>
- <button class="mode" data-mode="map"><span class="sym">⌖</span><b>Карта</b><small>Сканирование территории — будущая функция</small></button>
- <button class="mode" data-mode="camera"><span class="sym">◎</span><b>Камеры 360°</b><small>Подключение камер — будущая функция</small></button>
+<section class="panel">
+<div class="row"><b>Вид сверху · автопоезд</b><span id="mode" class="status">Остановлен</span></div>
+<canvas id="view" width="1000" height="650" aria-label="Вид сверху на автопоезд"></canvas>
+<div class="row" style="margin-top:8px">
+<button id="left">↶ Руль влево</button>
+<button id="straight">Прямо</button>
+<button id="right">Руль вправо ↷</button>
 </div>
-<section class="card" style="margin-top:15px">
- <div class="eyebrow">ВЫБРАННЫЙ РЕЖИМ</div><div class="info"><div class="sym" id="modeIcon">↪</div><div><b id="modeTitle">Заезд</b><p id="modeDesc">Выберите ворота и внесите измеренные ширину и высоту. Оценка траектории пока демонстрационная.</p></div></div>
+<div class="row" style="margin-top:7px">
+<button class="primary" id="forward">▲ Вперёд</button>
+<button class="stop" id="brake">■ Тормоз</button>
+<button class="primary" id="reverse">▼ Назад</button>
+</div>
+<div class="row" style="margin-top:7px">
+<button id="reset">↺ Сброс</button>
+<button id="trace">Траектория: вкл.</button>
+<button id="center">Центрировать</button>
+</div>
+<p class="small">Удерживай кнопку движения. Клавиатура: ←/→ — руль, ↑/↓ — движение, пробел — тормоз.</p>
+<div class="row" style="margin-top:7px">
+<button id="obstaclesToggle">Препятствия: вкл.</button>
+<button id="helperToggle" class="primary">Помощник: вкл.</button>
+<button id="scenarioReset">Сбросить площадку</button>
+</div>
+<div class="obstacle-legend">На площадке показаны условные стены, паллеты и парковочная зона. Их положение можно использовать для проверки манёвра.</div>
+<div class="assistant-box" aria-live="polite">
+<strong>🤖 Помощник TruckVision 360</strong>
+<p id="assistantAdvice">Система готова. Выберите манёвр и двигайтесь медленно, наблюдая за зазорами.</p>
+</div>
+<div class="assistant-box" aria-live="polite">
+<strong>🧭 Маршрут и сложность манёвра</strong>
+<div class="grid" style="margin-top:8px">
+ <div><label for="goalX">Цель по X, м</label><input id="goalX" type="number" value="22" step="1"></div>
+ <div><label for="goalY">Цель по Y, м</label><input id="goalY" type="number" value="0" step="1"></div>
+</div>
+<div class="row">
+ <button id="planRoute" class="primary">Построить путь</button>
+ <button id="clearRoute">Убрать путь</button>
+</div>
+<p id="routeAdvice">Задайте конечную точку и нажмите «Построить путь».</p>
+<p id="difficultyAdvice" style="margin-top:8px;color:#ffd18b">Сложность: пока не рассчитана.</p>
+</div>
 </section>
-<section class="card">
- <div class="eyebrow">РАСЧЁТНЫЙ МОДУЛЬ · ДЕМО</div><h3 style="margin:8px 0 2px">Тормозной путь</h3>
- <div class="result"><span id="total">78.2</span> <small style="font-size:16px;color:var(--muted)">м</small></div>
- <label>Начальная скорость <span class="value" id="speedVal">80 км/ч</span></label><input id="speed" type="range" min="10" max="100" value="80">
- <label>Условное замедление <span class="value" id="decelVal">5.0 м/с²</span></label><input id="decel" type="range" min="1" max="8" step=".1" value="5">
- <label>Время реакции <span class="value" id="reactionVal">1.5 с</span></label><input id="reaction" type="range" min=".5" max="2.5" step=".1" value="1.5">
- <div class="metric"><span>Путь за время реакции</span><b id="reactionDist">33.3 м</b></div>
- <div class="metric"><span>Условный тормозной путь</span><b id="brakeDist">44.4 м</b></div>
- <div class="metric"><span>Общий остановочный путь</span><b id="total2">77.8 м</b></div>
+
+<section class="panel">
+<b>Настройки модели</b>
+<div class="section">Режим</div>
+<label for="model">Тип расчёта</label>
+<select id="model">
+<option value="hybrid">Кинематика + упрощённая продольная динамика</option>
+<option value="kinematic">Кинематика с заданной скоростью</option>
+</select>
+<label for="speedSet">Заданная скорость: <b id="speedLabel">2,0 м/с</b></label>
+<input id="speedSet" type="range" min="0.2" max="8" step="0.1" value="2">
+<label for="steer">Угол управляемых колёс: <b id="steerLabel">0°</b></label>
+<input id="steer" type="range" min="-35" max="35" step="1" value="0">
+
+<div class="section">Тягач и сцепка</div>
+<div class="grid">
+<div><label for="wheelbase">Колёсная база, м</label><input id="wheelbase" type="number" value="3.80" step="0.05"></div>
+<div><label for="hitchOffset">Седло за задней осью, м</label><input id="hitchOffset" type="number" value="0.575" step="0.025"></div>
+<div><label for="tractorMass">Масса тягача, кг</label><input id="tractorMass" type="number" value="8500" step="100"></div>
+<div><label for="engineForce">Предельная тяга, Н</label><input id="engineForce" type="number" value="24000" step="500"></div>
+</div>
+
+<div class="section">Полуприцеп</div>
+<div class="grid">
+<div><label for="trailerLength">Длина, м</label><input id="trailerLength" type="number" value="13.60" step="0.1"></div>
+<div><label for="trailerWidth">Ширина, м</label><input id="trailerWidth" type="number" value="2.55" step="0.05"></div>
+<div><label for="kingpinAxles">Шкворень — центр осей, м</label><input id="kingpinAxles" type="number" value="8.00" step="0.1"></div>
+<div><label for="trailerMass">Масса с грузом, кг</label><input id="trailerMass" type="number" value="30000" step="500"></div>
+</div>
+
+<div class="section">Шины, сцепление и тормоза</div>
+<div class="grid">
+<div><label for="mu">Коэффициент сцепления μ</label><input id="mu" type="number" value="0.70" min="0.1" max="1.2" step="0.05"></div>
+<div><label for="crr">Сопротивление качению Crr</label><input id="crr" type="number" value="0.008" step="0.001"></div>
+<div><label for="brakeDecel">Предельное замедление, м/с²</label><input id="brakeDecel" type="number" value="4.5" step="0.1"></div>
+<div><label for="maxAccel">Предельное ускорение, м/с²</label><input id="maxAccel" type="number" value="0.8" step="0.1"></div>
+</div>
+
+<div class="section">Ворота</div>
+<div class="grid">
+<div><label for="gateWidth">Ширина проёма, м</label><input id="gateWidth" type="number" value="3.50" step="0.05"></div>
+<div><label for="margin">Запас с каждой стороны, м</label><input id="margin" type="number" value="0.20" step="0.05"></div>
+</div>
+<div class="row" style="margin-top:8px">
+<button id="apply">Применить параметры</button>
+<button id="assess" class="primary">Оценить проём</button>
+</div>
+
+<div class="section">Показания</div>
+<div class="grid">
+<div class="metric"><span>Скорость</span><strong id="vOut">0,0 м/с</strong></div>
+<div class="metric"><span>Угол сочленения</span><strong id="betaOut">0,0°</strong></div>
+<div class="metric"><span>Угол руля</span><strong id="steerOut">0°</strong></div>
+<div class="metric"><span>Продольное ускорение</span><strong id="accelOut">0,00 м/с²</strong></div>
+<div class="metric"><span>Боковое ускорение</span><strong id="latOut">0,00 м/с²</strong></div>
+<div class="metric"><span>Тормозной путь (оценка)</span><strong id="stopOut">0,0 м</strong></div>
+<div class="metric"><span>Запас сцепления</span><strong id="gripOut">—</strong></div>
+<div class="metric"><span>Пройденный путь</span><strong id="distanceOut">0,0 м</strong></div>
+</div>
+<div id="gateResult" class="notice">Задай ширину ворот и нажми «Оценить проём». Сейчас это только сравнение ширины, а не проверка всей траектории.</div>
+<div class="notice">
+<strong>Ограничения модели.</strong> Здесь реализованы кинематическое движение сочленённого автопоезда и упрощённая продольная динамика. Нет полной динамики шин, подвески, переноса нагрузки, крена, реальных характеристик двигателя и пневматических тормозов ABS/EBS. Значения по умолчанию предварительные, а не спецификация конкретного VIN. Препятствия и помощник работают по условной тестовой карте и упрощённой геометрии. Это учебный симулятор, не датчики и не система предотвращения столкновений; программа не предназначена для управления реальным грузовиком или подтверждения безопасности манёвра.
+</div>
 </section>
-<section class="card"><div class="info"><div class="sym" style="color:var(--orange)">⚠</div><div><b>Важное предупреждение</b><p class="warning">Это демонстрационная версия. Расчёт использует постоянное замедление и не моделирует реальную массу по осям, ABS/EBS, пневматические задержки, уклон, шины и динамику складывания. Не использовать для управления реальным грузовиком или принятия решений о безопасности.</p></div></div></section>
 </main>
-<footer>TruckVision 360 · Прототип интерфейса · Без подключения к автомобилю</footer>
-<script>
-const modes={
- entry:["↪","Заезд","Выберите ворота и внесите измеренные ширину и высоту. Оценка траектории пока демонстрационная."],
- parking:["🅿","Парковка","Выберите парковочное место. Расчёт коридора движения и запаса до препятствий ещё разрабатывается."],
- turn:["⤺","Разворот","Будущая модель рассчитает траекторию тягача, прицепа и внешний габаритный коридор."],
- map:["⌖","Карта","Сканирование и сохранение территории появятся после подключения камер и датчиков."],
- camera:["◎","Камеры 360°","Экран подготовлен под круговой обзор. Потоки реальных камер пока не подключены."]
-};
-document.querySelectorAll(".mode").forEach(btn=>btn.addEventListener("click",()=>{
- document.querySelectorAll(".mode").forEach(b=>b.classList.remove("active"));btn.classList.add("active");
- const d=modes[btn.dataset.mode];document.getElementById("modeIcon").textContent=d[0];document.getElementById("modeTitle").textContent=d[1];document.getElementById("modeDesc").textContent=d[2];
-}));
-function calc(){let v=+speed.value/3.6,a=+decel.value,t=+reaction.value;let r=v*t,b=v*v/(2*a),sum=r+b;
- document.getElementById("speedVal").textContent=speed.value+" км/ч";document.getElementById("decelVal").textContent=a.toFixed(1)+" м/с²";document.getElementById("reactionVal").textContent=t.toFixed(1)+" с";
- document.getElementById("reactionDist").textContent=r.toFixed(1)+" м";document.getElementById("brakeDist").textContent=b.toFixed(1)+" м";document.getElementById("total2").textContent=sum.toFixed(1)+" м";document.getElementById("total").textContent=sum.toFixed(1);
-}
-["speed","decel","reaction"].forEach(id=>document.getElementById(id).addEventListener("input",calc));calc();
-if("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("./sw.js");
-</script>
-</body></html>
+
+<script src="truckvision.js"></script>
+</body>
+</html>
