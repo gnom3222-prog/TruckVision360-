@@ -172,7 +172,7 @@
  }
  function recommendStart(states,options={}){
   if(!Array.isArray(states)||states.length<2)return {ok:false,reason:'route-too-short'};
-  const steeringThreshold=Number.isFinite(options.steeringThreshold)?Math.max(0,options.steeringThreshold):0.08;
+  const steeringThreshold=Number.isFinite(options.steeringThreshold)&&options.steeringThreshold>0?options.steeringThreshold:0.08;
   let distance=0;
   const first=states[1];
   const initialGear=(first.gear??1)<0?-1:1;
