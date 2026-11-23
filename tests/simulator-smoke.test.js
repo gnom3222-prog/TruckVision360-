@@ -5,6 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const physics=require('../vehicle-physics.js');
+const planner=require('../articulated-planner.js');
 
 function bootSimulator(){
  const root=path.join(__dirname,'..');
@@ -31,7 +32,7 @@ function bootSimulator(){
  canvas.width=1000;
  canvas.height=650;
  canvas.getContext=()=>ctx;
- const windowObject={TruckVisionPhysics:physics,addEventListener:()=>{}};
+ const windowObject={TruckVisionPhysics:physics,TruckVisionPlanner:planner,addEventListener:()=>{}};
  const sandbox={
   window:windowObject,
   document:{getElementById},
