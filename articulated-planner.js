@@ -170,5 +170,36 @@
   const pathMinimum=Math.min(startClearance,...chain.map(n=>n.minClearance));
   return {ok:true,states,expanded,length:finish.g,minimumClearance:pathMinimum,terminalErrors:goalErrors(finish.q,goal)};
  }
- return Object.freeze({plan,clearance,createClearanceChecker,polygons,goalErrors,goalReached});
+ function recommendStart(states,options={}){
+  if(!Array.isArray(states)||states.length<2)return {ok:false,reason:'route-too-short'};
+  const steeringThreshold=Number.isFinite(options.steeringThreshold)?Math.max(0,options.steeringThreshold):0.08;
+  let distance=0;
+  const first=states[1];
+  const initialGear=(first.gear??1)<0?-1:1;
+  let firstTurn=null;
+  let firstTurnDistance=null;
+  let firstTurnGear=null;
+  for(let i=1;i<states.length;i++){
+   const previous=states[i-1],current=states[i];
+   distance+=Math.hypot(current.x-previous.x,current.y-previous.y);
+   const steer=Number(current.steer)||0;
+   if(Math.abs(steer)>=steeringThreshold){
+    firstTurn=steer>0?'left':'right';
+    firstTurnDistance=distance;
+    firstTurnGear=(current.gear??initialGear)<0?-1:1;
+    break;
+   }
+  }
+  return {
+   ok:true,
+   initialGear,
+   initialSteer:Number(first.steer)||0,
+   firstTurn,
+   firstTurnDistance,
+   firstTurnGear,
+   firstTurnAfterGearChange:firstTurnGear!==null&&firstTurnGear!==initialGear
+  };
+ }
+
+ return Object.freeze({plan,clearance,createClearanceChecker,polygons,goalErrors,goalReached,recommendStart});
 });
