@@ -1,5 +1,5 @@
 'use strict';
-const CACHE = 'truckvision360-v18';
+const CACHE = 'truckvision360-v19';
 const CORE = ['./', './index.html', './truckvision.js', './vehicle-physics.js', './articulated-planner.js', './voice.js', './camera-measure.js', './manifest.webmanifest', './icon.svg'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
@@ -10,8 +10,28 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const request = event.request;
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
-  event.respondWith(caches.match(request, {ignoreSearch: true}).then(cached => {
-    if (cached) return cached;
-    return fetch(request).catch(() => request.mode === 'navigate' ? caches.match('./index.html') : Promise.reject(new Error('Offline resource unavailable')));
-  }));
+  const url = new URL(request.url);
+  const isAppCode = request.mode === 'navigate' || /\\.(?:html|js)$/.test(url.pathname);
+  if (isAppCode) {
+    event.respondWith(fetch(request).then(response => {
+      if (response && response.ok) {
+        const copy = response.clone();
+        caches.open(CACHE).then(cache => cache.put(request, copy));
+      }
+      return response;
+    }).catch(() => caches.match(request, {ignoreSearch: true}).then(cached =>
+      cached || (request.mode === 'navigate' ? caches.match('./index.html') : Promise.reject(new Error('Offline resource unavailable')))
+    )));
+  } else {
+    event.respondWith(caches.match(request, {ignoreSearch: true}).then(cached => {
+      if (cached) return cached;
+      return fetch(request).then(response => {
+        if (response && response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE).then(cache => cache.put(request, copy));
+        }
+        return response;
+      });
+    }));
+  }
 });
