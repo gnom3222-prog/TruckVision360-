@@ -67,7 +67,7 @@ test('planner rejects a positional match with incorrect terminal course or trail
 });
 
 test('simulator starts and exposes route controls',()=>{
- const elements=bootSimulator();
+ const {elements}=bootSimulator();
  assert.equal(typeof elements.planRoute.onclick,'function');
  assert.equal(elements.goalHeading.value,'0');
  assert.equal(elements.goalHeadingTolerance.value,'12');
@@ -78,7 +78,7 @@ test('simulator starts and exposes route controls',()=>{
 });
 
 test('automatic route remains blocked when obstacle checks are disabled',()=>{
- const elements=bootSimulator();
+ const {elements}=bootSimulator();
  elements.obstaclesToggle.onclick();
  elements.planRoute.onclick();
  assert.match(elements.difficultyAdvice.textContent,/проверка препятствий отключена/);
@@ -87,7 +87,7 @@ test('automatic route remains blocked when obstacle checks are disabled',()=>{
 });
 
 test('route planning reports missing Web Worker support without blanking the simulator',async()=>{
- const elements=bootSimulator();
+ const {elements}=bootSimulator();
  elements.planRoute.onclick();
  await new Promise(resolve=>setImmediate(resolve));
  assert.match(elements.routeAdvice.textContent,/не поддерживает фоновый расчёт маршрута/);
