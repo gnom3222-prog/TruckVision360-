@@ -42,6 +42,8 @@ const obstacles=[
 
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const norm=a=>Math.atan2(Math.sin(a),Math.cos(a));
+const physics=window.TruckVisionPhysics;
+if(!physics)throw new Error('TruckVision physics module failed to load.');
 
 function readSettings(){
  for(const key of Object.keys(cfg)){
@@ -76,42 +78,11 @@ function axlePoint(q){
 }
 
 function derivative(q,v,delta){
- const yawRate=v/cfg.wheelbase*Math.tan(delta);
- const beta=norm(q.psi-q.psiT);
- const trailerYawRate=(
-  v*Math.sin(beta)
-  -cfg.hitchOffset*yawRate*Math.cos(beta)
- )/cfg.kingpinAxles;
-
- return{
-  x:v*Math.cos(q.psi),
-  y:v*Math.sin(q.psi),
-  psi:yawRate,
-  psiT:trailerYawRate
- };
-}
-
-function addState(q,k,f){
- return{
-  x:q.x+k.x*f,
-  y:q.y+k.y*f,
-  psi:q.psi+k.psi*f,
-  psiT:q.psiT+k.psiT*f
- };
+ return physics.derivative(q,v,delta,cfg);
 }
 
 function rk4(q,v,delta,dt){
- const k1=derivative(q,v,delta);
- const k2=derivative(addState(q,k1,dt/2),v,delta);
- const k3=derivative(addState(q,k2,dt/2),v,delta);
- const k4=derivative(addState(q,k3,dt),v,delta);
-
- return{
-  x:q.x+dt*(k1.x+2*k2.x+2*k3.x+k4.x)/6,
-  y:q.y+dt*(k1.y+2*k2.y+2*k3.y+k4.y)/6,
-  psi:norm(q.psi+dt*(k1.psi+2*k2.psi+2*k3.psi+k4.psi)/6),
-  psiT:norm(q.psiT+dt*(k1.psiT+2*k2.psiT+2*k3.psiT+k4.psiT)/6)
- };
+ return physics.rk4(q,v,delta,dt,cfg);
 }
 
 function toScreen(p){
