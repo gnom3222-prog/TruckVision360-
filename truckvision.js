@@ -6,7 +6,7 @@ const $=id=>document.getElementById(id);
 const canvas=$('view');
 const ctx=canvas.getContext('2d');
 const G=9.81;
-const SCALE=22;
+const SCALE=34;
 const ARTICULATION_WARNING_DEG=45;
 const ARTICULATION_STOP_DEMO_DEG=55;
 
@@ -47,7 +47,7 @@ const cfg={
 
 let state,steer=0,targetSpeed=2,speed=0,drive=0;
 let braking=false,distance=0,trace=[],showTrace=true;
-let camera={x:0,y:0},lastTime=0;
+let camera={x:7.5,y:0},lastTime=0;
 let showObstacles=true,helperEnabled=true;
 let plannedRoute=[],alternativeRoutes=[],routeGoal=null,routeAssessment=null;
 let routePlayback={active:false,paused:false,index:1,stopReason:'',currentGear:1};
@@ -1271,6 +1271,57 @@ function drawRoute(){
  }
 }
 
+function drawWheel(center,angle){
+ const p=toScreen(center);
+ const radius=0.24*SCALE;
+ ctx.save();
+ ctx.translate(p.x,p.y);
+ ctx.rotate(-angle);
+ ctx.fillStyle='#050b11';
+ ctx.strokeStyle='#9bb2c3';
+ ctx.lineWidth=1.5;
+ ctx.beginPath();
+ ctx.roundRect(-radius*1.45,-radius,radius*2.9,radius*2,Math.max(2,radius*.35));
+ ctx.fill();
+ ctx.stroke();
+ ctx.restore();
+}
+
+function drawVehicleDetails(){
+ // Три оси полуприцепа: по два отчётливо видимых колеса на каждой оси.
+ physics.trailerAxlePoints(state,cfg).forEach(point=>{
+  drawWheel(localPoint(point,state.psiT,0,cfg.trailerWidth/2+0.12),state.psiT);
+  drawWheel(localPoint(point,state.psiT,0,-cfg.trailerWidth/2-0.12),state.psiT);
+ });
+ // Передняя управляемая ось и ведущая ось тягача.
+ [-cfg.wheelbase*0.25,-cfg.wheelbase*0.92].forEach(longitudinal=>{
+  drawWheel(localPoint(state,state.psi,longitudinal,cfg.trailerWidth/2+0.10),state.psi);
+  drawWheel(localPoint(state,state.psi,longitudinal,-cfg.trailerWidth/2-0.10),state.psi);
+ });
+ // Кабина: контрастное ветровое стекло и нос автомобиля.
+ const windshield=bodyCorners(localPoint(state,state.psi,2.1),state.psi,1.15,0.25,2.20).map(toScreen);
+ ctx.beginPath();
+ windshield.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+ ctx.closePath();
+ ctx.fillStyle='#a7e8f7';
+ ctx.globalAlpha=.82;
+ ctx.fill();
+ ctx.globalAlpha=1;
+ ctx.strokeStyle='#e4fbff';
+ ctx.lineWidth=2;
+ ctx.stroke();
+ // Направление движения вперёд.
+ const nose=toScreen(localPoint(state,state.psi,5.7));
+ const arrowBase=toScreen(localPoint(state,state.psi,4.4));
+ ctx.strokeStyle='#fff';
+ ctx.fillStyle='#fff';
+ ctx.lineWidth=3;
+ ctx.beginPath();ctx.moveTo(arrowBase.x,arrowBase.y);ctx.lineTo(nose.x,nose.y);ctx.stroke();
+ const left=toScreen(localPoint(state,state.psi,4.7,.28));
+ const right=toScreen(localPoint(state,state.psi,4.7,-.28));
+ ctx.beginPath();ctx.moveTo(nose.x,nose.y);ctx.lineTo(left.x,left.y);ctx.lineTo(right.x,right.y);ctx.closePath();ctx.fill();
+}
+
 function draw(){
  ctx.clearRect(0,0,canvas.width,canvas.height);
  ctx.fillStyle='#102235';
@@ -1323,20 +1374,12 @@ function draw(){
   cfg.trailerWidth,'#315b78'
  );
 
- for(const p of physics.trailerAxlePoints(state,cfg)){
-  drawLine([
-   localPoint(p,state.psiT,0,cfg.trailerWidth/2+0.13),
-   localPoint(p,state.psiT,0,-cfg.trailerWidth/2-0.13)
-  ],'#101820',7);
- }
-
  physics.vehiclePolygons(state,{...cfg,footprintUncertainty:cfg.vehicleFootprintUncertainty})
   .forEach(poly=>drawEnvelopePolygon(poly,'#ffd18b'));
+ drawBody(h,state.psiT,1.5,-(cfg.trailerLength-1.5),cfg.trailerWidth,'#315b78');
  drawBody(state,state.psi,5,-1.2,2.55,'#087fa5');
- drawBody(
-  localPoint(state,state.psi,2.1),
-  state.psi,1.35,-0.9,2.25,'#35c8ef'
- );
+ drawBody(localPoint(state,state.psi,2.1),state.psi,1.35,-0.9,2.25,'#35c8ef');
+ drawVehicleDetails();
 
  const hp=toScreen(h);
  ctx.beginPath();
@@ -1350,10 +1393,19 @@ function draw(){
  ctx.fillStyle='#fff';
  ctx.fill();
 
- ctx.fillStyle='#dceaf5';
- ctx.font='14px system-ui';
- ctx.fillText('Volvo FH 4×2',rp.x+10,rp.y-16);
- ctx.fillText('Полуприцеп · 3 оси',hp.x-10,hp.y+32);
+ ctx.save();
+ ctx.font='bold 20px system-ui';
+ ctx.textAlign='center';
+ ctx.lineWidth=4;
+ ctx.strokeStyle='#071522';
+ ctx.fillStyle='#f3fbff';
+ ctx.strokeText('VOLVO FH 4×2',rp.x,rp.y-30);
+ ctx.fillText('VOLVO FH 4×2',rp.x,rp.y-30);
+ ctx.font='bold 17px system-ui';
+ const trailerLabel=toScreen(localPoint(h,state.psiT,-cfg.trailerLength*.48));
+ ctx.strokeText('ПОЛУПРИЦЕП · 3 ОСИ',trailerLabel.x,trailerLabel.y);
+ ctx.fillText('ПОЛУПРИЦЕП · 3 ОСИ',trailerLabel.x,trailerLabel.y);
+ ctx.restore();
 
  updateReadouts();
  updateAssistant();
