@@ -133,7 +133,14 @@ main{max-width:1400px;padding:10px 10px calc(100px + env(safe-area-inset-bottom)
 .maneuver-controls{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.maneuver-controls button{font-size:11px;min-height:38px}.obstacle-legend,.small{font-size:10px}.metric{background:#0b1c2a;border-color:#1e4055}.metric strong{font-size:15px}
 .assistant-box,.maneuver-hint{background:#0b2233;border-color:#22536b}#environmentSection,#measurementSection,#settingsSection{padding:10px;background:#0a1b29;border:1px solid #1e3e53;border-radius:15px}
 #environmentSection .assistant-box{padding:10px}#environmentSection .row{display:grid;grid-template-columns:1fr 1fr}
-@media(max-width:700px){main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8px;border-radius:15px}.cockpit-grid{grid-template-columns:minmax(0,1fr);gap:7px}
+.cockpit-views{grid-template-rows:minmax(145px,.75fr) minmax(270px,1.25fr)}
+.map-preview .maneuver-view{min-height:270px}
+#view{min-height:260px}
+@media(max-width:700px){
+ .cockpit-views{grid-template-rows:145px 280px}
+ .map-preview .maneuver-view{min-height:280px}
+ #view{min-height:270px}
+main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8px;border-radius:15px}.cockpit-grid{grid-template-columns:minmax(0,1fr);gap:7px}
 .cockpit-summary{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px}.summary-heading{grid-column:1/-1;margin-bottom:2px}.summary-result{grid-column:1/-1;margin:0}.summary-line{padding:5px 2px}.summary-vehicle{grid-column:1/-1;margin-top:2px}
 .cockpit-views{grid-template-rows:120px 190px}.cockpit-readouts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:8px}.readout-title,.sensor-state{grid-column:1/-1;margin:0}.readout{margin:0!important}.readout strong{font-size:14px}
 .cockpit-actions{grid-template-columns:repeat(4,minmax(0,1fr))}.cockpit-actions button{font-size:9px}}
@@ -379,7 +386,7 @@ main{max-width:1400px;padding:10px 10px calc(100px + env(safe-area-inset-bottom)
 
 <script src="vehicle-physics.js?v=20261124-6"></script>
 <script src="articulated-planner.js?v=20261124-18"></script>\n<script src="sensor-perception.js?v=20261124-1"></script>
-<script src="truckvision.js?v=20261124-35"></script>
+<script src="truckvision.js?v=20261124-36"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261124-13"></script>
 <script src="camera-measure.js?v=20261124-16"></script>
