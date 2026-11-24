@@ -281,3 +281,33 @@ test('integrated equivalent axle center remains tangent to trailer heading acros
   }
  }
 });
+
+test('bounded footprint uncertainty expands tractor, cab, and trailer contours outward',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55};
+ const base=physics.vehiclePolygons(q,p);
+ const expanded=physics.vehiclePolygons(q,{...p,footprintUncertainty:0.1});
+ const width=poly=>Math.max(...poly.map(point=>point.y))-Math.min(...poly.map(point=>point.y));
+ near(width(base[0]),2.55);
+ near(width(expanded[0]),2.75);
+ near(width(base[1]),2.25);
+ near(width(expanded[1]),2.45);
+ near(width(base[2]),2.55);
+ near(width(expanded[2]),2.75);
+ const xBounds=poly=>({
+  min:Math.min(...poly.map(point=>point.x)),
+  max:Math.max(...poly.map(point=>point.x))
+ });
+ const trailerBase=xBounds(base[2]);
+ const trailerExpanded=xBounds(expanded[2]);
+ near(trailerExpanded.min,trailerBase.min-0.1);
+ near(trailerExpanded.max,trailerBase.max+0.1);
+});
+
+test('vehicle geometry rejects footprint uncertainty beyond its documented bound',()=>{
+ const errors=physics.validateVehicleParams({
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,footprintUncertainty:1.01
+ });
+ assert.ok(errors.some(message=>message.includes('footprintUncertainty')));
+});
