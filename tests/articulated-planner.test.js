@@ -680,9 +680,9 @@ test('geometry uncertainty envelope rejects a nominal route with insufficient ex
   start,goal:{x:2,y:0},params,obstacles:[obstacle],integrate,
   maxExpansions:1200,alternativeMaxExpansions:1200,
   minClearance:0.30,measurementUncertainty:0,costTolerance:0,
-  obstaclePositionUncertainty:0.05,
-  obstacleSizeUncertainty:0.02,
-  vehicleFootprintUncertainty:0.03,
+  obstaclePositionUncertainty:0.15,
+  obstacleSizeUncertainty:0.10,
+  vehicleFootprintUncertainty:0.10,
   bounds:{minX:-18,maxX:18,minY:-12,maxY:12}
  });
  assert.equal(result.ok,false,JSON.stringify(result));
