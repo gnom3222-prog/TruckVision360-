@@ -247,6 +247,18 @@ test('start recommendation ignores zero and invalid steering thresholds',()=>{
  assert.equal(planner.recommendStart(states,{steeringThreshold:-1}).firstTurn,null);
 });
 
+test('planner rejects a three-axle group that extends beyond the trailer body before search',()=>{
+ const result=planner.plan({
+  start:{x:0,y:0,psi:0,psiT:0},goal:{x:5,y:0},
+  params:{...params,trailerAxleSpacing:5},obstacles:[],integrate,
+  maxExpansions:100
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'invalid-input');
+ assert.equal(result.expanded,0);
+ assert.ok(result.errors.some(message=>message.includes('trailerAxleSpacing')));
+});
+
 test('planner rejects invalid vehicle geometry before collision checking or search',()=>{
  const result=planner.plan({
   start:{x:0,y:0,psi:0,psiT:0},goal:{x:5,y:0},
