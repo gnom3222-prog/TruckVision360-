@@ -14,7 +14,8 @@
   kingpinAxles:{min:0.5,max:30},
   trailerLength:{min:4,max:30},
   trailerWidth:{min:1.5,max:5},
-  trailerAxleSpacing:{min:0.3,max:5,optional:true}
+  trailerAxleSpacing:{min:0.3,max:5,optional:true},
+  footprintUncertainty:{min:0,max:1,optional:true}
  });
 
  function validateVehicleParams(params){
@@ -127,10 +128,13 @@
  function vehiclePolygons(q,params){
   const h=hitchPoint(q,params);
   const cab=localPoint(q,q.psi,2.1);
+  const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
+  // A bounded outward envelope is applied to every rectangular body edge.
+  // It is a geometry tolerance, not a tire, suspension, or localization model.
   return[
-   bodyCorners(q,q.psi,5,-1.2,2.55),
-   bodyCorners(cab,q.psi,1.35,-0.9,2.25),
-   bodyCorners(h,q.psiT,1.5,-(params.trailerLength-1.5),params.trailerWidth)
+   bodyCorners(q,q.psi,5+uncertainty,-1.2-uncertainty,2.55+2*uncertainty),
+   bodyCorners(cab,q.psi,1.35+uncertainty,-0.9-uncertainty,2.25+2*uncertainty),
+   bodyCorners(h,q.psiT,1.5+uncertainty,-(params.trailerLength-1.5+uncertainty),params.trailerWidth+2*uncertainty)
   ];
  }
 
