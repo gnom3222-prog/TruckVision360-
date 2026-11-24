@@ -174,9 +174,15 @@ canvas{max-width:100%}
 <div class="grid">
 <div><label for="gateWidth">Ширина проёма, м</label><input id="gateWidth" type="number" value="3.50" step="0.05"></div>
 <div><label for="margin">Запас с каждой стороны, м</label><input id="margin" type="number" value="0.20" step="0.05"></div>
-<div><label for="measurementUncertainty">Доп. резерв неопределённости с каждой стороны, м</label><input id="measurementUncertainty" type="number" min="0" max="2" value="0.15" step="0.05"></div>
+<div><label for="measurementUncertainty">Доп. резерв зазора с каждой стороны, м</label><input id="measurementUncertainty" type="number" min="0" max="2" value="0.15" step="0.05"></div>
 </div>
-<p class="small">Этот резерв вычитается из зазоров и полезной ширины ворот. При построении маршрута планировщик повторяет поиск с требуемым зазором, увеличенным на удвоенный резерв; если начальное действие меняется или путь не находится, рекомендация не выдаётся. Это настраиваемый запас, а не автоматически измеренная погрешность камеры; проверка не варьирует каждую координату препятствия и каждый размер машины независимо.</p>
+<div class="section">Границы геометрической неопределённости</div>
+<div class="grid">
+<div><label for="obstaclePositionUncertainty">Погрешность положения препятствий ±, м</label><input id="obstaclePositionUncertainty" type="number" min="0" max="1" value="0.05" step="0.01"></div>
+<div><label for="obstacleSizeUncertainty">Погрешность полного размера препятствий ±, м</label><input id="obstacleSizeUncertainty" type="number" min="0" max="1" value="0.02" step="0.01"></div>
+<div><label for="vehicleFootprintUncertainty">Расширение каждой грани автопоезда, м</label><input id="vehicleFootprintUncertainty" type="number" min="0" max="0.5" value="0.03" step="0.01"></div>
+</div>
+<p class="small">Это отдельные пользовательские границы, не оценка 1σ камеры: положение каждого прямоугольного препятствия расширяется по X/Y на заданную величину, его полный размер — на заданную погрешность, а все три прямоугольных контура автопоезда расширяются наружу с каждой грани. Планировщик ищет путь в этой геометрической оболочке и сравнивает начальное действие с номинальным поиском. Погрешности колёсной базы, седла и расстояния шкворень–тележка пока не варьируются; это ограниченная проверка, не полный анализ неопределённости.</p>
 <div class="row" style="margin-top:8px">
 <button id="apply">Применить параметры</button>
 <button id="assess" class="primary">Оценить проём</button>
@@ -222,9 +228,9 @@ canvas{max-width:100%}
 </section>
 </main>
 
-<script src="vehicle-physics.js?v=20261124-5"></script>
-<script src="articulated-planner.js?v=20261124-8"></script>
-<script src="truckvision.js?v=20261124-11"></script>
+<script src="vehicle-physics.js?v=20261124-6"></script>
+<script src="articulated-planner.js?v=20261124-9"></script>
+<script src="truckvision.js?v=20261124-12"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261124-10"></script>
 <script src="camera-measure.js?v=20261124-10"></script>
