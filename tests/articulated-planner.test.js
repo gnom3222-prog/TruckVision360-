@@ -766,7 +766,15 @@ test('vehicle parameter bounds evaluate all endpoint combinations for one active
  assert.equal(result.ok,true,JSON.stringify(result));
  assert.equal(result.parameterSensitivity.status,'stable-across-joint-endpoint-combinations');
  assert.equal(result.parameterSensitivity.coverage,'full-endpoint-combinations');
- assert.equal(result.parameterSensitivity.testedScenarioCount,2);
+ assert.equal(result.parameterSensitivity.testedScenarioCount,3);
+ assert.equal(result.parameterSensitivity.scenarioCount,3);
+ assert.equal(result.parameterSensitivity.midpointScenarioCount,1);
+ assert.equal(result.parameterSensitivity.testedMidpointScenarioCount,1);
+ assert.equal(result.parameterSensitivity.interiorCoverage,'one-factor-midpoints');
+ const midpoint=result.parameterSensitivity.completedScenarios.find(s=>s.kind==='one-factor-midpoint');
+ assert.ok(midpoint,'the interval midpoint should be tested separately');
+ assert.equal(midpoint.endpointSides.wheelbase,'midpoint');
+ assert.ok(Math.abs(midpoint.parameterValues.wheelbase-3.79995)<1e-10);
  assert.equal(result.parameterSensitivity.allParameterCombinationsEvaluated,true);
  assert.equal(result.parameterSensitivity.pairwiseEndpointCoverage,false);
  assert.deepEqual(params,originalParams);
@@ -801,6 +809,9 @@ test('vehicle parameter bounds pairwise covering array checks every endpoint pai
  assert.equal(sensitivity.status,'stable-across-pairwise-endpoint-scenarios');
  assert.equal(sensitivity.coverage,'pairwise-endpoint-covering-array');
  assert.equal(sensitivity.testedScenarioCount,9);
+ assert.equal(sensitivity.midpointScenarioCount,0);
+ assert.equal(sensitivity.testedMidpointScenarioCount,0);
+ assert.equal(sensitivity.interiorCoverage,'one-factor-midpoints');
  assert.equal(sensitivity.allParameterCombinationsEvaluated,false);
  assert.equal(sensitivity.pairwiseEndpointCoverage,true);
  const keys=Object.keys(bounds);
