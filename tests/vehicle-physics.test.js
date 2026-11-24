@@ -152,6 +152,41 @@ test('three-axle scrub exposure accumulates symmetric outer-axle geometric trave
  assert.equal(result.model,'rigid-axle-group-kinematic-proxy');
 });
 
+
+test('three-axle scrub exposure reports peak lateral speed separately for each axle',()=>{
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3};
+ let q={x:0,y:0,psi:0,psiT:0};
+ const path=[{...q,gear:1,steer:0.18}];
+ for(let i=0;i<20;i++){
+  q=physics.rk4(q,0.7,0.18,0.1,p);
+  path.push({...q,gear:1,steer:0.18});
+ }
+ const result=physics.trailerAxleScrubExposure(path,p,0.7);
+ assert.equal(result.maxAbsLateralVelocityByAxle.length,3);
+ assert.ok(result.maxAbsLateralVelocityByAxle[0]>0);
+ near(result.maxAbsLateralVelocityByAxle[0],result.maxAbsLateralVelocityByAxle[2],1e-9);
+ near(result.maxAbsLateralVelocityByAxle[1],0,1e-9);
+ near(result.maxAbsLateralVelocity,Math.max(...result.maxAbsLateralVelocityByAxle),1e-12);
+ assert.equal(result.integration,'composite-simpson-4-subintervals');
+});
+
+test('Simpson axle exposure converges on a coarse curved path against a fine reference',()=>{
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3};
+ const makePath=dt=>{
+  let q={x:0,y:0,psi:0,psiT:0};
+  const path=[{...q,gear:1,steer:0.18}];
+  for(let i=0;i<Math.round(3/dt);i++){
+   q=physics.rk4(q,0.7,0.18,dt,p);
+   path.push({...q,gear:1,steer:0.18});
+  }
+  return path;
+ };
+ const coarse=physics.trailerAxleScrubExposure(makePath(0.5),p,0.7);
+ const fine=physics.trailerAxleScrubExposure(makePath(0.01),p,0.7);
+ assert.ok(Math.abs(coarse.totalAbsoluteLateralTravel-fine.totalAbsoluteLateralTravel)<1e-5,
+  'coarse-segment Simpson integration should closely match the fine sampled reference');
+});
+
 test('three-axle scrub exposure rejects malformed route states and invalid speed',()=>{
  const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3};
  assert.throws(()=>physics.trailerAxleScrubExposure([{x:0,y:0,psi:0,psiT:0,gear:0}],p),/Передача/);
