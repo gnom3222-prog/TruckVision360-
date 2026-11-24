@@ -195,10 +195,11 @@ test('simulator explains joint endpoint and one-factor midpoint parameter covera
 test('camera registration atomically applies measured gate pose and enables jamb obstacles',()=>{
  const {elements,windowObject}=bootSimulator();
  const applied=windowObject.TruckVisionApplyGateRegistration({
-  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37
+  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08
  });
  assert.equal(applied,true);
  assert.equal(elements.gateWidth.value,'3.80');
+ assert.equal(elements.gateWidthUncertainty.value,'0.080');
  assert.equal(elements.gateCenterX.value,'14.50');
  assert.equal(elements.gateCenterY.value,'-2.25');
  assert.equal(elements.gateHeadingDeg.value,'37.00');
@@ -218,6 +219,31 @@ test('camera registration rejects invalid gate width without changing current ma
   before
  );
  assert.notEqual(elements.gateEnabled.checked,true);
+});
+
+test('camera registration rejects an uncertainty envelope that collapses the gate opening atomically',()=>{
+ const {elements,windowObject}=bootSimulator();
+ const before=[
+  elements.gateWidth.value,elements.gateWidthUncertainty.value,
+  elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value
+ ];
+ const applied=windowObject.TruckVisionApplyGateRegistration({
+  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:3.8
+ });
+ assert.equal(applied,false);
+ assert.deepEqual([
+  elements.gateWidth.value,elements.gateWidthUncertainty.value,
+  elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value
+ ],before);
+ assert.notEqual(elements.gateEnabled.checked,true);
+});
+
+test('gate map uncertainty settings are forwarded to both jamb polygons',()=>{
+ const root=path.join(__dirname,'..');
+ const source=fs.readFileSync(path.join(root,'truckvision.js'),'utf8');
+ assert.match(source,/widthUncertainty:cfg\.gateWidthUncertainty/);
+ assert.match(source,/positionUncertainty:cfg\.gatePositionUncertainty/);
+ assert.match(source,/headingUncertaintyDeg:cfg\.gateHeadingUncertaintyDeg/);
 });
 
 test('ambiguous planner results preserve candidate states and simulator draws them without enabling playback',()=>{
