@@ -670,18 +670,37 @@ async function buildRoute(){
 
   const m=routeMetrics(plannedRoute,result.minimumClearanceLowerBound,result.sweptClearanceDetail);
   routeAssessment=m;
-  const recommendation=planner.recommendStart(plannedRoute);
+  const startCandidates=[{states:plannedRoute,cost:result.length,label:'основной маршрут'}];
+  if(Array.isArray(result.alternativeRoutes))startCandidates.push(...result.alternativeRoutes);
+  const recommendationComparison=planner.compareStartCandidates(startCandidates,{costTolerance:0.25});
+  const recommendation=recommendationComparison.ok?
+   (recommendationComparison.recommendation||recommendationComparison.bestCandidate.recommendation):
+   planner.recommendStart(plannedRoute);
+  const ambiguousFields=recommendationComparison.ok?recommendationComparison.ambiguousFields:[];
   const firstGear=recommendation.initialGear;
-  const gearText=firstGear<0?'начать задним ходом':'начать движением вперёд';
+  const gearText=ambiguousFields.includes('initialGear')?
+   'передача начала не выбрана: близкие варианты расходятся':
+   firstGear<0?'начать задним ходом':'начать движением вперёд';
   let firstTurnText='первый участок пройти прямо; значимого поворота руля в рассчитанном маршруте не найдено';
-  if(recommendation.firstTurn){
+  if(ambiguousFields.includes('firstTurn')){
+   firstTurnText='сторона первого поворота не выбрана: близкие по стоимости варианты расходятся';
+  }else if(recommendation.firstTurn){
    const side=recommendation.firstTurn==='left'?'повернуть руль влево':'повернуть руль вправо';
    const timing=recommendation.firstTurnDistance<=0.3?'сразу':'примерно через '+recommendation.firstTurnDistance.toFixed(1)+' м';
-   const turnGear=recommendation.firstTurnGear<0?'задним ходом':'вперёд';
+   const turnGear=ambiguousFields.includes('turnGear')?'при неоднозначной передаче':
+    recommendation.firstTurnGear<0?'задним ходом':'вперёд';
    const gearNote=recommendation.firstTurnAfterGearChange?' после переключения на движение '+turnGear:' при движении '+turnGear;
-   const yawSide=recommendation.tractorYawDirection==='left'?'курс тягача начнёт меняться влево':'курс тягача начнёт меняться вправо';
+   const yawSide=ambiguousFields.includes('tractorYawDirection')?'направление изменения курса неоднозначно':
+    recommendation.tractorYawDirection==='left'?'курс тягача начнёт меняться влево':'курс тягача начнёт меняться вправо';
    firstTurnText=side+' '+timing+gearNote+'; '+yawSide;
   }
+  const recommendationNote=recommendationComparison.status==='single-candidate'?
+   ' Альтернативные варианты начала манёвра не сравнивались: планировщик вернул один маршрут.':
+   recommendationComparison.status==='ambiguous'?
+   ' Найдены близкие по стоимости варианты с разными начальными действиями; однозначная рекомендация не выдаётся.':
+   recommendationComparison.status==='preferred'?
+   ' Начальное действие выбрано сравнением переданных вариантов маршрута.':
+   ' Сравнение вариантов начала манёвра недоступно; показано только действие найденного маршрута.';
 
   const peakGearText=m.articulationPeak.gear<0?'задним ходом':'вперёд';
   const articulationPeakText='пик угла сочленения '+m.articulationPeak.maxAngleDegrees.toFixed(1)+
@@ -689,7 +708,7 @@ async function buildRoute(){
    m.articulationPeak.state.x.toFixed(1)+' м, Y '+m.articulationPeak.state.y.toFixed(1)+' м), '+peakGearText;
   $('routeAdvice').textContent=
    'Начало манёвра: '+gearText+'; первое рулевое действие: '+firstTurnText+
-   '. Сторона определяется по первому значимому управляющему углу планировщика (порог 0,08 рад), а не по одному лишь направлению на цель. Маршрут до точки ('+
+   '. Сторона определяется по первому значимому управляющему углу планировщика (порог 0,08 рад), а не по одному лишь направлению на цель.'+recommendationNote+' Маршрут до точки ('+
    gx.toFixed(1)+', '+gy.toFixed(1)+') м; длина '+m.length.toFixed(1)+
    ' м; переключений передачи: '+m.gearChanges+'; изменений руля: '+m.steeringChanges+
    '; задний ход: '+m.reverseDistance.toFixed(1)+' м. Заданный конечный курс '+headingDegrees.toFixed(0)+
