@@ -28,6 +28,9 @@ const cfg={
  gateCenterX:12,
  gateCenterY:0,
  gateHeadingDeg:90,
+ gateWidthUncertainty:0,
+ gatePositionUncertainty:0,
+ gateHeadingUncertaintyDeg:0,
  gatePostWidth:0.25,
  gateDepth:0.6,
  margin:0.2,
@@ -69,7 +72,10 @@ function sceneObstacles(){
    clearWidth:cfg.gateWidth,
    postWidth:cfg.gatePostWidth,
    depth:cfg.gateDepth,
-   heading:cfg.gateHeadingDeg*Math.PI/180
+   heading:cfg.gateHeadingDeg*Math.PI/180,
+   widthUncertainty:cfg.gateWidthUncertainty,
+   positionUncertainty:cfg.gatePositionUncertainty,
+   headingUncertaintyDeg:cfg.gateHeadingUncertaintyDeg
   }));
  }
  return result;
@@ -104,6 +110,9 @@ function readSettings(){
   gateCenterX:[-100,100],
   gateCenterY:[-100,100],
   gateHeadingDeg:[-180,180],
+  gateWidthUncertainty:[0,2],
+  gatePositionUncertainty:[0,2],
+  gateHeadingUncertaintyDeg:[0,45],
   gatePostWidth:[0.05,2],
   gateDepth:[0.05,10],
   margin:[0,5],
@@ -122,6 +131,10 @@ function readSettings(){
   if(!Number.isFinite(value)||value<range[0]||value>range[1]){
    errors.push(key+': допустимый диапазон '+range[0]+'–'+range[1]+'.');
   }
+ }
+ if(Number.isFinite(candidate.gateWidthUncertainty)&&
+    candidate.gateWidthUncertainty>=candidate.gateWidth-0.05){
+  errors.push('gateWidthUncertainty: консервативная ширина проёма должна оставаться больше 0,05 м.');
  }
  const parameterUncertaintyMap={
   wheelbaseUncertainty:'wheelbase',
@@ -1495,9 +1508,13 @@ function applyCameraGateRegistration(registration){
  const centerY=registration&&registration.centerY;
  const clearWidth=registration&&registration.clearWidth;
  const headingDeg=registration&&registration.headingDeg;
- if(![centerX,centerY,clearWidth,headingDeg].every(Number.isFinite)||
+ const widthUncertaintyBound=registration&&registration.widthUncertaintyBound!==undefined?
+  registration.widthUncertaintyBound:0;
+ if(![centerX,centerY,clearWidth,headingDeg,widthUncertaintyBound].every(Number.isFinite)||
     Math.abs(centerX)>100||Math.abs(centerY)>100||
-    clearWidth<1||clearWidth>20||headingDeg<-180||headingDeg>180){
+    clearWidth<1||clearWidth>20||headingDeg<-180||headingDeg>180||
+    widthUncertaintyBound<0||widthUncertaintyBound>2||
+    widthUncertaintyBound>=clearWidth-0.05){
   return false;
  }
  try{
@@ -1505,16 +1522,21 @@ function applyCameraGateRegistration(registration){
    centerX,centerY,clearWidth,
    postWidth:cfg.gatePostWidth,
    depth:cfg.gateDepth,
-   heading:headingDeg*Math.PI/180
+   heading:headingDeg*Math.PI/180,
+   widthUncertainty:widthUncertaintyBound,
+   positionUncertainty:cfg.gatePositionUncertainty,
+   headingUncertaintyDeg:cfg.gateHeadingUncertaintyDeg
   });
  }catch(error){
   return false;
  }
  cfg.gateWidth=clearWidth;
+ cfg.gateWidthUncertainty=widthUncertaintyBound;
  cfg.gateCenterX=centerX;
  cfg.gateCenterY=centerY;
  cfg.gateHeadingDeg=headingDeg;
  $('gateWidth').value=clearWidth.toFixed(2);
+ $('gateWidthUncertainty').value=widthUncertaintyBound.toFixed(3);
  $('gateCenterX').value=centerX.toFixed(2);
  $('gateCenterY').value=centerY.toFixed(2);
  $('gateHeadingDeg').value=headingDeg.toFixed(2);
