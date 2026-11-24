@@ -1390,11 +1390,9 @@ function draw(){
  ctx.lineWidth=4;
  ctx.strokeStyle='#071522';
  ctx.fillStyle='#f3fbff';
- ctx.strokeText('VOLVO FH 4×2',rp.x,rp.y-30);
  ctx.fillText('VOLVO FH 4×2',rp.x,rp.y-30);
  ctx.font='bold 17px system-ui';
  const trailerLabel=toScreen(localPoint(h,state.psiT,-cfg.trailerLength*.48));
- ctx.strokeText('ПОЛУПРИЦЕП · 3 ОСИ',trailerLabel.x,trailerLabel.y);
  ctx.fillText('ПОЛУПРИЦЕП · 3 ОСИ',trailerLabel.x,trailerLabel.y);
  ctx.restore();
 
