@@ -193,3 +193,9 @@ test('three-axle scrub exposure rejects malformed route states and invalid speed
  assert.throws(()=>physics.trailerAxleScrubExposure([{x:0,y:0,psi:0,psiT:0}],p,0),/скорость/);
  assert.throws(()=>physics.trailerAxleScrubExposure([{x:0,y:0,psi:NaN,psiT:0}],p),/некорректные координаты/);
 });
+
+
+test('three-axle scrub exposure rejects an empty route instead of reporting zero exposure',()=>{
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3};
+ assert.throws(()=>physics.trailerAxleScrubExposure([],p),/хотя бы одно состояние/);
+});
