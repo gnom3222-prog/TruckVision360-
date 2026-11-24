@@ -7,13 +7,13 @@ const vm=require('node:vm');
 const physics=require('../vehicle-physics.js');
 const planner=require('../articulated-planner.js');
 
-function bootSimulator(){
+function bootSimulator(options={}){
  const root=path.join(__dirname,'..');
  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
  const source=fs.readFileSync(path.join(root,'truckvision.js'),'utf8');
  const values={};
- for(const match of html.matchAll(/<([a-z][a-z0-9-]*)\b[^>]*\bid="([^"]+)"[^>]*>/gi)){
-  const value=match[1].toLowerCase()==='input'?match[0].match(/\bvalue="([^"]*)"/):null;
+ for(const match of html.matchAll(/<([a-z][a-z0-9-]*)\\b[^>]*\\bid="([^"]+)"[^>]*>/gi)){
+  const value=match[1].toLowerCase()==='input'?match[0].match(/\\bvalue="([^"]*)"/):null;
   values[match[2]]=value?value[1]:'';
  }
  values.model='hybrid';
@@ -24,10 +24,12 @@ function bootSimulator(){
  for(const name of ['beginPath','moveTo','lineTo','setLineDash','stroke','closePath','fill','fillText','arc','clearRect','fillRect']){
   ctx[name]=()=>{if(name==='clearRect')drawCalls++;};
  }
+ const makeElement=(id,value='')=>({
+  id,value,textContent:'',style:{},onclick:null,oninput:null,onchange:null,
+  children:[],appendChild(child){this.children.push(child);return child;}
+ });
  const getElementById=id=>{
-  if(!elements[id]){
-   elements[id]={id,value:values[id]??'',textContent:'',style:{},onclick:null,oninput:null};
-  }
+  if(!elements[id])elements[id]=makeElement(id,values[id]??'');
   return elements[id];
  };
  for(const id of Object.keys(values))getElementById(id);
@@ -38,10 +40,25 @@ function bootSimulator(){
  const windowObject={TruckVisionPhysics:physics,TruckVisionPlanner:planner,addEventListener:()=>{}};
  const sandbox={
   window:windowObject,
-  document:{getElementById},
+  document:{getElementById,createElement:tag=>makeElement(tag,'')},
   requestAnimationFrame:callback=>frames.push(callback),
+  setTimeout:()=>1,
+  clearTimeout:()=>{},
   console
  };
+ if(options.workerResult){
+  sandbox.Worker=class TestWorker{
+   constructor(url){this.url=url;this.terminated=false;}
+   postMessage(message){
+    Promise.resolve().then(()=>{
+     if(!this.terminated&&typeof this.onmessage==='function'){
+      this.onmessage({data:{id:message.id,type:'result',result:options.workerResult}});
+     }
+    });
+   }
+   terminate(){this.terminated=true;}
+  };
+ }
  vm.runInNewContext(source,sandbox,{filename:'truckvision.js'});
  return {elements,frames,windowObject,get drawCalls(){return drawCalls;}};
 }
