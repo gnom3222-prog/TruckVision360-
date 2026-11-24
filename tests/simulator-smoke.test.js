@@ -77,6 +77,18 @@ test('simulator starts and exposes route controls',()=>{
  assert.equal(typeof elements.routeStop.onclick,'function');
 });
 
+test('simulator exposes measured gate geometry and invalidates a route when gate obstacles are enabled',()=>{
+ const {elements}=bootSimulator();
+ assert.equal(elements.gateEnabled.checked,undefined);
+ assert.equal(elements.gateCenterX.value,'12');
+ assert.equal(elements.gateCenterY.value,'0');
+ assert.equal(elements.gateHeadingDeg.value,'90');
+ assert.equal(typeof elements.gateEnabled.onchange,'function');
+ elements.gateEnabled.checked=true;
+ elements.gateEnabled.onchange();
+ assert.match(elements.routeAdvice.textContent,/Параметры модели изменены/);
+});
+
 test('automatic route remains blocked when obstacle checks are disabled',()=>{
  const {elements}=bootSimulator();
  elements.obstaclesToggle.onclick();
