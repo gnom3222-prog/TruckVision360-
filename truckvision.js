@@ -467,6 +467,21 @@ function sweptClearanceColor(pathIndex,polygons,obstaclePolygons){
  return 'rgba(52,190,160,0.34)';
 }
 
+function clearanceForVehicleParts(q=state){
+ const bodies=physics.vehiclePolygons(q,{...cfg,footprintUncertainty:cfg.vehicleFootprintUncertainty});
+ const obstacles=showObstacles?sceneObstacles().map(o=>({name:o.name,polygon:obstaclePolygon(o)})):[];
+ return bodies.map((body,index)=>{
+  let nearest={distance:Infinity,name:'нет препятствий'};
+  for(const obstacle of obstacles){
+   const distance=polygonDistance(body,obstacle.polygon);
+   if(distance<nearest.distance)nearest={distance,name:obstacle.name};
+  }
+  const effective=nearest.distance-2*Math.max(0,cfg.measurementUncertainty);
+  const color=!showObstacles?'#8ba5b8':effective<0.45?'#ff6262':effective<1?'#ffc45f':'#42d6a0';
+  return{index,distance:nearest.distance,effective,name:nearest.name,color};
+ });
+}
+
 function drawSweptCorridor(path,kind){
  if(!Array.isArray(path)||path.length<2)return;
  const stride=Math.max(1,Math.ceil(path.length/240));
@@ -1404,16 +1419,25 @@ function draw(){
  ctx.fillStyle='#fff';
  ctx.fill();
 
+ const partClearances=clearanceForVehicleParts(state);
+ physics.vehiclePolygons(state,{...cfg,footprintUncertainty:cfg.vehicleFootprintUncertainty})
+  .forEach((poly,index)=>drawEnvelopePolygon(poly,partClearances[index]?.color||'#8ba5b8'));
  ctx.save();
- ctx.font='bold 20px system-ui';
  ctx.textAlign='center';
- ctx.lineWidth=4;
- ctx.strokeStyle='#071522';
+ ctx.font='bold 16px system-ui';
  ctx.fillStyle='#f3fbff';
- ctx.fillText('VOLVO FH 4×2',rp.x,rp.y-30);
- ctx.font='bold 17px system-ui';
+ ctx.fillText('VOLVO FH 4×2',rp.x+20,rp.y-27);
+ ctx.font='bold 14px system-ui';
  const trailerLabel=toScreen(localPoint(h,state.psiT,-cfg.trailerLength*.48));
- ctx.fillText('ПОЛУПРИЦЕП · 3 ОСИ',trailerLabel.x,trailerLabel.y);
+ ctx.fillStyle='#f3fbff';
+ ctx.fillText('ПОЛУПРИЦЕП · 3 ОСИ',trailerLabel.x,trailerLabel.y+24);
+ ctx.restore();
+ const mapAlert=partClearances.reduce((best,item)=>item.effective<best.effective?item:best,partClearances[0]||{effective:Infinity,name:'нет данных'});
+ ctx.save();
+ ctx.font='bold 15px system-ui';
+ ctx.fillStyle=mapAlert.effective<0.45?'#ff7777':mapAlert.effective<1?'#ffd078':'#83e5bb';
+ const clearanceLabel=Number.isFinite(mapAlert.distance)?mapAlert.distance.toFixed(2)+' м · '+mapAlert.name:'Зазор не рассчитан';
+ ctx.fillText(showObstacles?'МИН. ЗАЗОР: '+clearanceLabel:'ПРЕПЯТСТВИЯ НЕ ПРОВЕРЯЮТСЯ',18,28);
  ctx.restore();
 
  updateReadouts();
@@ -1455,6 +1479,9 @@ function updateReadouts(){
  if(cockpitClearance){
   const assessment=assessScene();
   cockpitClearance.textContent=Number.isFinite(assessment.nearest.distance)?assessment.nearest.distance.toFixed(2)+' м':'—';
+  cockpitClearance.style.color=!showObstacles?'#9bb2c3':assessment.collision?'#ff6262':assessment.nearest.distance-2*Math.max(0,cfg.measurementUncertainty)<0.45?'#ff6262':assessment.nearest.distance-2*Math.max(0,cfg.measurementUncertainty)<1?'#ffc45f':'#42d6a0';
+  const nearestLabel=$('cockpitNearest');
+  if(nearestLabel)nearestLabel.textContent=showObstacles&&Number.isFinite(assessment.nearest.distance)?assessment.nearest.name+' · '+(assessment.nearest.vehiclePart||'автопоезд'):'Проверка препятствий отключена';
  }
  const cockpitStatus=$('cockpitStatus');
  if(cockpitStatus)cockpitStatus.textContent=perceptionFrameTimestamp?'Датчики передали '+perceptionObstacles.length+' объектов':'Система готова · демонстрационный режим';
