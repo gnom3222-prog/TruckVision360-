@@ -1382,6 +1382,23 @@ function updateReadouts(){
   lateral>gripLimit?'Предел превышен':'В пределах заданного μ';
  $('distanceOut').textContent=distance.toFixed(1)+' м';
  $('axleScrubOut').textContent=axleDiagnostics.maxAbsLateralVelocity.toFixed(3)+' м/с';
+ const cockpitValues={
+  cockpitSpeed:Math.abs(speed).toFixed(1)+' м/с',
+  cockpitSpeedLarge:Math.abs(speed).toFixed(1)+' м/с',
+  cockpitBeta:(beta*180/Math.PI).toFixed(1)+'°',
+  cockpitBetaLarge:(beta*180/Math.PI).toFixed(1)+'°',
+  cockpitSteer:(steer*180/Math.PI).toFixed(0)+'°'
+ };
+ Object.entries(cockpitValues).forEach(([id,value])=>{const el=$(id);if(el)el.textContent=value;});
+ const cockpitClearance=$('cockpitClearance');
+ if(cockpitClearance){
+  const assessment=assessScene();
+  cockpitClearance.textContent=Number.isFinite(assessment.nearest.distance)?assessment.nearest.distance.toFixed(2)+' м':'—';
+ }
+ const cockpitStatus=$('cockpitStatus');
+ if(cockpitStatus)cockpitStatus.textContent=perceptionFrameTimestamp?'Датчики передали '+perceptionObstacles.length+' объектов':'Система готова · демонстрационный режим';
+ const cockpitDifficulty=$('cockpitDifficulty');
+ if(cockpitDifficulty)cockpitDifficulty.textContent=$('recommendationLevel')?.textContent||'Не рассчитана';
 
  $('mode').textContent=braking?'Торможение':
   drive>0?'Движение вперёд':
