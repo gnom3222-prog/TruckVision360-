@@ -633,11 +633,13 @@ async function buildRoute(){
    alternativeMaxExpansions:mobile?2200:4500,
    costTolerance:0.25,
    minClearance:0.65,
+   measurementUncertainty:cfg.measurementUncertainty,
    bounds:{minX:-20,maxX:42,minY:-20,maxY:20}
   },progress=>{
    if(token!==routeBuildToken)return;
-   const candidateText=progress.candidateIndex?'Кандидат '+progress.candidateIndex+'/'+progress.candidateCount+'; суммарно проверено ':'Проверено ';
-   $('routeAdvice').textContent='Рассчитываю варианты траектории… '+candidateText+progress.expanded+
+   const scenarioText=progress.scenario==='reserve'?'Повторный поиск с резервом неопределённости: ':'Базовый поиск: ';
+   const candidateText=progress.candidateIndex?'кандидат '+progress.candidateIndex+'/'+progress.candidateCount+'; суммарно проверено ':'проверено ';
+   $('routeAdvice').textContent='Рассчитываю варианты траектории… '+scenarioText+candidateText+progress.expanded+
     ' из '+progress.maxExpansions+' состояний; до цели '+
     progress.goalDistance.toFixed(1)+' м; ошибка курса '+
     (Number.isFinite(progress.headingError)?(progress.headingError*180/Math.PI).toFixed(1)+'°':'не задана')+
@@ -653,6 +655,42 @@ async function buildRoute(){
    return;
   }
 
+
+  if(result.reason==='uncertainty-sensitive-start'){
+   if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: рекомендация меняется при учёте погрешности измерений.');
+   plannedRoute=[];
+   routeAssessment=null;
+   const sensitivity=result.sensitivity||{};
+   const describeAction=action=>{
+    if(!action)return 'не выбрано';
+    const gear=action.initialGear<0?'назад':'вперёд';
+    const turn=action.firstTurn==='left'?'руль влево':
+     action.firstTurn==='right'?'руль вправо':'без значимого поворота руля';
+    return gear+', '+turn;
+   };
+   $('routeAdvice').textContent='Рекомендация чувствительна к погрешности: базовый поиск ('+
+    Number(sensitivity.nominalRequiredClearance||0).toFixed(2)+' м требуемого зазора) дал '+describeAction(sensitivity.comparison?.nominalAction)+
+    ', а повторный поиск с резервом '+Number(sensitivity.measurementUncertainty||0).toFixed(2)+
+    ' м на каждую сторону ('+Number(sensitivity.reserveRequiredClearance||0).toFixed(2)+
+    ' м требуемого зазора) дал '+describeAction(sensitivity.comparison?.reserveAction)+
+    '. Однозначная сторона и передача не выбраны.';
+   $('difficultyAdvice').textContent='Маршрут не показывается как рекомендация и виртуальный автопроезд не запускается: небольшое изменение требуемого зазора меняет начальное действие. Уточните размеры ворот и препятствий, проверьте их рулеткой и повторите расчёт. Это проверка резерва зазора, а не полный анализ распределения ошибок камеры и геометрии автомобиля.';
+   draw();
+   return;
+  }
+  if(result.reason==='uncertainty-no-route'){
+   if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: маршрут не подтверждён с резервом неопределённости.');
+   plannedRoute=[];
+   routeAssessment=null;
+   const sensitivity=result.sensitivity||{};
+   $('routeAdvice').textContent='В базовом сценарии маршрут-кандидат найден, но повторный поиск с резервом '+
+    Number(sensitivity.measurementUncertainty||0).toFixed(2)+' м на каждую сторону потребовал зазор '+
+    Number(sensitivity.reserveRequiredClearance||result.requiredClearance||0).toFixed(2)+
+    ' м и не нашёл допустимого пути. Маршрут не выбран.';
+   $('difficultyAdvice').textContent='Сложность и рекомендация не подтверждены с учётом заданной погрешности. Увеличивать допуски или уменьшать резерв только ради получения маршрута нельзя считать подтверждением безопасности.';
+   draw();
+   return;
+  }
   if(result.reason==='ambiguous-start'){
    if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: начальные варианты манёвра неоднозначны.');
    plannedRoute=[];
@@ -664,7 +702,8 @@ async function buildRoute(){
     return candidate.label+': '+gear+', '+turn+', эвристический балл '+candidate.cost.toFixed(2);
    }).join('; ');
    $('routeAdvice').textContent='Найдено несколько близких по эвристической стоимости вариантов с разными начальными действиями. Однозначная сторона и передача не выбраны. '+alternatives+'. Балл объединяет длину пути, переключения, пиковый угол и запас зазора; это не вероятность безопасности и не доказательство глобального оптимума.';
-   $('difficultyAdvice').textContent='Сложность не присвоена одному маршруту: варианты требуют разных начальных действий. Сравните геометрию площадки и повторите расчёт с уточнёнными измерениями. Виртуальный автопроезд не запускается.';
+   const reserveNote=result.sensitivity?.status==='reserve-ambiguous'?' Повторный поиск с резервом неопределённости также дал неоднозначные варианты.':'';
+   $('difficultyAdvice').textContent='Сложность не присвоена одному маршруту: варианты требуют разных начальных действий. Сравните геометрию площадки и повторите расчёт с уточнёнными измерениями. Виртуальный автопроезд не запускается.'+reserveNote;
    draw();
    return;
   }
@@ -717,6 +756,13 @@ async function buildRoute(){
    recommendationComparison.status==='preferred'?
    ' Выбран меньший эвристический балл среди '+(result.candidatesFound||1)+' найденных стартовых вариантов из '+(result.candidatesAttempted||1)+'; это ограниченное сравнение, не доказательство глобального оптимума.':
    ' Показано начальное действие найденного маршрута без подтверждённого сравнения альтернатив.';
+  const sensitivity=result.sensitivity||{};
+  const sensitivityNote=sensitivity.status==='stable-start-action'?
+   ' При повторном поиске с дополнительным резервом '+sensitivity.measurementUncertainty.toFixed(2)+
+   ' м на каждую сторону (требуемый зазор '+sensitivity.nominalRequiredClearance.toFixed(2)+' → '+
+   sensitivity.reserveRequiredClearance.toFixed(2)+' м) начальное действие совпало среди найденных кандидатов.'+
+   (sensitivity.candidateCoverageChanged?' Число найденных кандидатов при этом изменилось; сравнение остаётся ограниченным.':''):
+   sensitivity.status==='zero-reserve'?' Дополнительный резерв неопределённости равен нулю; повторный поиск не выполнялся.':'';
 
   const peakGearText=m.articulationPeak.gear<0?'задним ходом':'вперёд';
   const articulationPeakText='пик угла сочленения '+m.articulationPeak.maxAngleDegrees.toFixed(1)+
@@ -724,7 +770,7 @@ async function buildRoute(){
    m.articulationPeak.state.x.toFixed(1)+' м, Y '+m.articulationPeak.state.y.toFixed(1)+' м), '+peakGearText;
   $('routeAdvice').textContent=
    'Начало манёвра: '+gearText+'; первое рулевое действие: '+firstTurnText+
-   '. Сторона определяется по первому значимому управляющему углу планировщика (порог 0,08 рад), а не по одному лишь направлению на цель.'+recommendationNote+' Маршрут до точки ('+
+   '. Сторона определяется по первому значимому управляющему углу планировщика (порог 0,08 рад), а не по одному лишь направлению на цель.'+recommendationNote+sensitivityNote+' Маршрут до точки ('+
    gx.toFixed(1)+', '+gy.toFixed(1)+') м; длина '+m.length.toFixed(1)+
    ' м; переключений передачи: '+m.gearChanges+'; изменений руля: '+m.steeringChanges+
    '; задний ход: '+m.reverseDistance.toFixed(1)+' м. Заданный конечный курс '+headingDegrees.toFixed(0)+
@@ -749,6 +795,7 @@ async function buildRoute(){
    '; нижняя оценка между узлами '+(Number.isFinite(m.clearanceLowerBound)?m.clearanceLowerBound.toFixed(2)+' м':'не ограничена')+
    ' на '+sweptLocationText+' (общая оценка движения контура; точная часть в середине сегмента не атрибутируется)'+
    '; после резерва погрешности: '+(Number.isFinite(m.effectiveClearance)?m.effectiveClearance.toFixed(2)+' м':'не определено')+
+   '; устойчивость стартового действия: '+(sensitivity.status==='stable-start-action'?'сохранилось при повторном поиске с увеличенным требуемым зазором':sensitivity.status==='zero-reserve'?'не проверялась из-за нулевого резерва':'не подтверждена')+
    '; столкновение: '+(m.collision?'да':'не выявлено')+
    '. Курс у цели проверен относительно заданного угла и допуска; учебный расчёт, не гарантия безопасности.';
   draw();
