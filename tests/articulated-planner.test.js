@@ -1007,6 +1007,7 @@ test('gate uncertainty compares nominal and joint width-centre-heading envelopes
   obstacles:planner.createGateObstacles(gateGeometry),
   gateGeometry,
   alternativeMaxExpansions:3500,
+  costTolerance:0.001,
   positionTolerance:0.9,
   maxTerminalArticulation:12*Math.PI/180,minClearance:0.3,
   measurementUncertainty:0,
