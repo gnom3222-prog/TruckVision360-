@@ -23,6 +23,24 @@ header p{margin:0;color:var(--muted);font-size:13px}
 .app-nav button[aria-current="page"]{background:#087fa5;border-color:#35c8ef;color:#fff;box-shadow:0 0 0 1px rgba(53,200,239,.18) inset}
 main.single-view{grid-template-columns:minmax(0,1fr)}
 .tab-page{display:none}
+#maneuverSection{padding:clamp(12px,2vw,22px);background:linear-gradient(145deg,#142d43,#0d1e30);border-color:#31516b}
+.maneuver-topline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.maneuver-topline h2{font-size:clamp(18px,2.5vw,25px);margin:0}
+.maneuver-subtitle{font-size:12px;color:var(--muted);margin-top:3px}
+.maneuver-status{padding:7px 11px;border:1px solid #2f755d;border-radius:999px;background:#12382f;color:#9ce4bd;font-size:12px;font-weight:700;white-space:nowrap}
+.maneuver-view{padding:8px;background:#071522;border:1px solid #31516b;border-radius:15px;box-shadow:0 12px 32px #02091455}
+.maneuver-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.maneuver-controls button{min-height:44px}
+.maneuver-hint{margin:12px 0 0;padding:12px;border:1px solid #28708a;border-radius:12px;background:#0b293b}
+.maneuver-hint strong{display:block;color:var(--cyan);margin-bottom:4px}
+@media(orientation:landscape) and (max-height:600px) and (max-width:1000px){
+ #maneuverSection{padding:10px}
+ .maneuver-topline{margin-bottom:7px}
+ .maneuver-view{padding:5px}
+ #maneuverSection canvas{max-height:54vh;object-fit:contain}
+ .maneuver-controls{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:6px}
+ .maneuver-controls button{min-height:38px;padding:7px 4px}
+}
 .tab-page.active{display:block}
 [id]{scroll-margin-top:76px}
 @media(max-width:600px){header{padding:12px 10px 7px}h1{font-size:19px}.app-nav{padding:7px 8px;gap:6px}.app-nav button{min-width:0;padding:9px 11px;font-size:12px}}
@@ -94,22 +112,23 @@ canvas{max-width:100%}
 
 <main>
 <section class="panel tab-page active" id="maneuverSection">
-<div class="row"><b>Вид сверху · автопоезд</b><span id="mode" class="status">Остановлен</span></div>
-<canvas id="view" width="1000" height="650" aria-label="Вид сверху на автопоезд"></canvas>
-<div class="row" style="margin-top:8px">
-<button id="left">↶ Руль влево</button>
-<button id="straight">Прямо</button>
-<button id="right">Руль вправо ↷</button>
+<div class="maneuver-topline">
+ <div><h2>Манёвр</h2><div class="maneuver-subtitle">Контроль автопоезда · вид сверху</div></div>
+ <span id="mode" class="maneuver-status">Остановлен</span>
 </div>
-<div class="row" style="margin-top:7px">
-<button class="primary" id="forward">▲ Вперёд</button>
-<button class="stop" id="brake">■ Тормоз</button>
-<button class="primary" id="reverse">▼ Назад</button>
+<div class="maneuver-view">
+ <canvas id="view" width="1000" height="650" aria-label="Вид сверху на автопоезд"></canvas>
 </div>
-<div class="row" style="margin-top:7px">
-<button id="reset">↺ Сброс</button>
-<button id="trace">Траектория: вкл.</button>
-<button id="center">Центрировать</button>
+<div class="maneuver-controls">
+ <button id="left">↶ Руль влево</button>
+ <button id="straight">Прямо</button>
+ <button id="right">Руль вправо ↷</button>
+ <button class="primary" id="forward">▲ Вперёд</button>
+ <button class="stop" id="brake">■ Тормоз</button>
+ <button class="primary" id="reverse">▼ Назад</button>
+ <button id="reset">↺ Сброс</button>
+ <button id="trace">Траектория: вкл.</button>
+ <button id="center">Центрировать</button>
 </div>
 <p class="small">Удерживай кнопку движения. Клавиатура: ←/→ — руль, ↑/↓ — движение, пробел — тормоз.</p>
 <div class="row" id="environmentSection" style="margin-top:7px">
@@ -118,8 +137,8 @@ canvas{max-width:100%}
 <button id="scenarioReset">Сбросить площадку</button>
 </div>
 <div class="obstacle-legend">Сплошные фигуры — номинальные размеры. Оранжевый пунктир — расширенная оболочка, которую учитывает планировщик: положение препятствий ±0,05 м по каждой оси, полный размер ±0,02 м; контуры автопоезда расширяются на 0,03 м с каждой грани. Это граница расчётного допуска, а не дополнительный физический объект.</div>
-<div class="assistant-box" aria-live="polite">
-<strong>🤖 Помощник TruckVision 360</strong>
+<div class="maneuver-hint" aria-live="polite">
+<strong>🤖 Подсказка TruckVision 360</strong>
 <p id="assistantAdvice">Система готова. Выберите манёвр и двигайтесь медленно, наблюдая за зазорами.</p>
 </div>
 </section>
