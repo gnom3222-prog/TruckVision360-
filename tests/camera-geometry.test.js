@@ -191,3 +191,53 @@ test('camera gate map registration rejects missing or invalid manual map pose',(
  assert.throws(()=>camera.registerGateOnMap(measurement,{x:0,y:0},Infinity));
  assert.throws(()=>camera.registerGateOnMap({...measurement,points:[]},{x:0,y:0},0));
 });
+
+
+const rectangularReference=[
+ {x:0,y:0},{x:100,y:0},{x:100,y:50},{x:0,y:50}
+];
+
+test('camera measurement reports rectangularity diagnostics for a consistent gate opening',()=>{
+ const result=camera.measureQuad(
+  rectangularReference,4,2,
+  [{x:20,y:10},{x:80,y:10},{x:80,y:40},{x:20,y:40}]
+ );
+ assert.equal(result.shapeWarning,false);
+ assert.equal(result.shapeDiagnostics.warning,false);
+ near(result.shapeDiagnostics.widthSpreadRatio,0);
+ near(result.shapeDiagnostics.heightSpreadRatio,0);
+ near(result.shapeDiagnostics.maxOrthogonalityErrorDeg,0);
+ near(result.shapeDiagnostics.diagonalSpreadRatio,0);
+});
+
+test('camera measurement flags a trapezoidal or skewed opening instead of silently averaging its edges',()=>{
+ const result=camera.measureQuad(
+  rectangularReference,4,2,
+  [{x:20,y:10},{x:90,y:12},{x:80,y:40},{x:20,y:40}]
+ );
+ assert.equal(result.shapeWarning,true);
+ assert.ok(
+  result.shapeDiagnostics.widthSpreadRatio>camera.MAX_QUAD_EDGE_SPREAD_RATIO||
+  result.shapeDiagnostics.heightSpreadRatio>camera.MAX_QUAD_EDGE_SPREAD_RATIO||
+  result.shapeDiagnostics.maxOrthogonalityErrorDeg>camera.MAX_QUAD_ANGLE_ERROR_DEG
+ );
+});
+
+test('map registration rejects a non-rectangular measured gate and inconsistent reported width',()=>{
+ const skewed=camera.measureQuad(
+  rectangularReference,4,2,
+  [{x:20,y:10},{x:90,y:12},{x:80,y:40},{x:20,y:40}]
+ );
+ assert.throws(
+  ()=>camera.registerGateOnMap(skewed,{x:12,y:0},Math.PI/2),
+  /Форма измеренного проёма/
+ );
+ const rectangular=camera.measureQuad(
+  rectangularReference,4,2,
+  [{x:20,y:10},{x:80,y:10},{x:80,y:40},{x:20,y:40}]
+ );
+ assert.throws(
+  ()=>camera.registerGateOnMap({...rectangular,width:rectangular.width+0.2},{x:12,y:0},Math.PI/2),
+  /не совпадает с шириной/
+ );
+});
