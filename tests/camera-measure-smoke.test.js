@@ -28,7 +28,7 @@ function bootCamera(options={}){
  }
  let permissionRequests=0,trackStops=0;
  const win={
-  TruckVisionCameraGeometry:geometry,
+  TruckVisionCameraGeometry:options.geometry||geometry,
   addEventListener(type,fn){(windowListeners[type]??=[]).push(fn);}
  };
  const sandbox={
@@ -109,4 +109,25 @@ test('failed projective measurement keeps the previous gate width and explains t
  assert.equal(camera.elements.gateWidth.value,'3.50');
  assert.match(camera.elements.cameraStatus.textContent,/пересекает линию вырождения/);
  assert.match(camera.elements.cameraStatus.textContent,/Ширина ворот не обновлена/);
+});
+
+test('poorly conditioned camera calibration never overwrites the previous gate width',async()=>{
+ const warningGeometry={
+  ...geometry,
+  estimateUncertainty:options=>({
+   ...geometry.estimateUncertainty(options),
+   conditioningWarning:true,
+   conditionEstimate:2e5
+  })
+ };
+ const camera=bootCamera({geometry:warningGeometry});
+ await camera.fire('cameraStart','click');
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
+ assert.equal(camera.elements.gateWidth.value,'3.50');
+ assert.match(camera.elements.cameraStatus.textContent,/Калибровка плохо обусловлена/);
+ assert.match(camera.elements.gateResult.textContent,/не передан в настройки ворот/);
+ camera.fire('cameraStop','click');
 });
