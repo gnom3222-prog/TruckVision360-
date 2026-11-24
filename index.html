@@ -172,10 +172,19 @@ canvas{max-width:100%}
 
 <div class="section">Ворота</div>
 <div class="grid">
-<div><label for="gateWidth">Ширина проёма, м</label><input id="gateWidth" type="number" value="3.50" step="0.05"></div>
+<div><label for="gateWidth">Чистая ширина проёма между внутренними гранями косяков, м</label><input id="gateWidth" type="number" value="3.50" step="0.05"></div>
 <div><label for="margin">Запас с каждой стороны, м</label><input id="margin" type="number" value="0.20" step="0.05"></div>
 <div><label for="measurementUncertainty">Доп. резерв зазора с каждой стороны, м</label><input id="measurementUncertainty" type="number" min="0" max="2" value="0.15" step="0.05"></div>
 </div>
+<label for="gateEnabled"><input id="gateEnabled" type="checkbox"> Учитывать косяки ворот как реальные препятствия на карте маршрута</label>
+<div class="grid">
+<div><label for="gateCenterX">Центр проёма X на карте, м</label><input id="gateCenterX" type="number" value="12" step="0.1"></div>
+<div><label for="gateCenterY">Центр проёма Y на карте, м</label><input id="gateCenterY" type="number" value="0" step="0.1"></div>
+<div><label for="gateHeadingDeg">Направление линии ворот от оси +X, °</label><input id="gateHeadingDeg" type="number" min="-180" max="180" value="90" step="1"></div>
+<div><label for="gatePostWidth">Толщина каждого косяка вдоль проёма, м</label><input id="gatePostWidth" type="number" min="0.05" max="2" value="0.25" step="0.05"></div>
+<div><label for="gateDepth">Глубина косяка поперёк проёма, м</label><input id="gateDepth" type="number" min="0.05" max="10" value="0.6" step="0.05"></div>
+</div>
+<p class="small">Курс задаёт направление линии между косяками, а глубина направлена перпендикулярно ей. Камера может измерить чистую ширину, но положение центра и курс ворот на карте задаются вручную: автоматическая привязка изображения к мировой системе координат пока не реализована. Переключатель по умолчанию выключен, чтобы не считать условное положение ворот измеренным.</p>
 <div class="section">Границы геометрической неопределённости</div>
 <div class="grid">
 <div><label for="obstaclePositionUncertainty">Погрешность положения препятствий ±, м</label><input id="obstaclePositionUncertainty" type="number" min="0" max="1" value="0.05" step="0.01"></div>
@@ -230,7 +239,7 @@ canvas{max-width:100%}
 <p class="small camera-warning">Это измерение плоской поверхности с ручным выбором точек и математической коррекцией перспективы, а не LiDAR-сканирование. Приложение показывает локальную оценку чувствительности к отметке углов и введённой погрешности размера эталона (1σ) при предположении независимых ошибок. Она не учитывает полностью линзовые искажения, несовпадение плоскостей, движение камеры, размытие и неровность поверхности. Эталон должен лежать в той же плоскости, что и измеряемые ворота; телефон нельзя перемещать между калибровкой и измерением. Сравните результат с рулеткой и вручную задайте консервативный резерв неопределённости в разделе «Ворота»: оценка камеры автоматически в этот резерв не подставляется. Результат не подтверждает безопасность проезда.</p>
 </div>
 
-<div id="gateResult" class="notice">Задай ширину ворот и нажми «Оценить проём». Сейчас это только сравнение ширины, а не проверка всей траектории.</div>
+<div id="gateResult" class="notice">Задай ширину ворот и нажми «Оценить проём». Ширина оценивается отдельно; после включения косяков построение маршрута проверяет оба препятствия вместе с контурами всего автопоезда.</div>
 <div class="notice">
 <strong>Ограничения модели.</strong> Здесь реализованы кинематическое движение сочленённого автопоезда и упрощённая продольная динамика. Нет полной динамики шин, подвески, переноса нагрузки, крена, реальных характеристик двигателя и пневматических тормозов ABS/EBS. Значения по умолчанию предварительные, а не спецификация конкретного VIN. Препятствия и помощник работают по условной тестовой карте и упрощённой геометрии. Это учебный симулятор, не датчики и не система предотвращения столкновений; программа не предназначена для управления реальным грузовиком или подтверждения безопасности манёвра.
 </div>
@@ -238,8 +247,8 @@ canvas{max-width:100%}
 </main>
 
 <script src="vehicle-physics.js?v=20261124-6"></script>
-<script src="articulated-planner.js?v=20261124-12"></script>
-<script src="truckvision.js?v=20261124-17"></script>
+<script src="articulated-planner.js?v=20261124-13"></script>
+<script src="truckvision.js?v=20261124-18"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261124-10"></script>
 <script src="camera-measure.js?v=20261124-10"></script>
