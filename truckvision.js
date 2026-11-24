@@ -750,22 +750,33 @@ if(result.reason==='geometry-sensitive-start'||result.reason==='geometry-envelop
 }
 
 if(result.reason==='parameter-sensitive-start'||result.reason==='parameter-scenario-unavailable'){
- if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: неопределённость физических размеров не подтверждает начальное действие.');
+ if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: совместная неопределённость физических размеров не подтверждает начальное действие.');
  plannedRoute=[];
  routeAssessment=null;
  const sensitivity=result.parameterSensitivity||{};
+ const scenarioName=sensitivity.failedScenario||'совместная комбинация параметров';
+ const values=(sensitivity.failedParameters||[]).map(item=>
+  item.key+'='+Number(item.value).toFixed(3)+' м ('+item.side+')'
+ ).join('; ');
+ const coverageText=sensitivity.coverage==='pairwise-endpoint-covering-array'?
+  'Проверено парное покрытие крайних значений для каждой пары активных параметров; все совместные комбинации четырёх/пяти параметров и промежуточные значения не проверялись.':
+  sensitivity.coverage==='full-endpoint-combinations'?
+  'Проверены все сочетания нижних и верхних границ активных параметров (до трёх параметров); промежуточные значения не проверялись.':
+  'Покрытие неопределённости физических размеров не подтверждено.';
  if(result.reason==='parameter-sensitive-start'){
-  $('routeAdvice').textContent='Начальное действие меняется при изменении физического параметра «'+
-   (sensitivity.failedParameter||'автопоезд')+'» до '+Number(sensitivity.failedValue).toFixed(3)+
-   ' м. Сторона и передача не выбраны; изменились поля: '+(sensitivity.changedFields||[]).join(', ')+'.';
-  $('difficultyAdvice').textContent='Рекомендация чувствительна к заданному диапазону размеров автопоезда. Проверьте колёсную базу, положение седла, расстояние от шкворня до тележки и габариты полуприцепа по документам или измерениям. Виртуальный автопроезд заблокирован.';
+  $('routeAdvice').textContent='Начальное действие меняется в сценарии «'+scenarioName+'»'+
+   (values?': '+values:'')+'. Изменились поля: '+(sensitivity.changedFields||[]).join(', ')+
+   '. Сторона и передача не выбраны; виртуальный автопроезд заблокирован.';
+  $('difficultyAdvice').textContent='Рекомендация зависит от совместного изменения физических размеров тягача/полуприцепа. Уточните геометрию по документам и контрольным измерениям, затем повторите расчёт.';
  }else{
-  $('routeAdvice').textContent='Для крайнего сценария «'+(sensitivity.failedScenario||'неизвестный параметр')+
-   '» планировщик не подтвердил маршрут. Причина: '+(sensitivity.failureReason||'нет результата')+
-   '. Это не доказывает невозможность других траекторий; однозначная рекомендация не выдаётся.';
-  $('difficultyAdvice').textContent='Проверка диапазона физических параметров не завершена для всех сценариев. Уточните размеры и повторите расчёт; не считайте номинальный маршрут устойчивым.';
+  const validation=(sensitivity.validationErrors||[]).join(' ');
+  $('routeAdvice').textContent='Для сценария «'+scenarioName+'»'+
+   (values?' ('+values+')':'')+' планировщик не подтвердил допустимую геометрию или маршрут. Причина: '+
+   (validation||sensitivity.failureReason||'нет результата')+
+   '. Это не доказывает невозможность других траекторий; рекомендация не выдаётся.';
+  $('difficultyAdvice').textContent='Проверка диапазона физических параметров не завершена для всех сценариев. Уточните совместимость размеров по документации/измерениям и повторите расчёт; номинальный маршрут не считается устойчивым.';
  }
- $('difficultyAdvice').textContent+=' Проверены только крайние значения каждого параметра по одному за раз; совместные комбинации погрешностей не перебирались.';
+ $('difficultyAdvice').textContent+=' '+coverageText;
  draw();
  return;
 }
