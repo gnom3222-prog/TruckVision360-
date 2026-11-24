@@ -67,6 +67,14 @@ input[type=number],select{width:100%;background:#0e2031;color:#fff;border:1px so
 .assistant-box{margin-top:10px;padding:11px;border:1px solid #36718a;border-radius:10px;background:#0d2638}
 .assistant-box strong{display:block;color:var(--cyan);margin-bottom:5px}
 .assistant-box p{margin:0;line-height:1.45}.obstacle-legend{font-size:11px;color:var(--muted);margin-top:6px}
+.recommendation-card{margin-top:10px;padding:12px;border:1px solid #3c7890;border-radius:11px;background:linear-gradient(135deg,#102b40,#0c2032);font-size:13px;line-height:1.45}
+.recommendation-title{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--cyan);font-weight:800;margin-bottom:7px}
+#recommendationStatus{font-size:10px;color:var(--muted);font-weight:650;text-align:right}
+.recommendation-card p{margin:5px 0}
+.recommendation-card p b{color:#c6d8e8}
+#recommendationLevel{color:#ffd18b;font-weight:800}
+#recommendationStart,#recommendationTurn{color:#fff;font-weight:700}
+
 @media(max-width:800px){main{grid-template-columns:minmax(0,1fr)}header{padding-top:12px}}
 /* Keep the simulator inside narrow phone viewports. */
 html,body{max-width:100%;overflow-x:hidden}
@@ -170,6 +178,14 @@ canvas{max-width:100%}
 <p class="small">Планировщик ищет траекторию сочленённого автопоезда вперёд и назад, проверяя контуры тягача, кабины и полуприцепа. Для завершения задайте курс тягача у цели и допуски конечного курса и угла сочленения. Положительный курс отсчитывается против часовой стрелки от оси +X. Расчёт выполняется в фоновом потоке и требует проверки на площадке.</p>
 <p id="routeAdvice">Задайте конечную точку и нажмите «Построить путь».</p>
 <p id="difficultyAdvice" style="margin-top:8px;color:#ffd18b">Сложность: пока не рассчитана.</p>
+<div class="recommendation-card" id="recommendationCard" aria-live="polite">
+ <div class="recommendation-title">🧭 Рекомендация по манёвру <span id="recommendationStatus">Ожидает расчёта</span></div>
+ <p><b>Сложность:</b> <span id="recommendationLevel">Не рассчитана</span></p>
+ <p><b>С чего начать:</b> <span id="recommendationStart">Сначала постройте маршрут</span></p>
+ <p><b>Первое рулевое действие:</b> <span id="recommendationTurn">Пока не определено</span></p>
+ <p><b>Почему:</b> <span id="recommendationReasons">Нужен расчёт полной траектории и зазоров</span></p>
+ <p><b>Контроль:</b> <span id="recommendationCheck">Рекомендация относится только к виртуальной модели</span></p>
+</div>
 </div>
 </section>
 
