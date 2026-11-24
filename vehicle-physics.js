@@ -168,6 +168,7 @@
   const errors=validateVehicleParams(params);
   if(errors.length)throw new Error('Некорректная геометрия осевой группы: '+errors.join(' '));
   if(!Array.isArray(path))throw new Error('Траектория должна быть массивом состояний.');
+  if(path.length===0)throw new Error('Траектория должна содержать хотя бы одно состояние.');
   if(!Number.isFinite(nominalSpeed)||nominalSpeed<=0||nominalSpeed>20){
    throw new Error('Расчётная скорость должна быть больше нуля и не превышать 20 м/с.');
   }
