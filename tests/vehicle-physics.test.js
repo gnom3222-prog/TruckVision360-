@@ -237,3 +237,19 @@ test('RK4 trajectory converges under step refinement across steering reversals',
  assert.ok(refinedError<1e-6,
   'the refined trajectory should remain close to the fine-step reference');
 });
+ 
+test('longer kingpin-to-axle distance increases articulation for the same forward steering input',()=>{
+ const base={wheelbase:3.8,hitchOffset:0.575};
+ const articulationAfterTurn=kingpinAxles=>{
+  let q={x:0,y:0,psi:0,psiT:0};
+  const p={...base,kingpinAxles};
+  const dt=0.02;
+  for(let i=0;i<250;i++)q=physics.rk4(q,1,0.25,dt,p);
+  return Math.abs(physics.norm(q.psi-q.psiT));
+ };
+ const short=articulationAfterTurn(6);
+ const baseline=articulationAfterTurn(8);
+ const long=articulationAfterTurn(10);
+ assert.ok(short<baseline);
+ assert.ok(baseline<long);
+});
