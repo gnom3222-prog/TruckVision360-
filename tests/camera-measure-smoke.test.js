@@ -156,3 +156,18 @@ test('camera measurement fails closed when simulator map registration rejects th
  assert.equal(camera.appliedRegistrations.length,0);
  camera.fire('cameraStop','click');
 });
+
+
+test('camera rejects a skewed gate quadrilateral and keeps the previous width and map pose',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap([{x:150,y:150},{x:450,y:180},{x:450,y:250},{x:150,y:250}]);
+ assert.equal(camera.elements.gateWidth.value,'3.50');
+ assert.match(camera.elements.gateResult.textContent,/Форма измеренного проёма не соответствует прямоугольнику/);
+ assert.match(camera.elements.cameraStatus.textContent,/Ширина ворот не обновлена/);
+ assert.equal(camera.appliedRegistrations.length,0);
+ camera.fire('cameraStop','click');
+});
