@@ -420,6 +420,7 @@
   let firstTurn=null;
   let firstTurnDistance=null;
   let firstTurnGear=null;
+  let tractorYawDirection=null;
   for(let i=1;i<states.length;i++){
    const previous=states[i-1],current=states[i];
    distance+=Math.hypot(current.x-previous.x,current.y-previous.y);
@@ -428,6 +429,8 @@
     firstTurn=steer>0?'left':'right';
     firstTurnDistance=distance;
     firstTurnGear=(current.gear??initialGear)<0?-1:1;
+    // Positive yaw is counter-clockwise (left); reverse gear flips yaw for the same steering angle.
+    tractorYawDirection=steer*firstTurnGear>0?'left':'right';
     break;
    }
   }
@@ -438,6 +441,7 @@
    firstTurn,
    firstTurnDistance,
    firstTurnGear,
+   tractorYawDirection,
    firstTurnAfterGearChange:firstTurnGear!==null&&firstTurnGear!==initialGear
   };
  }
