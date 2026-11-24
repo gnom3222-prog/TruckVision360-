@@ -21,6 +21,9 @@ header p{margin:0;color:var(--muted);font-size:13px}
 .app-nav::-webkit-scrollbar{display:none}
 .app-nav button{flex:0 0 auto;min-width:88px;padding:10px 13px;border-radius:11px;background:#142b40;border-color:#294c68;color:#c5d5e3;white-space:nowrap}
 .app-nav button[aria-current="page"]{background:#087fa5;border-color:#35c8ef;color:#fff;box-shadow:0 0 0 1px rgba(53,200,239,.18) inset}
+main.single-view{grid-template-columns:minmax(0,1fr)}
+.tab-page{display:none}
+.tab-page.active{display:block}
 [id]{scroll-margin-top:76px}
 @media(max-width:600px){header{padding:12px 10px 7px}h1{font-size:19px}.app-nav{padding:7px 8px;gap:6px}.app-nav button{min-width:0;padding:9px 11px;font-size:12px}}
 main{max-width:1200px;margin:auto;padding:8px 12px 28px;display:grid;grid-template-columns:minmax(0,1.45fr) minmax(290px,1fr);gap:12px}
@@ -82,15 +85,15 @@ canvas{max-width:100%}
 <p>Универсальный помощник маневрирования · ALL-IN-ONE v4.4</p>
 </header>
 <nav class="app-nav" aria-label="Разделы TruckVision 360">
-<button type="button" data-target="maneuverSection" aria-current="page">↗ Манёвр</button>
-<button type="button" data-target="view">▦ Карта</button>
-<button type="button" data-target="environmentSection">◎ Окружение</button>
-<button type="button" data-target="measurementSection">⌗ Измерения</button>
-<button type="button" data-target="settingsSection">⚙ Настройки</button>
+<button type="button" data-page="maneuverSection" data-focus="maneuverSection" aria-current="page">↗ Манёвр</button>
+<button type="button" data-page="maneuverSection" data-focus="view">▦ Карта</button>
+<button type="button" data-page="environmentSection">◎ Окружение</button>
+<button type="button" data-page="measurementSection">⌗ Измерения</button>
+<button type="button" data-page="settingsSection">⚙ Настройки</button>
 </nav>
 
 <main>
-<section class="panel" id="maneuverSection">
+<section class="panel tab-page active" id="maneuverSection">
 <div class="row"><b>Вид сверху · автопоезд</b><span id="mode" class="status">Остановлен</span></div>
 <canvas id="view" width="1000" height="650" aria-label="Вид сверху на автопоезд"></canvas>
 <div class="row" style="margin-top:8px">
@@ -119,6 +122,8 @@ canvas{max-width:100%}
 <strong>🤖 Помощник TruckVision 360</strong>
 <p id="assistantAdvice">Система готова. Выберите манёвр и двигайтесь медленно, наблюдая за зазорами.</p>
 </div>
+</section>
+<section class="panel tab-page" id="environmentSection">
 <div class="assistant-box" aria-live="polite">
 <strong>🧭 Маршрут и сложность манёвра</strong>
 <div class="grid" style="margin-top:8px">
@@ -148,7 +153,7 @@ canvas{max-width:100%}
 </div>
 </section>
 
-<section class="panel" id="settingsSection">
+<section class="panel tab-page" id="settingsSection">
 <b>Настройки модели</b>
 <div class="section">Режим</div>
 <label for="model">Тип расчёта</label>
@@ -236,7 +241,9 @@ canvas{max-width:100%}
 <div class="metric"><span>Боковое смещение крайних осей · proxy</span><strong id="axleScrubOut">0,000 м/с</strong></div>
 </div>
 
-<div class="assistant-box camera-panel" id="measurementSection">
+</section>
+<section class="panel tab-page" id="measurementSection">
+<div class="assistant-box camera-panel">
 <strong>📷 Измерение ворот камерой iPhone</strong>
 <p class="small">Камера запускается только после нажатия кнопки. Изображение обрабатывается локально в браузере и не отправляется на сервер.</p>
 <div class="camera-stage">
@@ -273,29 +280,30 @@ canvas{max-width:100%}
 <script src="camera-measure.js?v=20261124-12"></script>
 
 <script>
-// Lightweight navigation: reveal existing working sections without replacing their controls.
+// App-style section navigation. Existing controls remain in the DOM with their IDs.
 (()=>{
  const nav=document.querySelector('.app-nav');
- if(!nav)return;
- nav.addEventListener('click',event=>{
-  const button=event.target.closest('button[data-target]');
-  if(!button)return;
-  const target=document.getElementById(button.dataset.target);
-  if(!target)return;
-  nav.querySelectorAll('button[data-target]').forEach(item=>item.removeAttribute('aria-current'));
-  button.setAttribute('aria-current','page');
-  target.scrollIntoView({behavior:'smooth',block:'start'});
- });
- const targets=['maneuverSection','view','environmentSection','measurementSection','settingsSection'];
- if('IntersectionObserver'in window){
-  const observer=new IntersectionObserver(entries=>{
-   const visible=entries.filter(entry=>entry.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];
-   if(!visible)return;
-   const active=nav.querySelector('[data-target="'+visible.target.id+'"]');
-   if(active){nav.querySelectorAll('button[data-target]').forEach(item=>item.removeAttribute('aria-current'));active.setAttribute('aria-current','page');}
-  },{rootMargin:'-20% 0px -65% 0px',threshold:[0,.1,.4]});
-  targets.forEach(id=>{const element=document.getElementById(id);if(element)observer.observe(element);});
+ const main=document.querySelector('main');
+ if(!nav||!main)return;
+ const pages=[...main.querySelectorAll('.tab-page')];
+ function activate(pageId,focusId){
+  const page=pages.find(item=>item.id===pageId);
+  if(!page)return;
+  pages.forEach(item=>item.classList.toggle('active',item===page));
+  main.classList.add('single-view');
+  nav.querySelectorAll('button[data-page]').forEach(button=>{
+   if(button.dataset.page===pageId)button.setAttribute('aria-current','page');
+   else button.removeAttribute('aria-current');
+  });
+  const focus=document.getElementById(focusId||pageId);
+  if(focus)focus.scrollIntoView({behavior:'smooth',block:'start'});
  }
+ nav.addEventListener('click',event=>{
+  const button=event.target.closest('button[data-page]');
+  if(!button)return;
+  activate(button.dataset.page,button.dataset.focus||button.dataset.page);
+ });
+ activate('maneuverSection','maneuverSection');
 })();
 </script>
 
