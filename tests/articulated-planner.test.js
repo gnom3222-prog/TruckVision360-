@@ -311,3 +311,62 @@ test('swept displacement bound remains conservative across articulation extrema,
   }
  }
 });
+
+test('swept bound uses the exact axle-centered trailer corner radius across long kingpin offsets',()=>{
+ const configurations=[
+  params,
+  {...params,kingpinAxles:25,trailerLength:13.6,trailerWidth:2.55},
+  {...params,kingpinAxles:30,trailerLength:4,trailerWidth:5}
+ ];
+ const betaValues=[-2.9,-Math.PI/2,-0.3,0.2,Math.PI/2,2.9];
+ const steeringValues=[-Math.PI/7,0,Math.PI/7];
+ for(const p of configurations){
+  for(const steer of steeringValues){
+   const yaw=Math.abs(Math.tan(steer)/p.wheelbase);
+   const a=p.hitchOffset*yaw;
+   const front=p.kingpinAxles+1.5;
+   const rear=p.kingpinAxles-(p.trailerLength-1.5);
+   let trailerRate=0;
+   for(const coupling of [-a,a]){
+    for(const longitudinal of [front,rear]){
+     for(const lateral of [-p.trailerWidth/2,p.trailerWidth/2]){
+      const m11=1+coupling*lateral/p.kingpinAxles;
+      const m12=coupling-lateral/p.kingpinAxles;
+      const m21=-coupling*longitudinal/p.kingpinAxles;
+      const m22=longitudinal/p.kingpinAxles;
+      const c1=m11*m11+m21*m21;
+      const c2=m12*m12+m22*m22;
+      const cross=m11*m12+m21*m22;
+      const lambda=0.5*(c1+c2+Math.hypot(c1-c2,2*cross));
+      trailerRate=Math.max(trailerRate,Math.sqrt(Math.max(0,lambda)));
+     }
+    }
+   }
+   const expected=Math.max(
+    1+Math.hypot(5,2.55/2)*yaw,
+    1+(2.1+Math.hypot(1.35,2.25/2))*yaw,
+    trailerRate
+   );
+   for(const beta of betaValues){
+    for(const gear of [-1,1]){
+     const q={x:0.7,y:-1.2,psi:3.05,psiT:3.05-beta};
+     const rate=planner.sweptDisplacementPerMeter(steer,p,q,0.05);
+     assert.ok(Math.abs(rate-expected)<1e-10,
+      'swept rate should equal the maximum spectral bound for all accepted body corners');
+     const initial=planner.polygons(q,p);
+     for(let sample=1;sample<=20;sample++){
+      const distance=0.05*sample/20;
+      const next=physics.rk4(q,gear*0.7,steer,distance/0.7,p);
+      const moved=planner.polygons(next,p);
+      for(let body=0;body<initial.length;body++)for(let vertex=0;vertex<initial[body].length;vertex++){
+       const from=initial[body][vertex],to=moved[body][vertex];
+       const displacement=Math.hypot(to.x-from.x,to.y-from.y);
+       assert.ok(displacement<=rate*distance+1e-7,
+        `swept bound underestimates body ${body+1} vertex ${vertex+1} for kingpinAxles=${p.kingpinAxles}, beta=${beta}, steer=${steer}, gear=${gear}`);
+      }
+     }
+    }
+   }
+  }
+ }
+});
