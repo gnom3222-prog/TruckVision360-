@@ -559,7 +559,8 @@ function drawObstacles(){
   const label=toScreen(center);
   ctx.fillStyle='#fff';
   ctx.font='12px system-ui';
-  const confidenceText=o.kind==='perception-obstacle'?' · '+Math.round(o.confidence*100)+'% · '+o.source:'';\n  ctx.fillText(o.name+confidenceText,label.x+5,label.y-5);
+  const confidenceText=o.kind==='perception-obstacle'?' · '+Math.round(o.confidence*100)+'% · '+o.source:'';;
+  ctx.fillText(o.name+confidenceText,label.x+5,label.y-5);
  }
 }
 
