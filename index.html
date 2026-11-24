@@ -115,6 +115,10 @@ canvas{max-width:100%}
  <div><label for="goalHeadingTolerance">Допуск курса, °</label><input id="goalHeadingTolerance" type="number" min="1" max="45" value="12" step="1"></div>
  <div><label for="goalArticulationLimit">Допустимый угол тягач–прицеп у цели, °</label><input id="goalArticulationLimit" type="number" min="1" max="45" value="12" step="1"></div>
 </div>
+<label for="alternativeRouteSelect">Выбор найденной траектории</label>
+<select id="alternativeRouteSelect" style="display:none;width:100%;margin:7px 0">
+ <option value="">Выберите вариант траектории…</option>
+</select>
 <div class="row">
  <button id="planRoute" class="primary">Построить путь</button>
  <button id="routeStart" class="primary">▶ Автоматически проехать</button>
