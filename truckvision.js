@@ -6,7 +6,7 @@ const $=id=>document.getElementById(id);
 const canvas=$('view');
 const ctx=canvas.getContext('2d');
 const G=9.81;
-const SCALE=26;
+let SCALE=26;
 const ARTICULATION_WARNING_DEG=45;
 const ARTICULATION_STOP_DEMO_DEG=55;
 
@@ -1322,11 +1322,27 @@ function drawVehicleDetails(){
  ctx.beginPath();ctx.moveTo(nose.x,nose.y);ctx.lineTo(left.x,left.y);ctx.lineTo(right.x,right.y);ctx.closePath();ctx.fill();
 }
 
+function fitSceneCamera(){
+ const points=[];
+ const add=poly=>{if(Array.isArray(poly))poly.forEach(p=>{if(Number.isFinite(p.x)&&Number.isFinite(p.y))points.push(p);});};
+ add(vehiclePolygons(state).flat());
+ if(showObstacles)sceneObstacles().forEach(o=>add(obstaclePolygon(o)));
+ if(plannedRoute.length>1)plannedRoute.forEach(p=>points.push({x:p.x,y:p.y}));
+ if(!points.length)return;
+ const xs=points.map(p=>p.x),ys=points.map(p=>p.y);
+ const minX=Math.min(...xs)-2.5,maxX=Math.max(...xs)+2.5;
+ const minY=Math.min(...ys)-2.5,maxY=Math.max(...ys)+2.5;
+ const spanX=Math.max(8,maxX-minX),spanY=Math.max(5,maxY-minY);
+ camera={x:(minX+maxX)/2,y:(minY+maxY)/2};
+ SCALE=Math.max(8,Math.min(36,canvas.width/spanX,canvas.height/spanY));
+}
+
 function draw(){
  ctx.clearRect(0,0,canvas.width,canvas.height);
  ctx.fillStyle='#102235';
  ctx.fillRect(0,0,canvas.width,canvas.height);
 
+ fitSceneCamera();
  const left=camera.x-canvas.width/(2*SCALE);
  const top=camera.y-canvas.height/(2*SCALE);
 
