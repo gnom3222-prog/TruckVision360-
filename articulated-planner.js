@@ -105,15 +105,27 @@
  function createGateObstacles(gate){
   if(!gate||typeof gate!=='object')throw new Error('Параметры ворот отсутствуют.');
   const {centerX,centerY,clearWidth,postWidth,depth,heading}=gate;
-  if(![centerX,centerY,clearWidth,postWidth,depth,heading].every(Number.isFinite)||
+  const widthUncertainty=gate.widthUncertainty??0;
+  const positionUncertainty=gate.positionUncertainty??0;
+  const headingUncertaintyDeg=gate.headingUncertaintyDeg??0;
+  if(![centerX,centerY,clearWidth,postWidth,depth,heading,
+       widthUncertainty,positionUncertainty,headingUncertaintyDeg].every(Number.isFinite)||
      Math.abs(centerX)>10000||Math.abs(centerY)>10000||
      clearWidth<=0||clearWidth>50||postWidth<=0||postWidth>5||
-     depth<=0||depth>10){
-   throw new Error('Ворота должны иметь конечное положение, курс, ширину проёма и положительные размеры косяков.');
+     depth<=0||depth>10||
+     widthUncertainty<0||widthUncertainty>2||widthUncertainty>=clearWidth||
+     positionUncertainty<0||positionUncertainty>2||
+     headingUncertaintyDeg<0||headingUncertaintyDeg>45){
+   throw new Error('Ворота и их границы неопределённости должны быть конечными и находиться в допустимых диапазонах.');
   }
+  // widthUncertainty is an absolute bound on the full clear width. Moving
+  // both jambs inward by half this amount models the narrowest opening.
+  const conservativeClearWidth=clearWidth-widthUncertainty;
   const ux=Math.cos(heading),uy=Math.sin(heading);
   const nx=-uy,ny=ux;
-  const halfOffset=clearWidth/2+postWidth/2;
+  const halfOffset=conservativeClearWidth/2+postWidth/2;
+  const headingDelta=headingUncertaintyDeg*Math.PI/180;
+  const positionInflation=Math.SQRT2*positionUncertainty;
   const makePost=(side,name)=>{
    const cx=centerX+side*halfOffset*ux;
    const cy=centerY+side*halfOffset*uy;
@@ -121,13 +133,31 @@
     x:cx+along*ux+across*nx,
     y:cy+along*uy+across*ny
    });
-   const polygon=[
+   const nominalPolygon=[
     point(-postWidth/2,-depth/2),
     point(postWidth/2,-depth/2),
     point(postWidth/2,depth/2),
     point(-postWidth/2,depth/2)
    ];
-   return {name,kind:'gate-jamb',polygon};
+   // A heading error rotates every jamb vertex around the manually supplied
+   // gate center. 2*R*sin(delta/2) bounds that displacement for |delta|.
+   const radius=Math.max(...nominalPolygon.map(p=>Math.hypot(p.x-centerX,p.y-centerY)));
+   const headingInflation=2*radius*Math.sin(headingDelta/2);
+   const uncertaintyInflation=positionInflation+headingInflation;
+   const polygon=inflateConvexPolygon(nominalPolygon,uncertaintyInflation);
+   return {
+    name,kind:'gate-jamb',polygon,
+    gateUncertainty:{
+     nominalClearWidth:clearWidth,
+     conservativeClearWidth,
+     widthUncertainty,
+     positionUncertaintyPerAxis:positionUncertainty,
+     headingUncertaintyDeg,
+     positionInflation,
+     headingInflation,
+     totalInflation:uncertaintyInflation
+    }
+   };
   };
   return [
    makePost(-1,'Левый косяк ворот'),
