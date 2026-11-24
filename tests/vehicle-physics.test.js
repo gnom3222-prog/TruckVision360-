@@ -92,3 +92,56 @@ test('vehicle geometry validation rejects missing, non-finite and implausible di
  assert.ok(errors.some(message=>message.startsWith('wheelbase:')));
  assert.ok(errors.some(message=>message.startsWith('kingpinAxles:')));
 });
+
+test('vehicle geometry rejects a three-axle group extending beyond the trailer body',()=>{
+ const base={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55};
+ const tooWide={...base,trailerAxleSpacing:5};
+ const tooFarRear={...base,kingpinAxles:12,trailerAxleSpacing:1.3};
+ assert.ok(physics.validateVehicleParams(tooWide).some(message=>message.includes('ось 3 выходит за границы')));
+ assert.ok(physics.validateVehicleParams(tooFarRear).some(message=>message.includes('ось 3 выходит за границы')));
+});
+
+test('vehicle geometry accepts a long trailer with a correspondingly rearward axle group',()=>{
+ const errors=physics.validateVehicleParams({
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:25,
+  trailerLength:30,trailerWidth:2.55,trailerAxleSpacing:1.3
+ });
+ assert.deepEqual(errors,[]);
+});
+
+test('three-axle scrub exposure is zero on a straight aligned path',()=>{
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3};
+ const path=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0},
+  {x:1,y:0,psi:0,psiT:0,gear:1,steer:0},
+  {x:2,y:0,psi:0,psiT:0,gear:1,steer:0}
+ ];
+ const result=physics.trailerAxleScrubExposure(path,p,0.7);
+ near(result.maxAbsLateralVelocity,0);
+ near(result.totalAbsoluteLateralTravel,0);
+ assert.deepEqual(result.cumulativeAbsoluteLateralTravelByAxle,[0,0,0]);
+});
+
+test('three-axle scrub exposure accumulates symmetric outer-axle geometric travel',()=>{
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3};
+ let q={x:0,y:0,psi:0,psiT:0};
+ const path=[{...q,gear:1,steer:0.18}];
+ for(let i=0;i<30;i++){
+  q=physics.rk4(q,0.7,0.18,0.1,p);
+  path.push({...q,gear:1,steer:0.18});
+ }
+ const result=physics.trailerAxleScrubExposure(path,p,0.7);
+ assert.ok(result.maxAbsLateralVelocity>0);
+ assert.ok(result.totalAbsoluteLateralTravel>0);
+ near(result.cumulativeAbsoluteLateralTravelByAxle[0],result.cumulativeAbsoluteLateralTravelByAxle[2],1e-9);
+ near(result.cumulativeAbsoluteLateralTravelByAxle[1],0,1e-9);
+ near(result.totalAbsoluteLateralTravel,result.cumulativeAbsoluteLateralTravelByAxle[0]*2,1e-9);
+ assert.equal(result.model,'rigid-axle-group-kinematic-proxy');
+});
+
+test('three-axle scrub exposure rejects malformed route states and invalid speed',()=>{
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3};
+ assert.throws(()=>physics.trailerAxleScrubExposure([{x:0,y:0,psi:0,psiT:0,gear:0}],p),/Передача/);
+ assert.throws(()=>physics.trailerAxleScrubExposure([{x:0,y:0,psi:0,psiT:0}],p,0),/скорость/);
+ assert.throws(()=>physics.trailerAxleScrubExposure([{x:0,y:0,psi:NaN,psiT:0}],p),/некорректные координаты/);
+});
