@@ -446,5 +446,69 @@
   };
  }
 
- return Object.freeze({plan,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,articulationExposure,recommendStart,validatePlanOptions});
+ 
+ function compareStartCandidates(candidates,options={}){
+  if(!Array.isArray(candidates)||candidates.length===0){
+   return {ok:false,reason:'no-candidates'};
+  }
+  const costTolerance=options.costTolerance===undefined?0.25:options.costTolerance;
+  if(!Number.isFinite(costTolerance)||costTolerance<0){
+   return {ok:false,reason:'invalid-cost-tolerance'};
+  }
+  const assessed=[];
+  for(let i=0;i<candidates.length;i++){
+   const candidate=candidates[i];
+   if(!candidate||!Number.isFinite(candidate.cost)||candidate.cost<0){
+    return {ok:false,reason:'invalid-candidate-cost',candidateIndex:i};
+   }
+   const recommendation=recommendStart(candidate.states,options);
+   if(!recommendation.ok){
+    return {ok:false,reason:'invalid-candidate-route',candidateIndex:i};
+   }
+   assessed.push({
+    index:i,
+    label:typeof candidate.label==='string'&&candidate.label?candidate.label:'вариант '+(i+1),
+    cost:candidate.cost,
+    recommendation
+   });
+  }
+  assessed.sort((a,b)=>a.cost-b.cost||a.index-b.index);
+  const best=assessed[0];
+  const comparable=assessed.slice(1).filter(candidate=>
+   candidate.cost-best.cost<=costTolerance+1e-12
+  );
+  const ambiguousFields=[];
+  if(comparable.some(candidate=>candidate.recommendation.initialGear!==best.recommendation.initialGear)){
+   ambiguousFields.push('initialGear');
+  }
+  if(comparable.some(candidate=>candidate.recommendation.firstTurn!==best.recommendation.firstTurn)){
+   ambiguousFields.push('firstTurn');
+  }
+  if(comparable.some(candidate=>candidate.recommendation.firstTurnGear!==best.recommendation.firstTurnGear)){
+   ambiguousFields.push('turnGear');
+  }
+  if(comparable.some(candidate=>candidate.recommendation.tractorYawDirection!==best.recommendation.tractorYawDirection)){
+   ambiguousFields.push('tractorYawDirection');
+  }
+  const ambiguous=ambiguousFields.length>0;
+  const summarize=candidate=>({
+   index:candidate.index,label:candidate.label,cost:candidate.cost,
+   initialGear:candidate.recommendation.initialGear,
+   firstTurn:candidate.recommendation.firstTurn,
+   firstTurnGear:candidate.recommendation.firstTurnGear,
+   tractorYawDirection:candidate.recommendation.tractorYawDirection
+  });
+  return {
+   ok:true,
+   status:ambiguous?'ambiguous':assessed.length===1?'single-candidate':'preferred',
+   recommendation:ambiguous?null:best.recommendation,
+   bestCandidate:{...summarize(best),recommendation:best.recommendation},
+   comparableAlternatives:comparable.map(summarize),
+   ambiguousFields,
+   candidatesCompared:assessed.length,
+   costTolerance
+  };
+ }
+
+return Object.freeze({plan,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions});
 });
