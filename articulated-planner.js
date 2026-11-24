@@ -292,7 +292,7 @@
    if(options.onProgress&&(expanded===1||expanded%250===0)){
     try{options.onProgress({expanded,maxExpansions,goalDistance:dist,headingError:errors.headingError,articulationAngle:errors.articulation,closest:{x:closest.q.x,y:closest.q.y}});}catch(_){}
    }
-   if(goalReached(cur.q,goal,goalOptions)){finish=cur;break;}
+   if(goalReached(cur.q,goal,goalOptions)&&(!options.firstActionConstraint||cur.firstTurnChosen)){finish=cur;break;}
    let activeControls=controls;
    const firstActionConstraint=options.firstActionConstraint;
    if(firstActionConstraint&&!cur.firstTurnChosen){
@@ -576,44 +576,51 @@
    {initialGear:-1,firstTurn:'left',label:'назад, первый поворот влево'},
    {initialGear:-1,firstTurn:'right',label:'назад, первый поворот вправо'}
   ];
+  const baseOptions={...options};
+  delete baseOptions.alternativeMaxExpansions;
+  delete baseOptions.costTolerance;
+  delete baseOptions.firstActionConstraint;
+  const candidateCount=constraints.length+1;
   const candidates=[],failures=[];
   let expanded=0;
-  for(let index=0;index<constraints.length;index++){
-   const constraint=constraints[index];
-   const result=plan({
-    ...options,
+  function attempt(label,constraint,candidateIndex){
+   const planOptions={
+    ...baseOptions,
     maxExpansions:perCandidateMaxExpansions,
-    firstActionConstraint:{initialGear:constraint.initialGear,firstTurn:constraint.firstTurn},
     onProgress:progress=>{
      if(typeof options.onProgress==='function'){
       try{
        options.onProgress({
         ...progress,
-        candidateIndex:index+1,
-        candidateCount:constraints.length,
+        candidateIndex,
+        candidateCount,
         expanded:expanded+progress.expanded,
-        maxExpansions:perCandidateMaxExpansions*constraints.length
+        maxExpansions:perCandidateMaxExpansions*candidateCount
        });
       }catch(_){}
      }
     }
-   });
+   };
+   if(constraint)planOptions.firstActionConstraint=constraint;
+   const result=plan(planOptions);
    expanded+=result.expanded||0;
    if(!result.ok){
-    failures.push({label:constraint.label,reason:result.reason,expanded:result.expanded||0});
-    continue;
+    failures.push({label,reason:result.reason,expanded:result.expanded||0});
+    return;
    }
    const recommendation=recommendStart(result.states);
    const score=scoreCandidateRoute(result);
-   candidates.push({
-    states:result.states,cost:score.cost,label:constraint.label,
-    route:result,recommendation,score
-   });
+   candidates.push({states:result.states,cost:score.cost,label,route:result,recommendation,score});
+  }
+  attempt('свободный поиск',null,1);
+  for(let index=0;index<constraints.length;index++){
+   const constraint=constraints[index];
+   attempt(constraint.label,{initialGear:constraint.initialGear,firstTurn:constraint.firstTurn},index+2);
   }
   if(!candidates.length){
    return {
     ok:false,reason:'no-candidate-route',expanded,
-    candidatesFound:0,candidatesAttempted:constraints.length,failures
+    candidatesFound:0,candidatesAttempted:candidateCount,failures
    };
   }
   const comparison=compareStartCandidates(
@@ -638,7 +645,7 @@
   if(comparison.status==='ambiguous'){
    return {
     ok:false,reason:'ambiguous-start',status:comparison.status,
-    expanded,candidatesFound:candidates.length,candidatesAttempted:constraints.length,
+    expanded,candidatesFound:candidates.length,candidatesAttempted:candidateCount,
     candidateSummaries,failures,comparison
    };
   }
@@ -649,9 +656,9 @@
    recommendation:comparison.recommendation||selected.recommendation,
    recommendationComparison:comparison,
    selectedCandidate:comparison.bestCandidate.index,
-   candidatesFound:candidates.length,candidatesAttempted:constraints.length,
+   candidatesFound:candidates.length,candidatesAttempted:candidateCount,
    candidateSummaries,failures,
-   totalExpanded:expanded
+   expanded
   };
  }
 
