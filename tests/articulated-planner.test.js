@@ -400,3 +400,32 @@ test('swept bound uses the exact axle-centered trailer corner radius across long
   }
  }
 });
+
+
+test('articulation exposure locates the peak angle and cumulative route distance',()=>{
+ const result=planner.articulationExposure([
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0},
+  {x:1,y:0,psi:0.2,psiT:0.1,gear:1,steer:0.1},
+  {x:3,y:0,psi:Math.PI/3,psiT:0,gear:-1,steer:-0.12},
+  {x:4,y:0,psi:0.3,psiT:0.2,gear:-1,steer:0}
+ ]);
+ assert.equal(result.stateIndex,2);
+ assert.equal(result.segmentIndex,1);
+ assert.equal(result.gear,-1);
+ assert.ok(Math.abs(result.maxAngleDegrees-60)<1e-9);
+ assert.ok(Math.abs(result.distanceAlongRoute-3)<1e-9);
+ assert.deepEqual(result.state,{x:3,y:0,psi:Math.PI/3,psiT:0,gear:-1,steer:-0.12});
+});
+
+test('articulation exposure uses wrapped angular difference near plus and minus pi',()=>{
+ const result=planner.articulationExposure([
+  {x:0,y:0,psi:Math.PI-0.01,psiT:-Math.PI+0.02,gear:1}
+ ]);
+ assert.ok(Math.abs(result.maxAngleRadians-0.03)<1e-9);
+ assert.ok(Math.abs(result.maxAngleDegrees-0.03*180/Math.PI)<1e-9);
+});
+
+test('articulation exposure rejects malformed route states',()=>{
+ assert.throws(()=>planner.articulationExposure([]),/Route states/);
+ assert.throws(()=>planner.articulationExposure([{x:0,y:0,psi:NaN,psiT:0}]),/invalid coordinates/);
+});
