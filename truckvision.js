@@ -79,6 +79,11 @@ function gateGeometryForPlanner(){
  };
 }
 function sceneObstacles(){
+ if(perceptionFrameTimestamp&&Date.now()-perceptionFrameTimestamp>1500){
+  perceptionObstacles=[];perceptionFrameId=null;perceptionFrameTimestamp=0;
+  updatePerceptionStatus('Данные датчиков устарели. Объекты удалены из активной карты; требуется новый кадр.');
+  if(typeof invalidateRouteForSettingsChange==='function')invalidateRouteForSettingsChange();
+ }
  const result=obstacles.map(obstacle=>({...obstacle}));
  result.push(...cameraObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point}))})));\n result.push(...perceptionObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point}))})));
  const gateGeometry=gateGeometryForPlanner();
