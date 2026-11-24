@@ -315,8 +315,8 @@ test('swept displacement bound remains conservative across articulation extrema,
 test('swept bound uses the exact axle-centered trailer corner radius across long kingpin offsets',()=>{
  const configurations=[
   params,
-  {...params,kingpinAxles:25,trailerLength:13.6,trailerWidth:2.55},
-  {...params,kingpinAxles:30,trailerLength:4,trailerWidth:5}
+  {...params,kingpinAxles:25,trailerLength:30,trailerWidth:2.55},
+  {...params,kingpinAxles:27,trailerLength:30,trailerWidth:5}
  ];
  const betaValues=[-2.9,-Math.PI/2,-0.3,0.2,Math.PI/2,2.9];
  const steeringValues=[-Math.PI/7,0,Math.PI/7];
