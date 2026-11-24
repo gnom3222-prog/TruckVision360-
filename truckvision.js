@@ -173,6 +173,8 @@ function invalidateRouteForSettingsChange(){
  if(routePlayback.active)stopRoutePlayback('Автопроезд остановлен: параметры модели изменились.');
  plannedRoute=[];
  alternativeRoutes=[];
+ $('alternativeRouteSelect').style.display='none';
+ $('alternativeRouteSelect').value='';
  routeGoal=null;
  routeAssessment=null;
  $('routeAdvice').textContent='Параметры модели изменены. Постройте маршрут заново.';
@@ -863,6 +865,15 @@ if(result.reason==='uncertainty-sensitive-start'){
    plannedRoute=[];
    alternativeRoutes=Array.isArray(result.candidateRoutes)?result.candidateRoutes.filter(candidate=>Array.isArray(candidate.states)&&candidate.states.length>=2):[];
    routeAssessment=null;
+   const chooser=$('alternativeRouteSelect');
+   chooser.innerHTML='<option value="">Выберите вариант траектории…</option>';
+   alternativeRoutes.forEach((candidate,index)=>{
+    const option=document.createElement('option');
+    option.value=String(index);
+    option.textContent='Вариант '+(index+1)+' — '+candidate.label+' · балл '+candidate.cost.toFixed(2);
+    chooser.appendChild(option);
+   });
+   chooser.style.display=alternativeRoutes.length?'block':'none';
    const alternatives=(result.candidateSummaries||[]).map(candidate=>{
     const gear=candidate.initialGear<0?'задний ход':'вперёд';
     const turn=candidate.firstTurn==='left'?'руль влево':
@@ -1562,6 +1573,25 @@ $('assess').onclick=()=>{
   ' м. '+($('gateEnabled').checked?'Косяки ворот также включены в карту как два ориентированных препятствия; построение маршрута проверяет их вместе со всем автопоездом.':'Косяки ворот пока не включены в карту: включите соответствующий переключатель и задайте положение/курс проёма. Камера измеряет ширину, но не регистрирует положение ворот на карте автоматически.')+' Это не гарантия проезда.';
 };
 
+$('alternativeRouteSelect').onchange=()=>{
+ const index=Number($('alternativeRouteSelect').value);
+ const candidate=alternativeRoutes[index];
+ if(!candidate||!Array.isArray(candidate.states)||candidate.states.length<2){
+  plannedRoute=[];routeAssessment=null;draw();return;
+ }
+ plannedRoute=candidate.states;
+ routeAssessment=routeMetrics(
+  plannedRoute,
+  Number(candidate.metrics?.minimumClearanceLowerBound??Infinity),
+  candidate.metrics?.sweptClearanceDetail??null
+ );
+ const passed=!routeAssessment.collision&&routeAssessment.reached&&
+  !routeAssessment.articulationBlocked&&!routeAssessment.clearanceInsufficient;
+ $('routeAdvice').textContent='Выбран вариант '+(index+1)+'. '+(passed?'Повторная проверка пройдена по текущей модели.':'Проверка не пройдена: '+routeAssessment.reasons.join('; '));
+ $('difficultyAdvice').textContent='Сложность: '+routeAssessment.level+'. Длина '+routeAssessment.length.toFixed(1)+' м; пиковый угол сочленения '+routeAssessment.maxBeta.toFixed(1)+'°; минимальный эффективный зазор '+(Number.isFinite(routeAssessment.effectiveClearance)?routeAssessment.effectiveClearance.toFixed(2)+' м':'не определён')+'. '+(passed?'Автопроезд разрешён только в виртуальной модели.':'Автопроезд остаётся заблокирован.');
+ draw();
+};
+
 $('routeStart').onclick=()=>{
  const settings=readSettings();
  if(!settings.ok){
@@ -1616,6 +1646,8 @@ $('clearRoute').onclick=()=>{
  stopRoutePlayback('');
  plannedRoute=[];
  alternativeRoutes=[];
+ $('alternativeRouteSelect').style.display='none';
+ $('alternativeRouteSelect').value='';
  routeGoal=null;
  routeAssessment=null;
  $('routeAdvice').textContent='Маршрут удалён.';
