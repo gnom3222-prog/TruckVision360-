@@ -1620,7 +1620,11 @@ function applyCameraGateRegistration(registration){
 window.TruckVisionApplyGateRegistration=applyCameraGateRegistration;
 
 function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name){
+ const sigmaWidth=Number(measurement?.sigmaWidth)||0;
+ const sigmaDepth=Number(measurement?.sigmaHeight)||0;
  if(!measurement||!Number.isFinite(measurement.width)||!Number.isFinite(measurement.height)||
+    !Number.isFinite(sigmaWidth)||!Number.isFinite(sigmaDepth)||sigmaWidth<0||sigmaDepth<0||
+    sigmaWidth>2||sigmaDepth>2||
     measurement.width<0.08||measurement.height<0.08||
     measurement.width>20||measurement.height>20||
     !anchor||![anchor.x,anchor.y,headingRadians].every(Number.isFinite)||
@@ -1636,9 +1640,13 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name)
   {x:anchor.x+hw*ux+hh*nx,y:anchor.y+hw*uy+hh*ny},
   {x:anchor.x-hw*ux+hh*nx,y:anchor.y-hw*uy+hh*ny}
  ];
- const obstacle={kind:'camera-obstacle',name:String(name||'Препятствие камеры').trim().slice(0,48)||'Препятствие камеры',polygon,
+ const measurementInflation=2*Math.max(sigmaWidth,sigmaDepth);
+ let conservativePolygon=polygon;
+ try{if(measurementInflation>0)conservativePolygon=planner.inflateConvexPolygon(polygon,measurementInflation);}catch(_){return false;}
+ const obstacle={kind:'camera-obstacle',name:String(name||'Препятствие камеры').trim().slice(0,48)||'Препятствие камеры',
+  polygon:conservativePolygon,nominalPolygon:polygon,
   measuredWidth:measurement.width,measuredDepth:measurement.height,
-  sigmaWidth:Number(measurement.sigmaWidth)||0,sigmaDepth:Number(measurement.sigmaHeight)||0};
+  sigmaWidth,sigmaDepth,measurementInflation,uncertaintyModel:'2-sigma-isotropic-envelope'};
  try{if(planner.validateObstacles([obstacle]).length)return false;}catch(_){return false;}
  cameraObstacles.push(obstacle);
  invalidateRouteForSettingsChange();
