@@ -183,6 +183,15 @@ canvas{max-width:100%}
 <div><label for="vehicleFootprintUncertainty">Расширение каждой грани автопоезда, м</label><input id="vehicleFootprintUncertainty" type="number" min="0" max="0.5" value="0.03" step="0.01"></div>
 </div>
 <p class="small">Это отдельные пользовательские границы, не оценка 1σ камеры: положение каждого прямоугольного препятствия расширяется по X/Y на заданную величину, его полный размер — на заданную погрешность, а все три прямоугольных контура автопоезда расширяются наружу с каждой грани. Планировщик ищет путь в этой геометрической оболочке и сравнивает начальное действие с номинальным поиском. Погрешности колёсной базы, седла и расстояния шкворень–тележка пока не варьируются; это ограниченная проверка, не полный анализ неопределённости.</p>
+<div class="section">Неопределённость размеров автопоезда</div>
+<div class="grid">
+<div><label for="wheelbaseUncertainty">Колёсная база ±, м</label><input id="wheelbaseUncertainty" type="number" min="0" max="2" value="0" step="0.01"></div>
+<div><label for="hitchOffsetUncertainty">Задняя ось — седло ±, м</label><input id="hitchOffsetUncertainty" type="number" min="0" max="1" value="0" step="0.01"></div>
+<div><label for="kingpinAxlesUncertainty">Шкворень — центр тележки ±, м</label><input id="kingpinAxlesUncertainty" type="number" min="0" max="5" value="0" step="0.01"></div>
+<div><label for="trailerLengthUncertainty">Длина полуприцепа ±, м</label><input id="trailerLengthUncertainty" type="number" min="0" max="5" value="0" step="0.01"></div>
+<div><label for="trailerWidthUncertainty">Ширина полуприцепа ±, м</label><input id="trailerWidthUncertainty" type="number" min="0" max="1.5" value="0" step="0.01"></div>
+</div>
+<p class="small">Указывайте только подтверждённый диапазон по документам или контрольным измерениям. Значение 0 означает «допуск не задан», а не доказанную точность. Планировщик проверяет крайние значения каждого параметра по одному за раз; совместные комбинации всех ошибок не перебираются. Шаг осей и динамика отдельных шин не входят в эту проверку траектории.</p>
 <div class="row" style="margin-top:8px">
 <button id="apply">Применить параметры</button>
 <button id="assess" class="primary">Оценить проём</button>
@@ -229,8 +238,8 @@ canvas{max-width:100%}
 </main>
 
 <script src="vehicle-physics.js?v=20261124-6"></script>
-<script src="articulated-planner.js?v=20261124-9"></script>
-<script src="truckvision.js?v=20261124-12"></script>
+<script src="articulated-planner.js?v=20261124-10"></script>
+<script src="truckvision.js?v=20261124-13"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261124-10"></script>
 <script src="camera-measure.js?v=20261124-10"></script>
