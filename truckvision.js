@@ -866,8 +866,11 @@ const geometryNote=geometrySensitivity.status==='stable-within-bounded-envelope'
  ' Дополнительно проверена расширенная геометрия: положение препятствий ±'+geometrySensitivity.obstaclePositionUncertainty.toFixed(2)+' м по каждой оси, ошибка полного размера ±'+geometrySensitivity.obstacleSizeUncertainty.toFixed(2)+' м, внешний контур автопоезда расширен на '+geometrySensitivity.vehicleFootprintUncertainty.toFixed(2)+' м с каждой грани. Параметры wheelbase, hitchOffset и kingpinAxles не варьировались; это ограниченная проверка оболочки, не полный анализ неопределённости.':
  geometrySensitivity.status==='zero-geometry-bounds'?' Геометрические границы неопределённости заданы нулевыми; расширенная проверка не выполнялась.':'';
 const parameterSensitivity=result.parameterSensitivity||{};
+const parameterRanges=Object.entries(parameterSensitivity.suppliedBounds||{}).map(([key,bound])=>
+ key+' '+Number(bound.min).toFixed(3)+'–'+Number(bound.max).toFixed(3)+' м'
+).join('; ');
 const parameterNote=parameterSensitivity.status==='stable-across-one-at-a-time-bounds'?
- ' Проверены '+parameterSensitivity.testedScenarioCount+' крайних сценариев физических размеров по одному параметру за раз; начальное действие совпало среди найденных кандидатов. Совместные комбинации диапазонов не проверялись.':
+ ' Проверены '+parameterSensitivity.testedScenarioCount+' крайних сценариев физических размеров по одному параметру за раз ('+parameterRanges+'); начальное действие совпало среди найденных кандидатов. Совместные комбинации диапазонов не проверялись.':
  parameterSensitivity.status==='not-varied'?
  ' Неопределённости физических размеров не заданы (нулевые допуски означают «не оценивалось», а не доказанную точность).':
  ' Устойчивость к диапазонам физических размеров не подтверждена.';
