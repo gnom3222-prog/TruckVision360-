@@ -17,6 +17,12 @@ body{margin:0;background:var(--bg);color:#f3f7fb;font:14px system-ui,-apple-syst
 header{max-width:1200px;margin:auto;padding:16px 14px 8px}
 h1{font-size:22px;margin:0 0 4px}
 header p{margin:0;color:var(--muted);font-size:13px}
+.app-nav{position:sticky;top:0;z-index:50;display:flex;gap:7px;max-width:1200px;margin:0 auto;padding:8px 12px;background:rgba(8,19,33,.94);backdrop-filter:blur(12px);border-bottom:1px solid rgba(53,200,239,.18);overflow-x:auto;scrollbar-width:none}
+.app-nav::-webkit-scrollbar{display:none}
+.app-nav button{flex:0 0 auto;min-width:88px;padding:10px 13px;border-radius:11px;background:#142b40;border-color:#294c68;color:#c5d5e3;white-space:nowrap}
+.app-nav button[aria-current="page"]{background:#087fa5;border-color:#35c8ef;color:#fff;box-shadow:0 0 0 1px rgba(53,200,239,.18) inset}
+[id]{scroll-margin-top:76px}
+@media(max-width:600px){header{padding:12px 10px 7px}h1{font-size:19px}.app-nav{padding:7px 8px;gap:6px}.app-nav button{min-width:0;padding:9px 11px;font-size:12px}}
 main{max-width:1200px;margin:auto;padding:8px 12px 28px;display:grid;grid-template-columns:minmax(0,1.45fr) minmax(290px,1fr);gap:12px}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:12px;min-width:0}
 canvas{display:block;width:100%;height:auto;background:#102235;border:1px solid #36516a;border-radius:10px;touch-action:pan-y}
@@ -72,12 +78,19 @@ canvas{max-width:100%}
 </head>
 <body>
 <header>
-<h1>🚛 TruckVision 360 · ALL-IN-ONE v4.4</h1>
-<p>Volvo FH 4×2 · седельный трёхосный полуприцеп · учебный симулятор маневрирования</p>
+<h1>🚛 TruckVision 360</h1>
+<p>Универсальный помощник маневрирования · ALL-IN-ONE v4.4</p>
 </header>
+<nav class="app-nav" aria-label="Разделы TruckVision 360">
+<button type="button" data-target="maneuverSection" aria-current="page">↗ Манёвр</button>
+<button type="button" data-target="view">▦ Карта</button>
+<button type="button" data-target="environmentSection">◎ Окружение</button>
+<button type="button" data-target="measurementSection">⌗ Измерения</button>
+<button type="button" data-target="settingsSection">⚙ Настройки</button>
+</nav>
 
 <main>
-<section class="panel">
+<section class="panel" id="maneuverSection">
 <div class="row"><b>Вид сверху · автопоезд</b><span id="mode" class="status">Остановлен</span></div>
 <canvas id="view" width="1000" height="650" aria-label="Вид сверху на автопоезд"></canvas>
 <div class="row" style="margin-top:8px">
@@ -96,7 +109,7 @@ canvas{max-width:100%}
 <button id="center">Центрировать</button>
 </div>
 <p class="small">Удерживай кнопку движения. Клавиатура: ←/→ — руль, ↑/↓ — движение, пробел — тормоз.</p>
-<div class="row" style="margin-top:7px">
+<div class="row" id="environmentSection" style="margin-top:7px">
 <button id="obstaclesToggle">Препятствия: вкл.</button>
 <button id="helperToggle" class="primary">Помощник: вкл.</button>
 <button id="scenarioReset">Сбросить площадку</button>
@@ -135,7 +148,7 @@ canvas{max-width:100%}
 </div>
 </section>
 
-<section class="panel">
+<section class="panel" id="settingsSection">
 <b>Настройки модели</b>
 <div class="section">Режим</div>
 <label for="model">Тип расчёта</label>
@@ -223,7 +236,7 @@ canvas{max-width:100%}
 <div class="metric"><span>Боковое смещение крайних осей · proxy</span><strong id="axleScrubOut">0,000 м/с</strong></div>
 </div>
 
-<div class="assistant-box camera-panel">
+<div class="assistant-box camera-panel" id="measurementSection">
 <strong>📷 Измерение ворот камерой iPhone</strong>
 <p class="small">Камера запускается только после нажатия кнопки. Изображение обрабатывается локально в браузере и не отправляется на сервер.</p>
 <div class="camera-stage">
@@ -258,6 +271,33 @@ canvas{max-width:100%}
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261124-12"></script>
 <script src="camera-measure.js?v=20261124-12"></script>
+
+<script>
+// Lightweight navigation: reveal existing working sections without replacing their controls.
+(()=>{
+ const nav=document.querySelector('.app-nav');
+ if(!nav)return;
+ nav.addEventListener('click',event=>{
+  const button=event.target.closest('button[data-target]');
+  if(!button)return;
+  const target=document.getElementById(button.dataset.target);
+  if(!target)return;
+  nav.querySelectorAll('button[data-target]').forEach(item=>item.removeAttribute('aria-current'));
+  button.setAttribute('aria-current','page');
+  target.scrollIntoView({behavior:'smooth',block:'start'});
+ });
+ const targets=['maneuverSection','view','environmentSection','measurementSection','settingsSection'];
+ if('IntersectionObserver'in window){
+  const observer=new IntersectionObserver(entries=>{
+   const visible=entries.filter(entry=>entry.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];
+   if(!visible)return;
+   const active=nav.querySelector('[data-target="'+visible.target.id+'"]');
+   if(active){nav.querySelectorAll('button[data-target]').forEach(item=>item.removeAttribute('aria-current'));active.setAttribute('aria-current','page');}
+  },{rootMargin:'-20% 0px -65% 0px',threshold:[0,.1,.4]});
+  targets.forEach(id=>{const element=document.getElementById(id);if(element)observer.observe(element);});
+ }
+})();
+</script>
 
 <script>
 // PWA: register only on secure origins supported by iOS Safari.
