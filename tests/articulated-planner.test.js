@@ -88,6 +88,18 @@ test('prepared clearance checker matches direct collision-distance queries',()=>
  assert.deepEqual(check(q),planner.clearance(q,obstacles,params));
 });
 
+test('clearance checker identifies whether the tractor or trailer is nearest to an obstacle',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const rear=planner.clearance(q,[{x:-13.5,y:0,w:1,h:1,name:'rear pallet'}],params);
+ assert.equal(rear.vehiclePart,'полуприцеп');
+ assert.equal(rear.obstacle,'rear pallet');
+ assert.equal(rear.bodyIndex,2);
+ const front=planner.clearance(q,[{x:6.5,y:0,w:1,h:1,name:'front pallet'}],params);
+ assert.equal(front.vehiclePart,'тягач');
+ assert.equal(front.obstacle,'front pallet');
+ assert.equal(front.bodyIndex,0);
+});
+
 test('articulated planner passes through a two-pallet clearance gate',()=>{
  const obstacles=[
   {x:12,y:3,w:1.2,h:2,name:'upper pallet'},
@@ -103,6 +115,12 @@ test('articulated planner passes through a two-pallet clearance gate',()=>{
  });
  assert.equal(result.ok,true,JSON.stringify(result));
  assert.ok(result.minimumClearanceLowerBound>=0.30-1e-6,'continuous-step bound must preserve the gate clearance');
+ assert.ok(result.minimumClearanceDetail,'route should expose the nearest sampled clearance detail');
+ assert.ok(result.minimumClearanceDetail.vehiclePart);
+ assert.ok(result.minimumClearanceDetail.obstacle);
+ assert.ok(result.minimumClearanceDetail.state);
+ assert.ok(result.sweptClearanceDetail,'route should identify the segment responsible for its lower bound');
+ assert.ok(Number.isFinite(result.sweptClearanceDetail.lowerBound));
  for(const q of result.states.slice(1)){
   assert.ok(planner.clearance(q,obstacles,params).distance>=0.30-1e-6,'entire articulated footprint must clear both pallets');
  }
