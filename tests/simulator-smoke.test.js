@@ -246,6 +246,24 @@ test('gate map uncertainty settings are forwarded to both jamb polygons',()=>{
  assert.match(source,/headingUncertaintyDeg:cfg\.gateHeadingUncertaintyDeg/);
 });
 
+test('camera registration rejects invalid manual gate pose uncertainty without partial mutation',()=>{
+ const {elements,windowObject}=bootSimulator();
+ const before=[
+  elements.gateWidth.value,elements.gateWidthUncertainty.value,
+  elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value
+ ];
+ elements.gateHeadingUncertaintyDeg.value='46';
+ const applied=windowObject.TruckVisionApplyGateRegistration({
+  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08
+ });
+ assert.equal(applied,false);
+ assert.deepEqual([
+  elements.gateWidth.value,elements.gateWidthUncertainty.value,
+  elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value
+ ],before);
+ assert.notEqual(elements.gateEnabled.checked,true);
+});
+
 test('ambiguous planner results preserve candidate states and simulator draws them without enabling playback',()=>{
  const root=path.join(__dirname,'..');
  const plannerSource=fs.readFileSync(path.join(root,'articulated-planner.js'),'utf8');
