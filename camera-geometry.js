@@ -7,7 +7,7 @@
  'use strict';
 
  const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
- const MAX_CONDITION_ESTIMATE=1e8;
+ const MAX_CONDITION_ESTIMATE=1e7;
  const CONDITION_WARNING_ESTIMATE=1e5;
 
  function validQuad(q,minArea=1000,minEdge=20){
