@@ -654,6 +654,7 @@ async function buildRoute(){
   }
 
   if(result.reason==='ambiguous-start'){
+   if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: начальные варианты манёвра неоднозначны.');
    plannedRoute=[];
    routeAssessment=null;
    const alternatives=(result.candidateSummaries||[]).map(candidate=>{
