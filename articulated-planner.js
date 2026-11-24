@@ -756,7 +756,14 @@
    return {
     ok:false,reason:'ambiguous-start',status:comparison.status,
     expanded,candidatesFound:candidates.length,candidatesAttempted:candidateCount,
-    candidateSummaries,failures,comparison
+    candidateSummaries,
+    candidateRoutes:candidates.map((candidate,index)=>({
+     index,label:candidate.label,cost:candidate.cost,
+     states:candidate.states,
+     metrics:candidate.score,
+     recommendation:candidate.recommendation
+    })),
+    failures,comparison
    };
   }
   const selected=candidates[comparison.bestCandidate.index];
