@@ -100,6 +100,56 @@ test('clearance checker identifies whether the tractor or trailer is nearest to 
  assert.equal(front.bodyIndex,0);
 });
 
+test('gate helper creates two oriented convex jamb polygons with the requested clear opening',()=>{
+ const gate=planner.createGateObstacles({
+  centerX:10,centerY:-2,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2
+ });
+ assert.equal(gate.length,2);
+ assert.deepEqual(gate.map(item=>item.name),['Левый косяк ворот','Правый косяк ворот']);
+ assert.equal(planner.validateObstacles(gate).length,0);
+ const u={x:Math.cos(Math.PI/2),y:Math.sin(Math.PI/2)};
+ const projections=gate.map(item=>item.polygon.map(point=>point.x*u.x+point.y*u.y));
+ const leftInside=Math.max(...projections[0]);
+ const rightInside=Math.min(...projections[1]);
+ assert.ok(Math.abs((rightInside-leftInside)-4)<1e-9,'inside faces must preserve the measured clear width');
+});
+
+test('oriented gate jamb polygons participate in whole-vehicle clearance',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const narrow=planner.createGateObstacles({
+  centerX:0,centerY:0,clearWidth:3,postWidth:0.2,depth:0.6,heading:Math.PI/2
+ });
+ const wide=planner.createGateObstacles({
+  centerX:0,centerY:0,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2
+ });
+ const narrowClearance=planner.clearance(q,narrow,params).distance;
+ const wideClearance=planner.clearance(q,wide,params).distance;
+ assert.ok(Math.abs(narrowClearance-0.225)<1e-8,'3 m opening should leave 0.225 m from the 2.55 m footprint');
+ assert.ok(Math.abs(wideClearance-0.725)<1e-8,'4 m opening should leave 0.725 m from the 2.55 m footprint');
+ assert.ok(wideClearance>narrowClearance);
+});
+
+test('convex polygon inflation is finite, outward and rejects concave geometry',()=>{
+ const gate=planner.createGateObstacles({
+  centerX:0,centerY:0,clearWidth:4,postWidth:0.2,depth:0.6,heading:0.37
+ });
+ const original=gate[0].polygon;
+ const expanded=planner.inflateConvexPolygon(original,0.1);
+ assert.equal(expanded.length,4);
+ assert.ok(planner.validateObstacles([{polygon:expanded}]).length===0);
+ const bounds=points=>({
+  minX:Math.min(...points.map(point=>point.x)),
+  maxX:Math.max(...points.map(point=>point.x)),
+  minY:Math.min(...points.map(point=>point.y)),
+  maxY:Math.max(...points.map(point=>point.y))
+ });
+ const before=bounds(original),after=bounds(expanded);
+ assert.ok(after.minX<before.minX&&after.maxX>before.maxX);
+ assert.ok(after.minY<before.minY&&after.maxY>before.maxY);
+ const concave=[{x:0,y:0},{x:2,y:0},{x:1,y:0.5},{x:2,y:2},{x:0,y:2}];
+ assert.ok(planner.validateObstacles([{polygon:concave}]).length>0);
+});
+
 test('articulated planner passes through a two-pallet clearance gate',()=>{
  const obstacles=[
   {x:12,y:3,w:1.2,h:2,name:'upper pallet'},
