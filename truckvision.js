@@ -1272,19 +1272,15 @@ function drawRoute(){
 }
 
 function drawWheel(center,angle){
- const p=toScreen(center);
- const radius=0.24*SCALE;
- ctx.save();
- ctx.translate(p.x,p.y);
- ctx.rotate(-angle);
- ctx.fillStyle='#050b11';
- ctx.strokeStyle='#9bb2c3';
- ctx.lineWidth=1.5;
- ctx.beginPath();
- ctx.roundRect(-radius*1.45,-radius,radius*2.9,radius*2,Math.max(2,radius*.35));
- ctx.fill();
- ctx.stroke();
- ctx.restore();
+ // Рисуем колесо как полигон в координатах карты: это работает
+ // и в браузерном Canvas, и в облегчённом Canvas-контексте тестов.
+ const halfLength=0.36,halfWidth=0.22;
+ drawPolygon([
+  localPoint(center,angle,halfLength,halfWidth),
+  localPoint(center,angle,-halfLength,halfWidth),
+  localPoint(center,angle,-halfLength,-halfWidth),
+  localPoint(center,angle,halfLength,-halfWidth)
+ ],'#050b11');
 }
 
 function drawVehicleDetails(){
