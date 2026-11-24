@@ -123,3 +123,41 @@ test('camera uncertainty estimation also fails closed for a projective-horizon c
   /пересекает линию вырождения/
  );
 });
+
+test('normalized homography is invariant to high-resolution image coordinate scaling',()=>{
+ const scale=8;
+ const scaledReference=perspectiveReference.map(point=>({x:point.x*scale,y:point.y*scale}));
+ const scaledOpening=measuredOpening.map(point=>({x:point.x*scale,y:point.y*scale}));
+ const original=camera.measureQuad(perspectiveReference,0.297,0.210,measuredOpening);
+ const scaled=camera.measureQuad(scaledReference,0.297,0.210,scaledOpening);
+ near(scaled.width,original.width,1e-8);
+ near(scaled.height,original.height,1e-8);
+ assert.ok(Number.isFinite(scaled.conditionEstimate));
+ assert.ok(scaled.conditionEstimate>0);
+});
+
+test('camera calibration rejects a nearly degenerate reference by condition estimate',()=>{
+ const narrowReference=[
+  {x:0,y:0},{x:1000,y:0},
+  {x:1000,y:0.0001},{x:0,y:0.0001}
+ ];
+ assert.equal(camera.validQuad(narrowReference,0,0),true);
+ assert.throws(
+  ()=>camera.homography(narrowReference,0.297,0.210),
+  /плохо обусловлена/
+ );
+});
+
+test('camera measurement exposes a conditioning warning for a very thin calibration quadrilateral',()=>{
+ const thinReference=[
+  {x:0,y:0},{x:1000,y:0},
+  {x:1000,y:0.02},{x:0,y:0.02}
+ ];
+ const opening=[
+  {x:100,y:0.004},{x:900,y:0.004},
+  {x:900,y:0.016},{x:100,y:0.016}
+ ];
+ const result=camera.measureQuad(thinReference,0.297,0.210,opening);
+ assert.ok(result.conditionEstimate>camera.CONDITION_WARNING_ESTIMATE);
+ assert.equal(result.conditioningWarning,true);
+});
