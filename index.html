@@ -103,6 +103,42 @@ canvas{max-width:100%}
 .camera-actions button{flex:1;min-width:130px}
 .camera-status{margin-top:8px;padding:9px;border-radius:8px;background:#0e2031;color:#dceaf5;font-size:12px;line-height:1.45;white-space:pre-wrap}
 .camera-warning{color:#ffd18b}
+
+:root{--bg:#050d16;--panel:#0b1b2a;--line:#203b50;--cyan:#32d4ef;--green:#44e56f;--muted:#91a8bb}
+body{background:radial-gradient(ellipse at 50% -15%,#17364b 0,#071321 48%,#040a11 100%);color:#edf6ff}header{display:none}
+.app-nav{position:fixed;top:auto;bottom:0;left:0;right:0;max-width:100%;padding:8px 10px calc(8px + env(safe-area-inset-bottom));justify-content:space-around;background:rgba(4,12,21,.94);border-top:1px solid #24465e;border-bottom:0;z-index:100;backdrop-filter:blur(18px)}
+.app-nav button{min-width:0;flex:1;border:0;background:transparent;padding:8px 4px;color:#91a8bb;white-space:normal;font-size:11px}
+.app-nav button:before{display:block;font-size:18px;margin-bottom:3px}
+.app-nav button[data-page="maneuverSection"]:before{content:"◈"}.app-nav button[data-page="environmentSection"]:before{content:"⌖"}.app-nav button[data-page="measurementSection"]:before{content:"▧"}.app-nav button[data-page="settingsSection"]:before{content:"⚙"}
+.app-nav button[aria-current="page"]{background:#12344b;color:#53d9f4;border-radius:12px;box-shadow:inset 0 0 0 1px #28617b}
+main{max-width:1400px;padding:10px 10px calc(100px + env(safe-area-inset-bottom));display:block}.panel{background:transparent;border:0;border-radius:0;padding:0}#maneuverSection{background:transparent;border:0;padding:0}
+.cockpit{background:linear-gradient(155deg,#0c2030,#071522 65%);border:1px solid #23465e;border-radius:18px;padding:10px;box-shadow:0 18px 50px #0008}
+.cockpit-brand{display:flex;align-items:center;gap:9px;padding:3px 2px 10px;border-bottom:1px solid #20394d}.brand-mark{font-size:25px}.cockpit-brand strong{font-size:17px;letter-spacing:-.5px}.cockpit-brand em{font-style:normal;color:#29d6f2}.cockpit-brand small{display:block;font-size:8px;letter-spacing:1.2px;color:#89a8be;margin-top:1px}
+.connection-pill{margin-left:auto;padding:5px 8px;border:1px solid #28566b;border-radius:20px;font-size:9px;color:#9ac4d7}.connection-pill i,.status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#42dc73;box-shadow:0 0 10px #42dc73;margin-right:5px}
+.cockpit-status{display:flex;align-items:center;margin:9px 1px;padding:7px 9px;border-radius:8px;background:#0c2a28;color:#a7edc1;font-size:10px}
+.cockpit-grid{display:grid;grid-template-columns:minmax(115px,.75fr) minmax(0,2fr) minmax(120px,.75fr);gap:8px;align-items:stretch}
+.cockpit-summary,.cockpit-readouts{background:#0b1c2a;border:1px solid #1c3c51;border-radius:12px;padding:9px;min-width:0}
+.summary-heading,.readout-title{font-size:9px;letter-spacing:.8px;color:#7f9cb2;font-weight:800;margin-bottom:9px}.summary-result{padding:7px 6px;border-radius:8px;background:#103a2b;color:#79ef9a;font-size:11px;margin-bottom:9px}.summary-result span{margin-right:5px}
+.summary-line{display:flex;justify-content:space-between;gap:4px;padding:6px 0;border-bottom:1px solid #1b3548;font-size:9px;color:#9db2c4}.summary-line b{color:#eaf6ff;text-align:right}
+.summary-vehicle{margin-top:10px;padding:8px 5px;border-radius:8px;background:#102a3c;color:#9ab4c9;font-size:8px;line-height:1.6}.summary-vehicle strong{font-size:10px;color:#e5f6ff}
+.cockpit-views{display:grid;grid-template-rows:minmax(100px,.85fr) minmax(140px,1.15fr);gap:8px;min-width:0}.sensor-preview,.map-preview{position:relative;min-height:0;overflow:hidden;border:1px solid #2b4b62;border-radius:12px;background:#071522}
+.view-label{display:flex;justify-content:space-between;gap:6px;padding:7px 9px;background:#102a3d;color:#a9c4d8;font-size:8px;letter-spacing:.6px}.view-label b{color:#ffcb7c;font-size:7px}
+.sensor-empty{height:calc(100% - 28px);min-height:82px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:8px;background:radial-gradient(ellipse at center,#17364a,#071522 72%)}
+.sensor-cross{font-size:23px;color:#4f839b}.sensor-empty strong{font-size:10px;color:#d6e7f2}.sensor-empty small{font-size:8px;color:#819db2;margin-top:4px;max-width:230px}
+.map-preview .maneuver-view{height:calc(100% - 28px);padding:3px;border:0;border-radius:0;box-shadow:none;background:#061321}#view{height:100%;max-height:230px;object-fit:contain;border:0;border-radius:7px;background:#081b2a}
+.cockpit-readouts .readout{padding:8px 7px;margin-bottom:7px;border-radius:9px;background:#10283a;border:1px solid #1d4055}.readout span{display:block;color:#8ca8bc;font-size:8px;margin-bottom:4px}.readout strong{display:block;color:#48e477;font-size:15px;font-variant-numeric:tabular-nums}
+.sensor-state{font-size:8px;color:#8ea7ba;line-height:1.5;margin-top:10px}.status-dot.muted{background:#e9a94e;box-shadow:0 0 8px #e9a94e}
+.cockpit-actions{display:grid;grid-template-columns:1.35fr 1fr 1fr 1fr;gap:6px;margin-top:9px}.cockpit-actions button{font-size:10px;padding:10px 4px;min-height:40px;border-radius:9px}.cockpit-actions .primary{background:#087eaa;border-color:#29c6e8}.cockpit-actions .drive-action{background:#116a3a;border-color:#39d66d}.cockpit-actions .stop{background:#842e37;border-color:#d95761}
+.cockpit-disclaimer{font-size:8px;color:#8098aa;line-height:1.4;padding:8px 3px 1px}.maneuver-topline{margin:12px 2px 8px}.maneuver-topline h2{font-size:15px}.maneuver-subtitle{font-size:10px}.maneuver-status{font-size:9px}
+.maneuver-controls{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.maneuver-controls button{font-size:11px;min-height:38px}.obstacle-legend,.small{font-size:10px}.metric{background:#0b1c2a;border-color:#1e4055}.metric strong{font-size:15px}
+.assistant-box,.maneuver-hint{background:#0b2233;border-color:#22536b}#environmentSection,#measurementSection,#settingsSection{padding:10px;background:#0a1b29;border:1px solid #1e3e53;border-radius:15px}
+#environmentSection .assistant-box{padding:10px}#environmentSection .row{display:grid;grid-template-columns:1fr 1fr}
+@media(max-width:700px){main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8px;border-radius:15px}.cockpit-grid{grid-template-columns:minmax(0,1fr);gap:7px}
+.cockpit-summary{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px}.summary-heading{grid-column:1/-1;margin-bottom:2px}.summary-result{grid-column:1/-1;margin:0}.summary-line{padding:5px 2px}.summary-vehicle{grid-column:1/-1;margin-top:2px}
+.cockpit-views{grid-template-rows:120px 190px}.cockpit-readouts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:8px}.readout-title,.sensor-state{grid-column:1/-1;margin:0}.readout{margin:0!important}.readout strong{font-size:14px}
+.cockpit-actions{grid-template-columns:repeat(4,minmax(0,1fr))}.cockpit-actions button{font-size:9px}}
+@media(orientation:landscape) and (max-height:600px){main{padding:6px 8px 72px}.cockpit-grid{grid-template-columns:minmax(115px,.7fr) minmax(0,2fr) minmax(115px,.7fr)}.cockpit-views{grid-template-rows:105px 145px}.cockpit-summary,.cockpit-readouts{display:block}.readout{padding:5px!important;margin-bottom:4px!important}.readout strong{font-size:12px}}
+
 </style>
 </head>
 <body>
@@ -125,7 +161,7 @@ canvas{max-width:100%}
  <span id="mode" class="maneuver-status">Остановлен</span>
 </div>
 <div class="maneuver-view">
- <canvas id="view" width="1000" height="650" aria-label="Вид сверху на автопоезд"></canvas>
+ 
 </div>
 <div class="maneuver-controls">
  <button id="left">↶ Руль влево</button>
@@ -149,6 +185,20 @@ canvas{max-width:100%}
 <div class="maneuver-hint" aria-live="polite">
 <strong>🤖 Подсказка TruckVision 360</strong>
 <p id="assistantAdvice">Система готова. Выберите манёвр и двигайтесь медленно, наблюдая за зазорами.</p>
+</div>
+<div class="cockpit">
+ <div class="cockpit-brand"><div class="brand-mark">🚛</div><div><strong>TruckVision <em>360°</em></strong><small>УМНЫЙ ПОМОЩНИК МАНЁВРА</small></div><span class="connection-pill"><i></i> SIM</span></div>
+ <div class="cockpit-status"><span class="status-dot"></span><span id="cockpitStatus">Система готова · демонстрационный режим</span></div>
+ <div class="cockpit-grid">
+  <aside class="cockpit-summary"><div class="summary-heading">СОСТОЯНИЕ МАНЁВРА</div><div class="summary-result"><span>●</span><b>Ожидание</b></div><div class="summary-line"><span>Сложность</span><b id="cockpitDifficulty">Не рассчитана</b></div><div class="summary-line"><span>Скорость</span><b id="cockpitSpeed">0,0 м/с</b></div><div class="summary-line"><span>Угол сочленения</span><b id="cockpitBeta">0,0°</b></div><div class="summary-vehicle">ТЯГАЧ + 3-ОСНЫЙ ПОЛУПРИЦЕП<br><strong>16,50 м · модель</strong></div></aside>
+  <div class="cockpit-views">
+   <div class="sensor-preview"><div class="view-label"><span>КАМЕРЫ · ПЕРЕДНИЙ ВИД</span><b>НЕТ ВИДЕОСИГНАЛА</b></div><div class="sensor-empty"><span class="sensor-cross">⌗</span><strong>Внешняя камера не подключена</strong><small>Здесь появится поток после подключения оборудования</small></div></div>
+   <div class="map-preview"><div class="view-label"><span>КАРТА · ВИД СВЕРХУ</span><b>ВИРТУАЛЬНАЯ МОДЕЛЬ</b></div><div class="maneuver-view"><canvas id="view" width="1000" height="650" aria-label="Вид сверху на автопоезд"></canvas></div></div>
+  </div>
+  <aside class="cockpit-readouts"><div class="readout-title">ТЕЛЕМЕТРИЯ</div><div class="readout"><span>Скорость</span><strong id="cockpitSpeedLarge">0,0 м/с</strong></div><div class="readout"><span>Минимальный зазор</span><strong id="cockpitClearance">—</strong></div><div class="readout"><span>Угол сочленения</span><strong id="cockpitBetaLarge">0,0°</strong></div><div class="readout"><span>Рулевое управление</span><strong id="cockpitSteer">0°</strong></div><div class="sensor-state"><span class="status-dot muted"></span>LiDAR / камеры: ожидание подключения</div></aside>
+ </div>
+ <div class="cockpit-actions"><button id="planRoute" class="primary">Построить маршрут</button><button id="routeStart" class="drive-action">▶ Старт</button><button id="routePause">Ⅱ Пауза</button><button id="routeStop" class="stop">■ Стоп</button></div>
+ <div class="cockpit-disclaimer">Демонстрационная модель. Реальные камеры и LiDAR пока не подключены. Расчёт не подтверждает безопасность манёвра.</div>
 </div>
 </section>
 <section class="panel tab-page" id="environmentSection">
@@ -321,7 +371,7 @@ canvas{max-width:100%}
 
 <script src="vehicle-physics.js?v=20261124-6"></script>
 <script src="articulated-planner.js?v=20261124-18"></script>\n<script src="sensor-perception.js?v=20261124-1"></script>
-<script src="truckvision.js?v=20261124-33"></script>
+<script src="truckvision.js?v=20261124-34"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261124-13"></script>
 <script src="camera-measure.js?v=20261124-16"></script>
