@@ -1046,3 +1046,24 @@ test('gate uncertainty rejects an invalid joint envelope before changing route o
  assert.equal(result.reason,'invalid-input');
  assert.match(result.errors.join(' '),/неопределённости|границы/);
 });
+
+
+test('ambiguous nominal gate route does not claim the uncertainty envelope was checked',()=>{
+ const gateGeometry={
+  centerX:3.5,centerY:0,clearWidth:8,postWidth:0.25,depth:0.6,heading:Math.PI/2,
+  widthUncertainty:0.4,positionUncertainty:0.1,headingUncertaintyDeg:1
+ };
+ const result=planner.planAlternativesWithVehicleParameterBounds({
+  start:{x:0,y:0,psi:0,psiT:0},goal:{x:7,y:0},params,integrate,
+  obstacles:planner.createGateObstacles(gateGeometry),gateGeometry,
+  alternativeMaxExpansions:3500,costTolerance:0.25,
+  positionTolerance:0.9,maxTerminalArticulation:12*Math.PI/180,minClearance:0.3,
+  measurementUncertainty:0,obstaclePositionUncertainty:0,
+  obstacleSizeUncertainty:0,vehicleFootprintUncertainty:0
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'ambiguous-start');
+ assert.equal(result.geometrySensitivity.status,'nominal-ambiguous');
+ assert.equal(result.geometrySensitivity.envelopeEvaluated,false);
+ assert.equal(result.geometrySensitivity.gateGeometryUncertainty.enabled,true);
+});
