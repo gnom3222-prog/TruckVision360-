@@ -163,7 +163,6 @@
   // Bound the farthest body corner from that center, not from the kingpin.
   const trailerFrontFromAxle=kingpinAxles+1.5;
   const trailerRearFromAxle=kingpinAxles-(trailerLength-1.5);
-  const trailerRadius=Math.hypot(Math.max(Math.abs(trailerFrontFromAxle),Math.abs(trailerRearFromAxle)),trailerWidth/2);
   if(q&&(!Number.isFinite(q.psi)||!Number.isFinite(q.psiT))){
    throw new Error('Articulation state is invalid for swept-clearance checking.');
   }
@@ -171,9 +170,30 @@
   // kingpinAxles * trailer yaw rate] has norm sqrt(1 + a^2), with
   // a = hitchOffset * tractor yaw rate per metre. A Frobenius-norm bound
   // covers every point at radius R from the equivalent axle-group center.
+  // For fixed steering, each trailer corner's velocity in trailer coordinates
+  // is a 2x2 linear map of [cos(beta), sin(beta)]. Its spectral norm is the
+  // exact maximum speed over every articulation angle. Evaluate all four
+  // corners and both gear signs to cover forward and reverse motion.
   const hitchYawCoupling=hitchOffset*tractorYawPerMeter;
-  const trailerPointRate=Math.hypot(1,hitchYawCoupling)*
-   Math.hypot(1,trailerRadius/kingpinAxles);
+  const trailerLongitudinalOffsets=[trailerFrontFromAxle,trailerRearFromAxle];
+  let trailerPointRate=0;
+  for(const coupling of [-hitchYawCoupling,hitchYawCoupling]){
+   for(const longitudinal of trailerLongitudinalOffsets){
+    for(const lateral of [-trailerWidth/2,trailerWidth/2]){
+     const m11=1+coupling*lateral/kingpinAxles;
+     const m12=coupling-lateral/kingpinAxles;
+     const m21=-coupling*longitudinal/kingpinAxles;
+     const m22=longitudinal/kingpinAxles;
+     const column1=m11*m11+m21*m21;
+     const column2=m12*m12+m22*m22;
+     const cross=m11*m12+m21*m22;
+     const largestEigenvalue=0.5*(
+      column1+column2+Math.hypot(column1-column2,2*cross)
+     );
+     trailerPointRate=Math.max(trailerPointRate,Math.sqrt(Math.max(0,largestEigenvalue)));
+    }
+   }
+  }
   return Math.max(
    1+tractorRadius*tractorYawPerMeter,
    1+cabRadiusFromRearAxle*tractorYawPerMeter,
