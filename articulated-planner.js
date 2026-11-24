@@ -51,7 +51,22 @@
    if(sign&&current!==sign)return false;
    sign=current;
   }
-  return Math.abs(polygonSignedArea(poly))>1e-8;
+  const area=polygonSignedArea(poly);
+  if(Math.abs(area)<=1e-8)return false;
+  const orientation=Math.sign(area);
+  // Every non-adjacent vertex must lie strictly on the same side of each
+  // edge. This rejects self-intersecting star polygons as well as concave ones.
+  for(let i=0;i<poly.length;i++){
+   const a=poly[i],b=poly[(i+1)%poly.length];
+   const dx=b.x-a.x,dy=b.y-a.y;
+   for(let j=0;j<poly.length;j++){
+    if(j===i||j===(i+1)%poly.length)continue;
+    const point=poly[j];
+    const side=(dx*(point.y-a.y)-dy*(point.x-a.x))*orientation;
+    if(side<=1e-10)return false;
+   }
+  }
+  return true;
  }
  function obstaclePoly(o){
   if(Array.isArray(o.polygon))return o.polygon.map(point=>({x:point.x,y:point.y}));
