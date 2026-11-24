@@ -234,15 +234,18 @@ function polygonDistance(a,b){
 
 function assessScene(q=state){
  const vehicle=vehiclePolygons(q);
- let nearest={distance:Infinity,name:'нет препятствий'};
+ const bodyNames=['тягач','кабина','полуприцеп'];
+ let nearest={distance:Infinity,name:'нет заданных препятствий',vehiclePart:null,bodyIndex:null};
  let collision=false;
 
  if(showObstacles){
   for(const o of obstacles){
    const op=obstaclePolygon(o);
-   for(const vp of vehicle){
-    const d=polygonDistance(vp,op);
-    if(d<nearest.distance)nearest={distance:d,name:o.name};
+   for(let i=0;i<vehicle.length;i++){
+    const d=polygonDistance(vehicle[i],op);
+    if(d<nearest.distance){
+     nearest={distance:d,name:o.name,vehiclePart:bodyNames[i]||('часть '+(i+1)),bodyIndex:i};
+    }
     if(d===0)collision=true;
    }
   }
@@ -250,6 +253,7 @@ function assessScene(q=state){
  return{
   nearest,
   collision,
+  obstacleChecksEnabled:showObstacles,
   beta:Math.abs(norm(q.psi-q.psiT))*180/Math.PI
  };
 }
@@ -262,13 +266,17 @@ function updateAssistant(){
  if(!helperEnabled){
   message='Помощник выключен. Контроль препятствий остаётся доступен только визуально.';
   color='#a9bacb';
+ }else if(!showObstacles){
+  message='Проверка препятствий отключена. Свободный путь не подтверждён; предупреждения по объектам неактивны. Включите препятствия перед оценкой или виртуальным проездом.';
+  color='#ffd18b';
  }else{
   const a=assessScene();
   const effectiveClearance=a.nearest.distance-2*Math.max(0,cfg.measurementUncertainty);
+  const partText=a.nearest.vehiclePart?'Часть автопоезда: '+a.nearest.vehiclePart+'. ':'';
 
   if(a.collision){
-   message='Стоп! Расчётные контуры автопоезда пересекаются с препятствием '+
-    a.nearest.name+'. Остановитесь и измените траекторию.';
+   message='Стоп! Расчётные контуры '+(a.nearest.vehiclePart||'автопоезда')+
+    ' пересекаются с препятствием '+a.nearest.name+'. Остановитесь и измените траекторию.';
    color='#ff8585';
   }else if(a.beta>=ARTICULATION_STOP_DEMO_DEG){
    message='Осторожно! Большой угол сочленения '+
@@ -280,19 +288,23 @@ function updateAssistant(){
     '°. Это программный порог внимания, а не предел устойчивости. Снизьте скорость и проверьте положение полуприцепа.';
    color='#ffd18b';
   }else if(effectiveClearance<0.45){
-   message='Очень близко к объекту '+a.nearest.name+
-    ': геометрический зазор '+a.nearest.distance.toFixed(2)+' м; после резерва неопределённости остаётся '+Math.max(0,effectiveClearance).toFixed(2)+' м. Остановитесь и проверьте пространство.';
+   message='Очень близко к объекту '+a.nearest.name+'. '+partText+
+    'Геометрический зазор '+a.nearest.distance.toFixed(2)+' м; после заданного резерва неопределённости остаётся '+
+    Math.max(0,effectiveClearance).toFixed(2)+' м. Остановитесь и проверьте пространство.';
    color='#ff8585';
   }else if(effectiveClearance<1.0){
-   message='Внимание! Препятствие '+a.nearest.name+
-    ' на расстоянии '+a.nearest.distance.toFixed(2)+' м; после резерва остаётся '+Math.max(0,effectiveClearance).toFixed(2)+' м. Маневрируйте медленно.';
+   message='Внимание! Препятствие '+a.nearest.name+'. '+partText+
+    'Расчётный зазор '+a.nearest.distance.toFixed(2)+
+    ' м; после заданного резерва остаётся '+Math.max(0,effectiveClearance).toFixed(2)+' м. Маневрируйте медленно.';
    color='#ffd18b';
+  }else if(Number.isFinite(a.nearest.distance)){
+   message='В текущей позе расчётные контуры не пересекают заданные объекты. Ближайший объект: '+
+    a.nearest.name+'. '+partText+'Расчётный зазор '+a.nearest.distance.toFixed(2)+
+    ' м; после заданного резерва неопределённости остаётся '+
+    Math.max(0,effectiveClearance).toFixed(2)+' м. Контролируйте зеркала и фактическое пространство.';
   }else{
-   message='Путь по текущему положению свободен в пределах тестовой карты. Ближайший объект: '+
-    a.nearest.name+' — '+
-    (Number.isFinite(a.nearest.distance)?
-     a.nearest.distance.toFixed(2)+' метра':'не обнаружен')+
-    '. Продолжайте медленно и контролируйте зеркала.';
+   message='В тестовой карте нет заданных препятствий. Проверка не подтверждает свободный путь в реальном пространстве.';
+   color='#ffd18b';
   }
  }
 
@@ -300,9 +312,7 @@ function updateAssistant(){
   el.textContent=message;
   el.style.color=color;
  }
-
 }
-
 function drawObstacles(){
  if(!showObstacles)return;
 
