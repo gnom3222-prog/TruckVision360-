@@ -993,3 +993,55 @@ test('vehicle parameter bounds reject unknown, inverted, out-of-range, and non-c
   assert.equal(result.reason,'invalid-input');
  }
 });
+
+
+test('gate uncertainty compares nominal and joint width-centre-heading envelopes',()=>{
+ const start={x:0,y:0,psi:0,psiT:0};
+ const goal={x:4,y:0,heading:0};
+ const gateGeometry={
+  centerX:2,centerY:0,clearWidth:8,postWidth:0.25,depth:0.6,heading:Math.PI/2,
+  widthUncertainty:0.4,positionUncertainty:0.1,headingUncertaintyDeg:1
+ };
+ const result=planner.planAlternativesWithVehicleParameterBounds({
+  start,goal,params,integrate,
+  obstacles:planner.createGateObstacles(gateGeometry),
+  gateGeometry,
+  alternativeMaxExpansions:1800,
+  positionTolerance:0.08,headingTolerance:0.08,
+  maxTerminalArticulation:0.2,minClearance:0.3,
+  measurementUncertainty:0,
+  obstaclePositionUncertainty:0,
+  obstacleSizeUncertainty:0,
+  vehicleFootprintUncertainty:0
+ });
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.geometrySensitivity.status,'stable-within-bounded-envelope');
+ const gate=result.geometrySensitivity.gateGeometryUncertainty;
+ assert.equal(gate.enabled,true);
+ assert.equal(gate.nominalClearWidth,8);
+ assert.equal(gate.conservativeClearWidth,7.6);
+ assert.equal(gate.widthUncertainty,0.4);
+ assert.equal(gate.positionUncertaintyPerAxis,0.1);
+ assert.equal(gate.headingUncertaintyDeg,1);
+ assert.equal(result.geometrySensitivity.comparison.status,'stable');
+ assert.ok(result.geometrySensitivity.nominalCandidatesFound>=1);
+ assert.ok(result.geometrySensitivity.envelopeCandidatesFound>=1);
+});
+
+test('gate uncertainty rejects an invalid joint envelope before changing route options',()=>{
+ const gateGeometry={
+  centerX:2,centerY:0,clearWidth:3,postWidth:0.25,depth:0.6,heading:Math.PI/2,
+  widthUncertainty:3,positionUncertainty:0.1,headingUncertaintyDeg:1
+ };
+ const obstacles=planner.createGateObstacles({
+  ...gateGeometry,widthUncertainty:0,positionUncertainty:0,headingUncertaintyDeg:0
+ });
+ const result=planner.planAlternativesWithVehicleParameterBounds({
+  start:{x:0,y:0,psi:0,psiT:0},goal:{x:4,y:0,heading:0},
+  params,integrate,obstacles,gateGeometry,
+  alternativeMaxExpansions:100
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'invalid-input');
+ assert.match(result.errors.join(' '),/неопределённости|границы/);
+});
