@@ -83,7 +83,7 @@ test('camera permission is requested only on tap; measurement reports uncertaint
  assert.ok(Math.abs(camera.appliedRegistrations[0].widthUncertaintyBound-2*camera.appliedRegistrations[0].widthSigma)<1e-10);
  assert.equal(camera.appliedRegistrations[0].widthUncertaintyModel,'2-sigma-normal-approximation');
  assert.equal(camera.elements.gateWidthUncertainty.value,camera.appliedRegistrations[0].widthUncertaintyBound.toFixed(3));
- assert.match(camera.elements.gateResult.textContent,/оболочка ширины/);
+ assert.match(camera.elements.gateResult.textContent,/Ширина оболочки/);
  camera.fire('cameraStop','click');
  assert.equal(camera.trackStops,1,'stopping the camera must stop its media track');
 });
