@@ -187,7 +187,8 @@
   const offsets=trailerAxleOffsets(params);
   const axleTravel=offsets.map(()=>0);
   const maxAbsLateralVelocityByAxle=offsets.map(()=>0);
-  const states=path.map(readState);
+  // Array.from visits sparse slots so a hole cannot masquerade as an empty, zero-exposure route.
+  const states=Array.from(path,readState);
   const evaluate=(q,steer)=>{
    // Absolute lateral speed is identical in forward and reverse for the same pose and steering angle.
    const diagnostic=trailerAxleDiagnostics(q,nominalSpeed,steer,params);
