@@ -728,7 +728,7 @@ if(result.reason==='geometry-sensitive-start'||result.reason==='geometry-envelop
   $('routeAdvice').textContent='Поиск в расширенной геометрической оболочке не подтвердил маршрут в заданном лимите вычислений. Это не доказывает невозможность других маршрутов; рекомендация не выдаётся.';
   $('difficultyAdvice').textContent='Автопроезд заблокирован: выбранный маршрут не подтверждён при расширении прямоугольных контуров препятствий и автопоезда. Не уменьшайте резерв только ради получения маршрута.';
  }
- $('difficultyAdvice').textContent+=' Границы проверки: положение препятствия ±'+Number(geometry.obstaclePositionUncertainty||0).toFixed(2)+' м по каждой оси; ошибка полного размера препятствия ±'+Number(geometry.obstacleSizeUncertainty||0).toFixed(2)+' м; расширение каждой внешней грани автопоезда '+Number(geometry.vehicleFootprintUncertainty||0).toFixed(2)+' м. Погрешности wheelbase, hitchOffset и kingpinAxles пока не варьируются.';
+ $('difficultyAdvice').textContent+=' Границы проверки: положение препятствия ±'+Number(geometry.obstaclePositionUncertainty||0).toFixed(2)+' м по каждой оси; ошибка полного размера препятствия ±'+Number(geometry.obstacleSizeUncertainty||0).toFixed(2)+' м; расширение каждой внешней грани автопоезда '+Number(geometry.vehicleFootprintUncertainty||0).toFixed(2)+' м. Кинематические размеры проверяются отдельно только при ненулевых допусках; это однофакторные крайние сценарии, а не все совместные комбинации.';
  draw();
  return;
 }
