@@ -415,7 +415,7 @@ function sweptClearanceColor(pathIndex,polygons,obstaclePolygons){
 
 function drawSweptCorridor(path,kind){
  if(!Array.isArray(path)||path.length<2)return;
- const stride=Math.max(1,Math.ceil(path.length/650));
+ const stride=Math.max(1,Math.ceil(path.length/240));
  const samples=[];
  for(let i=0;i<path.length;i+=stride){
   const q=path[i];
