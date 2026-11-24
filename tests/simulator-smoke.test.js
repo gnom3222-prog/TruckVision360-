@@ -200,6 +200,39 @@ test('live assistant identifies the nearest vehicle part and named obstacle',()=
  assert.match(elements.assistantAdvice.textContent,/Расчётный зазор/);
 });
 
+test('current-pose and per-part clearance include vehicle and obstacle uncertainty envelopes',()=>{
+ const {elements,windowObject}=bootSimulator();
+ const getDiagnostics=windowObject.TruckVisionGetClearanceDiagnostics;
+ assert.equal(typeof getDiagnostics,'function');
+ const baseline=getDiagnostics();
+ assert.equal(baseline.parts.length,3);
+ assert.ok(baseline.parts.every(part=>Number.isFinite(part.effective)));
+ assert.ok(baseline.parts.every(part=>part.geometryLowerBound<=part.distance+1e-9));
+ elements.obstaclePositionUncertainty.value='0.80';
+ elements.obstacleSizeUncertainty.value='0.40';
+ elements.vehicleFootprintUncertainty.value='0.20';
+ elements.measurementUncertainty.value='0.30';
+ elements.apply.onclick();
+ const bounded=getDiagnostics();
+ assert.equal(bounded.uncertainty.obstaclePosition,0.8);
+ assert.equal(bounded.uncertainty.obstacleSize,0.4);
+ assert.equal(bounded.uncertainty.vehicleFootprint,0.2);
+ assert.ok(bounded.parts.every((part,index)=>part.effective<=baseline.parts[index].effective+1e-9));
+ assert.ok(bounded.scene.nearest.effectiveDistance<=baseline.scene.nearest.effectiveDistance+1e-9);
+ assert.ok(bounded.parts.every(part=>['тягач','кабина','полуприцеп'].includes(part.vehiclePart)));
+});
+
+test('uncertainty-envelope overlap is not misreported as a nominal collision',()=>{
+ const {elements,windowObject}=bootSimulator();
+ elements.measurementUncertainty.value='5';
+ elements.apply.onclick();
+ const diagnostics=windowObject.TruckVisionGetClearanceDiagnostics();
+ assert.equal(diagnostics.scene.collision,false);
+ assert.ok(diagnostics.scene.nearest.effectiveDistance<0);
+ assert.match(elements.assistantAdvice.textContent,/оболочка погрешности пересекается с контуром/);
+ assert.doesNotMatch(elements.assistantAdvice.textContent,/Стоп! Расчётные контуры/);
+});
+
 test('live assistant fails closed when obstacle checks are disabled',()=>{
  const {elements}=bootSimulator();
  elements.obstaclesToggle.onclick();
