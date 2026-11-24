@@ -977,45 +977,61 @@ function planAlternativesWithVehicleParameterBounds(options={}){
  if(unknownKeys.length){
   return {ok:false,reason:'invalid-input',errors:['Неизвестные параметры неопределённости: '+unknownKeys.join(', ')+'.'],expanded:0};
  }
- const scenarios=[];
  const baseParams={...options.params};
+ const activeDimensions=[];
+ const boundsSummary={};
  for(const key of Object.keys(allowedBounds)){
   if(!Object.prototype.hasOwnProperty.call(suppliedBounds,key))continue;
-  const bound=suppliedBounds[key];
-  const limits=allowedBounds[key];
-  const nominal=baseParams[key];
+  const bound=suppliedBounds[key],limits=allowedBounds[key],nominal=baseParams[key];
   if(!bound||typeof bound!=='object'||!Number.isFinite(bound.min)||!Number.isFinite(bound.max)||
      bound.min>bound.max||bound.min>nominal||bound.max<nominal||
      bound.min<limits[0]||bound.max>limits[1]){
    return {ok:false,reason:'invalid-input',errors:[key+': диапазон должен быть конечным, содержать номинальное значение и оставаться в пределах '+limits[0]+'–'+limits[1]+'.'],expanded:0};
   }
-  for(const [side,value] of [['min',bound.min],['max',bound.max]]){
-   if(Math.abs(value-nominal)<=1e-12)continue;
-   const scenarioParams={...baseParams,[key]:value};
-   const errors=rootPhysics.validateVehicleParams(scenarioParams);
-   if(errors.length){
-    return {ok:false,reason:'invalid-input',errors:[key+' ('+side+'): '+errors.join(' ')],expanded:0};
-   }
-   scenarios.push({name:key+' '+side,value,parameter:key,params:scenarioParams});
-  }
- }
- if(scenarios.length>10){
-  return {ok:false,reason:'invalid-input',errors:['Однофакторная проверка допускает не более десяти крайних сценариев.'],expanded:0};
+  boundsSummary[key]={min:bound.min,max:bound.max,nominal};
+  if(bound.max-bound.min>1e-12)activeDimensions.push({key,min:bound.min,max:bound.max,nominal});
  }
  const baseOptions={...options};
  delete baseOptions.vehicleParameterBounds;
- const originalProgress=options.onProgress;
  const perCandidateMaxExpansions=options.alternativeMaxExpansions??options.maxExpansions??24000;
+ if(!Number.isInteger(perCandidateMaxExpansions)||perCandidateMaxExpansions<1||perCandidateMaxExpansions>500000){
+  return {ok:false,reason:'invalid-input',errors:['Лимит расширений каждого альтернативного поиска должен быть целым числом от 1 до 500000.'],expanded:0};
+ }
  const reserveScenarioCount=(options.measurementUncertainty??0)>0?2:1;
- const totalScenarioCount=scenarios.length+1;
- const totalBudget=perCandidateMaxExpansions*5*reserveScenarioCount*2*totalScenarioCount;
+ const hasGeometryBounds=(options.obstaclePositionUncertainty??0)>0||
+  (options.obstacleSizeUncertainty??0)>0||
+  (options.vehicleFootprintUncertainty??0)>0;
+ const geometryScenarioCount=hasGeometryBounds?2:1;
+ function endpointVectors(count){
+  if(count<=3){
+   return Array.from({length:1<<count},(_,mask)=>
+    Array.from({length:count},(_,index)=>(mask>>index)&1)
+   );
+  }
+  // An 8-row binary orthogonal array of strength two. Distinct non-zero
+  // columns over GF(2)^3 ensure every pair sees all four endpoint pairs.
+  const columnMasks=[1,2,4,3,5].slice(0,count);
+  const rows=[];
+  const parity=value=>{
+   let result=0;
+   for(let n=value;n;n>>=1)result^=n&1;
+   return result;
+  };
+  for(let row=0;row<8;row++)rows.push(columnMasks.map(mask=>parity(row&mask)));
+  const allHigh=Array(count).fill(1);
+  if(!rows.some(row=>row.every((value,index)=>value===allHigh[index])))rows.push(allHigh);
+  return rows;
+ }
+ const vectors=endpointVectors(activeDimensions.length);
+ const totalScenarioCount=vectors.length+1;
+ const totalBudget=perCandidateMaxExpansions*5*reserveScenarioCount*geometryScenarioCount*totalScenarioCount;
  let expandedOffset=0;
  function runScenario(name,params,index){
-  const scenarioOptions={...baseOptions,params};
-  if(typeof originalProgress==='function'){
+  const scenarioOptions={...baseOptions,params,alternativeMaxExpansions:perCandidateMaxExpansions};
+  if(typeof options.onProgress==='function'){
    scenarioOptions.onProgress=progress=>{
     try{
-     originalProgress({
+     options.onProgress({
       ...progress,
       parameterScenario:name,
       parameterScenarioIndex:index,
@@ -1031,51 +1047,88 @@ function planAlternativesWithVehicleParameterBounds(options={}){
   return result;
  }
  const nominal=runScenario('номинальные размеры',baseParams,1);
- const boundsSummary=Object.fromEntries(Object.entries(suppliedBounds).map(([key,value])=>[
-  key,{min:value.min,max:value.max,nominal:baseParams[key]}
- ]));
- if(!scenarios.length){
+ if(!activeDimensions.length){
   return {
    ...nominal,expanded:expandedOffset,
    parameterSensitivity:{
     status:'not-varied',coverage:'none',
     suppliedBounds:boundsSummary,testedScenarioCount:0,
-    kinematicParameterUncertaintyIncluded:false,
+    activeParameterCount:0,kinematicParameterUncertaintyIncluded:false,
+    allParameterCombinationsEvaluated:false,pairwiseEndpointCoverage:false,
     note:'Все заданные диапазоны имеют нулевую ширину или не заданы; неопределённость размеров автопоезда не проверялась.'
    }
   };
  }
+ const coverage=activeDimensions.length<=3?
+  'full-endpoint-combinations':'pairwise-endpoint-covering-array';
+ const allParameterCombinationsEvaluated=activeDimensions.length<=3;
+ const pairwiseEndpointCoverage=activeDimensions.length>=2;
+ const coverageNote=allParameterCombinationsEvaluated?
+  'Проверены все сочетания нижних и верхних границ активных параметров, но не промежуточные значения.':
+  'Для четырёх или пяти активных параметров применён 8-строчный парный covering array плюс совместный верхний угол. Каждая пара параметров проверена во всех четырёх сочетаниях min/max, но все многопараметрические комбинации и промежуточные значения не перебирались.';
  if(!nominal.ok){
   return {
    ...nominal,expanded:expandedOffset,
    parameterSensitivity:{
-    status:'nominal-unavailable',coverage:'one-parameter-at-a-time-endpoints',
-    suppliedBounds:boundsSummary,testedScenarioCount:0,
-    nominalReason:nominal.reason
+    status:'nominal-unavailable',coverage,
+    suppliedBounds:boundsSummary,activeParameterCount:activeDimensions.length,
+    testedScenarioCount:0,allParameterCombinationsEvaluated,
+    pairwiseEndpointCoverage,nominalReason:nominal.reason,note:coverageNote
    }
   };
  }
  const nominalAction=recommendationAction(nominal);
  const completed=[];
- for(let index=0;index<scenarios.length;index++){
-  const scenario=scenarios[index];
-  const result=runScenario(scenario.name,scenario.params,index+2);
+ for(let index=0;index<vectors.length;index++){
+  const vector=vectors[index];
+  const scenarioParams={...baseParams};
+  const parameterValues={},endpointSides={};
+  const failedParameters=[];
+  for(let dimensionIndex=0;dimensionIndex<activeDimensions.length;dimensionIndex++){
+   const dimension=activeDimensions[dimensionIndex];
+   const side=vector[dimensionIndex]?'max':'min';
+   const value=side==='max'?dimension.max:dimension.min;
+   scenarioParams[dimension.key]=value;
+   parameterValues[dimension.key]=value;
+   endpointSides[dimension.key]=side;
+   failedParameters.push({key:dimension.key,side,value});
+  }
+  const scenarioName='совместная комбинация '+String(index+1).padStart(2,'0')+'/'+vectors.length;
+  const geometryErrors=rootPhysics.validateVehicleParams(scenarioParams);
+  if(geometryErrors.length){
+   return {
+    ok:false,reason:'parameter-scenario-unavailable',expanded:expandedOffset,candidatesFound:0,
+    parameterSensitivity:{
+     status:'joint-scenario-invalid',coverage,
+     suppliedBounds:boundsSummary,activeParameterCount:activeDimensions.length,
+     scenarioCount:vectors.length,testedScenarioCount:completed.length,
+     completedScenarios:completed,failedScenario:scenarioName,
+     failedParameters,parameterValues,endpointSides,
+     failureReason:'invalid-vehicle-geometry',validationErrors:geometryErrors,
+     nominalAction,allParameterCombinationsEvaluated,
+     pairwiseEndpointCoverage,note:coverageNote
+    }
+   };
+  }
+  const result=runScenario(scenarioName,scenarioParams,index+2);
   if(!result.ok){
    return {
     ok:false,reason:'parameter-scenario-unavailable',expanded:expandedOffset,
-    candidatesFound:0,
+    candidatesFound:result.candidatesFound??0,
     parameterSensitivity:{
-     status:'scenario-unavailable',coverage:'one-parameter-at-a-time-endpoints',
-     suppliedBounds:boundsSummary,scenarioCount:scenarios.length,
-     completedScenarios:completed,failedScenario:scenario.name,
-     failedParameter:scenario.parameter,failedValue:scenario.value,
-     failureReason:result.reason,nominalAction
+     status:'joint-scenario-unavailable',coverage,
+     suppliedBounds:boundsSummary,activeParameterCount:activeDimensions.length,
+     scenarioCount:vectors.length,testedScenarioCount:completed.length,
+     completedScenarios:completed,failedScenario:scenarioName,
+     failedParameters,parameterValues,endpointSides,
+     failureReason:result.reason,nominalAction,
+     allParameterCombinationsEvaluated,pairwiseEndpointCoverage,note:coverageNote
     }
    };
   }
   const comparison=compareRecommendationSensitivity(nominal,result);
   const summary={
-   name:scenario.name,parameter:scenario.parameter,value:scenario.value,
+   name:scenarioName,parameterValues,endpointSides,
    status:comparison.status,changedFields:comparison.changedFields||[],
    recommendation:recommendationAction(result),
    candidatesFound:result.candidatesFound??0,
@@ -1087,12 +1140,14 @@ function planAlternativesWithVehicleParameterBounds(options={}){
     ok:false,reason:'parameter-sensitive-start',expanded:expandedOffset,
     candidatesFound:result.candidatesFound??0,
     parameterSensitivity:{
-     status:'start-action-changed',coverage:'one-parameter-at-a-time-endpoints',
-     suppliedBounds:boundsSummary,scenarioCount:scenarios.length,
-     completedScenarios:completed,failedScenario:scenario.name,
-     failedParameter:scenario.parameter,failedValue:scenario.value,
+     status:'start-action-changed',coverage,
+     suppliedBounds:boundsSummary,activeParameterCount:activeDimensions.length,
+     scenarioCount:vectors.length,testedScenarioCount:completed.length,
+     completedScenarios:completed,failedScenario:scenarioName,
+     failedParameters,parameterValues,endpointSides,
      nominalAction,scenarioAction:recommendationAction(result),
-     changedFields:comparison.changedFields||[]
+     changedFields:comparison.changedFields||[],
+     allParameterCombinationsEvaluated,pairwiseEndpointCoverage,note:coverageNote
     }
    };
   }
@@ -1100,14 +1155,16 @@ function planAlternativesWithVehicleParameterBounds(options={}){
  return {
   ...nominal,expanded:expandedOffset,
   parameterSensitivity:{
-   status:'stable-across-one-at-a-time-bounds',
-   coverage:'one-parameter-at-a-time-endpoints',
-   suppliedBounds:boundsSummary,scenarioCount:scenarios.length,
-   testedScenarioCount:completed.length,completedScenarios:completed,
-   nominalAction,
-   allParameterCombinationsEvaluated:false,
+   status:allParameterCombinationsEvaluated?
+    'stable-across-joint-endpoint-combinations':
+    'stable-across-pairwise-endpoint-scenarios',
+   coverage,suppliedBounds:boundsSummary,
+   activeParameterCount:activeDimensions.length,
+   scenarioCount:vectors.length,testedScenarioCount:completed.length,
+   completedScenarios:completed,nominalAction,
+   allParameterCombinationsEvaluated,pairwiseEndpointCoverage,
    kinematicParameterUncertaintyIncluded:true,
-   note:'Начальное действие совпало во всех проверенных крайних сценариях по одному параметру за раз. Совместные комбинации ошибок и весь диапазон непрерывных значений не проверялись.'
+   note:coverageNote
   }
  };
 }
