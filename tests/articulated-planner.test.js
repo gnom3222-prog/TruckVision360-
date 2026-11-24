@@ -432,3 +432,80 @@ test('articulation exposure rejects malformed route states',()=>{
  assert.throws(()=>planner.articulationExposure([]),/Route states/);
  assert.throws(()=>planner.articulationExposure([{x:0,y:0,psi:NaN,psiT:0}]),/invalid coordinates/);
 });
+
+
+test('start recommendation mirrors steering side and tractor yaw on a mirrored route',()=>{
+ const route=[
+  {x:0,y:0,psi:0,psiT:0,gear:-1,steer:0},
+  {x:-0.4,y:0.02,psi:-0.04,psiT:-0.01,gear:-1,steer:0.12},
+  {x:-0.8,y:0.10,psi:-0.08,psiT:-0.02,gear:-1,steer:0.12}
+ ];
+ const mirrored=route.map(state=>({
+  ...state,y:-state.y,psi:-state.psi,psiT:-state.psiT,steer:-state.steer
+ }));
+ const originalAdvice=planner.recommendStart(route);
+ const mirroredAdvice=planner.recommendStart(mirrored);
+ assert.equal(originalAdvice.firstTurn,'left');
+ assert.equal(mirroredAdvice.firstTurn,'right');
+ assert.equal(originalAdvice.tractorYawDirection,'right');
+ assert.equal(mirroredAdvice.tractorYawDirection,'left');
+ assert.equal(originalAdvice.initialGear,mirroredAdvice.initialGear);
+ assert.ok(Math.abs(originalAdvice.firstTurnDistance-mirroredAdvice.firstTurnDistance)<1e-12);
+});
+
+test('near-equal candidate routes with opposite first turns produce no preferred side',()=>{
+ const left=[
+  {x:0,y:0,gear:1,steer:0},
+  {x:0.5,y:0.01,gear:1,steer:0.12}
+ ];
+ const right=[
+  {x:0,y:0,gear:1,steer:0},
+  {x:0.5,y:-0.01,gear:1,steer:-0.12}
+ ];
+ const result=planner.compareStartCandidates([
+  {states:left,cost:10,label:'влево'},
+  {states:right,cost:10.1,label:'вправо'}
+ ],{costTolerance:0.25});
+ assert.equal(result.ok,true);
+ assert.equal(result.status,'ambiguous');
+ assert.equal(result.recommendation,null);
+ assert.ok(result.ambiguousFields.includes('firstTurn'));
+ assert.equal(result.candidatesCompared,2);
+});
+
+test('candidate comparison selects a side only when the alternative is outside the cost tolerance',()=>{
+ const left=[
+  {x:0,y:0,gear:1,steer:0},
+  {x:0.5,y:0.01,gear:1,steer:0.12}
+ ];
+ const right=[
+  {x:0,y:0,gear:1,steer:0},
+  {x:0.5,y:-0.01,gear:1,steer:-0.12}
+ ];
+ const result=planner.compareStartCandidates([
+  {states:left,cost:10,label:'влево'},
+  {states:right,cost:10.5,label:'вправо'}
+ ],{costTolerance:0.25});
+ assert.equal(result.ok,true);
+ assert.equal(result.status,'preferred');
+ assert.equal(result.recommendation.firstTurn,'left');
+ assert.deepEqual(result.ambiguousFields,[]);
+});
+
+test('candidate comparison labels a single route as unverified against alternatives',()=>{
+ const states=[
+  {x:0,y:0,gear:1,steer:0},
+  {x:0.5,y:0,gear:1,steer:0.12}
+ ];
+ const result=planner.compareStartCandidates([{states,cost:5}]);
+ assert.equal(result.ok,true);
+ assert.equal(result.status,'single-candidate');
+ assert.equal(result.recommendation.firstTurn,'left');
+ assert.equal(result.candidatesCompared,1);
+});
+
+test('candidate comparison rejects invalid candidate costs and routes',()=>{
+ const states=[{x:0,y:0,gear:1,steer:0},{x:0.5,y:0,gear:1,steer:0.12}];
+ assert.equal(planner.compareStartCandidates([{states,cost:NaN}]).reason,'invalid-candidate-cost');
+ assert.equal(planner.compareStartCandidates([{states:[{x:0,y:0}],cost:1}]).reason,'invalid-candidate-route');
+});
