@@ -1504,6 +1504,8 @@ function startDrive(direction){
 }
 
 function applyCameraGateRegistration(registration){
+ const settings=readSettings();
+ if(!settings.ok)return false;
  const centerX=registration&&registration.centerX;
  const centerY=registration&&registration.centerY;
  const clearWidth=registration&&registration.clearWidth;
