@@ -172,6 +172,7 @@ function invalidateRouteForSettingsChange(){
  $('planRoute').disabled=false;
  if(routePlayback.active)stopRoutePlayback('Автопроезд остановлен: параметры модели изменились.');
  plannedRoute=[];
+ alternativeRoutes=[];
  routeGoal=null;
  routeAssessment=null;
  $('routeAdvice').textContent='Параметры модели изменены. Постройте маршрут заново.';
@@ -662,7 +663,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261124-13');
+   worker=new Worker('./planner-worker.js?v=20261124-14');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
@@ -1614,6 +1615,7 @@ $('clearRoute').onclick=()=>{
  routeBuildToken++;cancelPlannerWorker('Расчёт отменён: маршрут удалён.');$('planRoute').disabled=false;
  stopRoutePlayback('');
  plannedRoute=[];
+ alternativeRoutes=[];
  routeGoal=null;
  routeAssessment=null;
  $('routeAdvice').textContent='Маршрут удалён.';
