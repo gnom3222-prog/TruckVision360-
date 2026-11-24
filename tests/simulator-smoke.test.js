@@ -202,3 +202,14 @@ test('camera registration rejects invalid gate width without changing current ma
  );
  assert.notEqual(elements.gateEnabled.checked,true);
 });
+
+test('ambiguous planner results preserve candidate states and simulator draws them without enabling playback',()=>{
+ const root=path.join(__dirname,'..');
+ const plannerSource=fs.readFileSync(path.join(root,'articulated-planner.js'),'utf8');
+ const simulatorSource=fs.readFileSync(path.join(root,'truckvision.js'),'utf8');
+ assert.match(plannerSource,/candidateRoutes:candidates\.map\(\(candidate,index\)=>\(/);
+ assert.match(plannerSource,/states:candidate\.states/);
+ assert.match(simulatorSource,/alternativeRoutes=Array\.isArray\(result\.candidateRoutes\)/);
+ assert.match(simulatorSource,/drawLine\(candidate\.states,colors\[index%colors\.length\],4,\[9,6\]\)/);
+ assert.match(simulatorSource,/if\(plannedRoute\.length<2\|\|!routeAssessment\)/);
+});
