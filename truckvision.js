@@ -63,21 +63,24 @@ const obstacles=[
  {x:13.0,y:-5.0,w:16.0,h:0.7,name:'Стена справа'}
  ];
 
+function gateGeometryForPlanner(){
+ if(!$('gateEnabled')||!$('gateEnabled').checked)return null;
+ return {
+  centerX:cfg.gateCenterX,
+  centerY:cfg.gateCenterY,
+  clearWidth:cfg.gateWidth,
+  postWidth:cfg.gatePostWidth,
+  depth:cfg.gateDepth,
+  heading:cfg.gateHeadingDeg*Math.PI/180,
+  widthUncertainty:cfg.gateWidthUncertainty,
+  positionUncertainty:cfg.gatePositionUncertainty,
+  headingUncertaintyDeg:cfg.gateHeadingUncertaintyDeg
+ };
+}
 function sceneObstacles(){
  const result=obstacles.map(obstacle=>({...obstacle}));
- if($('gateEnabled')&&$('gateEnabled').checked){
-  result.push(...planner.createGateObstacles({
-   centerX:cfg.gateCenterX,
-   centerY:cfg.gateCenterY,
-   clearWidth:cfg.gateWidth,
-   postWidth:cfg.gatePostWidth,
-   depth:cfg.gateDepth,
-   heading:cfg.gateHeadingDeg*Math.PI/180,
-   widthUncertainty:cfg.gateWidthUncertainty,
-   positionUncertainty:cfg.gatePositionUncertainty,
-   headingUncertaintyDeg:cfg.gateHeadingUncertaintyDeg
-  }));
- }
+ const gateGeometry=gateGeometryForPlanner();
+ if(gateGeometry)result.push(...planner.createGateObstacles(gateGeometry));
  return result;
 }
 
@@ -830,6 +833,7 @@ async function buildRoute(){
    maxTerminalArticulation:routeGoal.maxTerminalArticulation,
    params:{...cfg},
    obstacles:sceneObstacles(),
+   gateGeometry:gateGeometryForPlanner(),
    maxExpansions:mobile?4500:12000,
    alternativeMaxExpansions:mobile?2200:4500,
    costTolerance:0.25,
@@ -869,12 +873,16 @@ if(result.reason==='geometry-sensitive-start'||result.reason==='geometry-envelop
  plannedRoute=[];
  routeAssessment=null;
  const geometry=result.geometrySensitivity||{};
+ const gate=geometry.gateGeometryUncertainty;
+ const gateNote=gate&&gate.enabled?
+  ' Совместная оболочка ворот: ширина '+Number(gate.nominalClearWidth).toFixed(2)+' → '+Number(gate.conservativeClearWidth).toFixed(2)+' м; центр ±'+Number(gate.positionUncertaintyPerAxis).toFixed(2)+' м по X/Y; курс ±'+Number(gate.headingUncertaintyDeg).toFixed(2)+'°.':
+  '';
  if(result.reason==='geometry-sensitive-start'){
-  $('routeAdvice').textContent='Начальное действие меняется при независимом расширении геометрии в заданных пределах. Сторона и передача не выбраны; номинальный и консервативный маршруты требуют разных действий.';
-  $('difficultyAdvice').textContent='Рекомендация неустойчива к заданным границам погрешности положения/размера препятствий и внешних габаритов автопоезда. Уточните геометрию рулеткой и документами; повторите расчёт. Это ограниченный набор проверок, не полный анализ всех комбинаций.';
+  $('routeAdvice').textContent='Начальное действие меняется при одновременном учёте заданной геометрической неопределённости. Сторона и передача не выбраны; номинальный и консервативный маршруты требуют разных действий.'+gateNote;
+  $('difficultyAdvice').textContent='Рекомендация неустойчива к заданным границам погрешности препятствий и внешних габаритов автопоезда. Уточните геометрию рулеткой и повторите расчёт. Проверяется ограниченная оболочка, не все возможные комбинации ошибок.'+gateNote;
  }else{
-  $('routeAdvice').textContent='Поиск в расширенной геометрической оболочке не подтвердил маршрут в заданном лимите вычислений. Это не доказывает невозможность других маршрутов; рекомендация не выдаётся.';
-  $('difficultyAdvice').textContent='Автопроезд заблокирован: выбранный маршрут не подтверждён при расширении прямоугольных контуров препятствий и автопоезда. Не уменьшайте резерв только ради получения маршрута.';
+  $('routeAdvice').textContent='Поиск в расширенной геометрической оболочке не подтвердил маршрут в заданном лимите вычислений. Это не доказывает невозможность других маршрутов; рекомендация не выдаётся.'+gateNote;
+  $('difficultyAdvice').textContent='Автопроезд заблокирован: выбранный маршрут не подтверждён при расширении геометрии препятствий и автопоезда. Не уменьшайте резерв только ради получения маршрута.'+gateNote;
  }
  $('difficultyAdvice').textContent+=' Границы проверки: положение препятствия ±'+Number(geometry.obstaclePositionUncertainty||0).toFixed(2)+' м по каждой оси; ошибка полного размера препятствия ±'+Number(geometry.obstacleSizeUncertainty||0).toFixed(2)+' м; расширение каждой внешней грани автопоезда '+Number(geometry.vehicleFootprintUncertainty||0).toFixed(2)+' м. Кинематические размеры проверяются отдельно при ненулевых допусках: совместные крайние сценарии плюс середины диапазонов по одному параметру; это не полный перебор всех комбинаций и не непрерывный worst-case анализ.';
  draw();
@@ -1043,9 +1051,12 @@ if(result.reason==='uncertainty-sensitive-start'){
    (sensitivity.candidateCoverageChanged?' Число найденных кандидатов при этом изменилось; сравнение остаётся ограниченным.':''):
    sensitivity.status==='zero-reserve'?' Дополнительный резерв неопределённости равен нулю; повторный поиск не выполнялся.':'';
 const geometrySensitivity=result.geometrySensitivity||{};
+const gateUncertainty=geometrySensitivity.gateGeometryUncertainty;
+const gateGeometryNote=gateUncertainty&&gateUncertainty.enabled?
+ ' Геометрия ворот проверена совместной ограниченной оболочкой: чистая ширина '+Number(gateUncertainty.nominalClearWidth).toFixed(2)+' → '+Number(gateUncertainty.conservativeClearWidth).toFixed(2)+' м; центр ±'+Number(gateUncertainty.positionUncertaintyPerAxis).toFixed(2)+' м по X/Y; курс ±'+Number(gateUncertainty.headingUncertaintyDeg).toFixed(2)+'°. Это сравнение номинального проёма с консервативно расширенными косяками, а не перебор всех независимых реализаций ошибок.':'';
 const geometryNote=geometrySensitivity.status==='stable-within-bounded-envelope'?
- ' Дополнительно проверена расширенная геометрия: положение препятствий ±'+geometrySensitivity.obstaclePositionUncertainty.toFixed(2)+' м по каждой оси, ошибка полного размера ±'+geometrySensitivity.obstacleSizeUncertainty.toFixed(2)+' м, внешний контур автопоезда расширен на '+geometrySensitivity.vehicleFootprintUncertainty.toFixed(2)+' м с каждой грани. Параметры wheelbase, hitchOffset и kingpinAxles не варьировались; это ограниченная проверка оболочки, не полный анализ неопределённости.':
- geometrySensitivity.status==='zero-geometry-bounds'?' Геометрические границы неопределённости заданы нулевыми; расширенная проверка не выполнялась.':'';
+ ' Дополнительно проверена расширенная геометрия: положение препятствий ±'+geometrySensitivity.obstaclePositionUncertainty.toFixed(2)+' м по каждой оси, ошибка полного размера ±'+geometrySensitivity.obstacleSizeUncertainty.toFixed(2)+' м, внешний контур автопоезда расширен на '+geometrySensitivity.vehicleFootprintUncertainty.toFixed(2)+' м с каждой грани. Параметры wheelbase, hitchOffset и kingpinAxles не варьировались; это ограниченная проверка оболочки, не полный анализ неопределённости.'+gateGeometryNote:
+ geometrySensitivity.status==='zero-geometry-bounds'?' Геометрические границы неопределённости заданы нулевыми; расширенная проверка не выполнялась.'+gateGeometryNote:'';
 const parameterSensitivity=result.parameterSensitivity||{};
 const parameterRanges=Object.entries(parameterSensitivity.suppliedBounds||{}).map(([key,bound])=>
  key+' '+Number(bound.min).toFixed(3)+'–'+Number(bound.max).toFixed(3)+' м'
