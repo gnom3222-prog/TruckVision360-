@@ -15,6 +15,8 @@
   else if(frame.timestamp>now+MAX_FUTURE_MS)errors.push('Временная метка находится в будущем.');
   else if(now-frame.timestamp>MAX_AGE_MS)errors.push('Кадр устарел: допустимо не более 1500 мс.');
   if(frame.coordinateFrame!=='vehicle-local')errors.push('Поддерживается только coordinateFrame="vehicle-local".');
+  const vp=frame.vehiclePose;
+  if(!vp||![vp.x,vp.y,vp.heading].every(finite))errors.push('vehiclePose должен содержать синхронизированные x, y и heading в системе карты (метры, радианы).');
   if(!Array.isArray(frame.objects))errors.push('objects должен быть массивом.');
   else{
    if(frame.objects.length>MAX_OBJECTS)errors.push('В одном кадре допускается не более 300 объектов.');
@@ -35,11 +37,12 @@
   }
   return errors;
  }
- function toObstacles(frame,vehiclePose){
+ function toObstacles(frame){
   const errors=validateFrame(frame);
   if(errors.length)throw new Error(errors.join(' '));
-  if(!vehiclePose||![vehiclePose.x,vehiclePose.y,vehiclePose.psi].every(finite))throw new Error('Поза тягача для преобразования координат недоступна.');
-  const c=Math.cos(vehiclePose.psi),s=Math.sin(vehiclePose.psi);
+  const vehiclePose=frame.vehiclePose;
+  if(!vehiclePose||![vehiclePose.x,vehiclePose.y,vehiclePose.heading].every(finite))throw new Error('Синхронизированная поза тягача в кадре недоступна.');
+  const c=Math.cos(vehiclePose.heading),s=Math.sin(vehiclePose.heading);
   return frame.objects.map(o=>{
    const x=vehiclePose.x+o.pose.x*c-o.pose.y*s;
    const y=vehiclePose.y+o.pose.x*s+o.pose.y*c;
