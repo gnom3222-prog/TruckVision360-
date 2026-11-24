@@ -317,7 +317,10 @@
   // Convert the camera's local 1σ sensitivity into a clearly-labelled 2σ
   // screening envelope. This is not a deterministic bound or a safety claim.
   const widthUncertaintyBound=2*sigmaWidth;
-  if(widthUncertaintyBound>=measurement.width){
+  if(widthUncertaintyBound>2){
+   throw new Error('Оболочка неопределённости ширины превышает поддерживаемый предел 2 м. Измерение нельзя переносить на карту.');
+  }
+  if(widthUncertaintyBound>=measurement.width-0.05){
    throw new Error('Неопределённость ширины сопоставима с самим проёмом. Измерение нельзя переносить на карту.');
   }
   if(!anchor||!Number.isFinite(anchor.x)||!Number.isFinite(anchor.y)||
