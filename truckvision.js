@@ -1588,10 +1588,36 @@ $('assess').onclick=()=>{
 };
 
 $('alternativeRouteSelect').onchange=()=>{
- const index=Number($('alternativeRouteSelect').value);
+ const selectedValue=String($('alternativeRouteSelect').value??'').trim();
+ const clearSelection=message=>{
+  if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: '+message);
+  plannedRoute=[];
+  routeAssessment=null;
+  $('routeAdvice').textContent=message;
+  $('difficultyAdvice').textContent='Сложность не рассчитана. Выберите допустимый вариант и постройте маршрут заново.';
+  draw();
+ };
+ // The empty placeholder must never coerce to index 0 (Number('') === 0).
+ if(selectedValue===''){
+  clearSelection('Выбор альтернативной траектории снят. Маршрут очищен; выберите вариант заново.');
+  return;
+ }
+ if(!/^\\d+$/.test(selectedValue)){
+  clearSelection('Выбор отклонён: индекс варианта имеет неверный формат. Маршрут очищен.');
+  return;
+ }
+ const index=Number(selectedValue);
+ if(!Number.isSafeInteger(index)||index<0||index>=alternativeRoutes.length){
+  clearSelection('Выбор отклонён: такого варианта нет. Маршрут очищен; выполните расчёт заново.');
+  return;
+ }
  const candidate=alternativeRoutes[index];
  if(!candidate||!Array.isArray(candidate.states)||candidate.states.length<2){
-  plannedRoute=[];routeAssessment=null;draw();return;
+  clearSelection('Выбор отклонён: траектория кандидата неполная. Маршрут очищен.');
+  return;
+ }
+ if(routePlayback.active){
+  stopRoutePlayback('Виртуальный автопроезд остановлен: выбран другой вариант траектории.');
  }
  plannedRoute=candidate.states;
  routeAssessment=routeMetrics(
@@ -1600,7 +1626,8 @@ $('alternativeRouteSelect').onchange=()=>{
   candidate.metrics?.sweptClearanceDetail??null
  );
  const passed=!routeAssessment.collision&&routeAssessment.reached&&
-  !routeAssessment.articulationBlocked&&!routeAssessment.clearanceInsufficient;
+  !routeAssessment.articulationBlocked&&!routeAssessment.clearanceInsufficient&&
+  Number.isFinite(routeAssessment.effectiveClearance);
  $('routeAdvice').textContent='Выбран вариант '+(index+1)+'. '+(passed?'Повторная проверка пройдена по текущей модели.':'Проверка не пройдена: '+routeAssessment.reasons.join('; '));
  $('difficultyAdvice').textContent='Сложность: '+routeAssessment.level+'. Длина '+routeAssessment.length.toFixed(1)+' м; пиковый угол сочленения '+routeAssessment.maxBeta.toFixed(1)+'°; минимальный эффективный зазор '+(Number.isFinite(routeAssessment.effectiveClearance)?routeAssessment.effectiveClearance.toFixed(2)+' м':'не определён')+'. '+(passed?'Автопроезд разрешён только в виртуальной модели.':'Автопроезд остаётся заблокирован.');
  draw();
