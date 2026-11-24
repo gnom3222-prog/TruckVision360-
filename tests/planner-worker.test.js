@@ -45,6 +45,7 @@ test('planner worker reports ambiguous reverse starts instead of choosing one ar
  assert.equal(resultMessage.result.candidatesAttempted,5);
  assert.ok(resultMessage.result.candidatesFound>=2);
  assert.equal(resultMessage.result.comparison.recommendation,null,'ambiguous candidates must not produce a single start recommendation');
+ assert.equal(resultMessage.result.parameterSensitivity.status,'not-varied','zero physical dimension tolerances must be reported as not assessed');
  assert.ok(resultMessage.result.candidateSummaries.some(candidate=>candidate.initialGear===-1&&candidate.firstTurn==='left'));
  assert.ok(resultMessage.result.candidateSummaries.some(candidate=>candidate.initialGear===-1&&candidate.firstTurn==='right'));
 });
