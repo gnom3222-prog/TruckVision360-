@@ -6,7 +6,7 @@ The browser camera workflow uses four manually selected corners of a known recta
 
 Before solving the 8-parameter homography system, both source image points and destination reference points are translated to their centroid and scaled so their mean distance from the origin is approximately √2. The transform is solved in these normalized coordinates and then denormalized.
 
-The implementation estimates the infinity-norm condition number of the normalized 8×8 linear system by solving for the inverse matrix. A non-finite estimate or a value above 1e8 rejects calibration. Values above 1e5 are treated as a warning: the provisional dimensions may be shown for diagnosis, but the measured gate width is not copied into the simulator settings. The user must enlarge the reference in the image, improve its orientation/placement, and calibrate again.
+The implementation estimates the infinity-norm condition number of the normalized 8×8 linear system by solving for the inverse matrix. A non-finite estimate or a value above 1e7 rejects calibration. Values above 1e5 are treated as a warning: the provisional dimensions may be shown for diagnosis, but the measured gate width is not copied into the simulator settings. The user must enlarge the reference in the image, improve its orientation/placement, and calibrate again.
 
 These thresholds are numerical fail-closed heuristics, not validated camera-accuracy limits. A low condition estimate only indicates that this particular linear system is not severely ill-conditioned; it does not validate lens calibration, coplanarity, corner selection, or the physical reference dimensions.
 
