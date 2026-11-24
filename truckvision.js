@@ -1602,7 +1602,7 @@ $('alternativeRouteSelect').onchange=()=>{
   clearSelection('Выбор альтернативной траектории снят. Маршрут очищен; выберите вариант заново.');
   return;
  }
- if(!/^\\d+$/.test(selectedValue)){
+ if(!/^\d+$/.test(selectedValue)){
   clearSelection('Выбор отклонён: индекс варианта имеет неверный формат. Маршрут очищен.');
   return;
  }
