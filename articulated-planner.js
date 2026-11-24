@@ -1022,8 +1022,38 @@ function planAlternativesWithVehicleParameterBounds(options={}){
   if(!rows.some(row=>row.every((value,index)=>value===allHigh[index])))rows.push(allHigh);
   return rows;
  }
- const vectors=endpointVectors(activeDimensions.length);
- const totalScenarioCount=vectors.length+1;
+ const endpointRows=endpointVectors(activeDimensions.length);
+ const endpointScenarios=endpointRows.map((row,index)=>{
+  const parameterValues={},endpointSides={},failedParameters=[];
+  for(let dimensionIndex=0;dimensionIndex<activeDimensions.length;dimensionIndex++){
+   const dimension=activeDimensions[dimensionIndex];
+   const side=row[dimensionIndex]?'max':'min';
+   const value=side==='max'?dimension.max:dimension.min;
+   parameterValues[dimension.key]=value;
+   endpointSides[dimension.key]=side;
+   failedParameters.push({key:dimension.key,side,value});
+  }
+  return {
+   name:'совместная комбинация '+String(index+1).padStart(2,'0')+'/'+endpointRows.length,
+   kind:'endpoint-combination',parameterValues,endpointSides,failedParameters
+  };
+ });
+ // Endpoint-only checks can miss an interior change in the planner's discrete
+ // candidate ranking. Check the midpoint of each interval independently too.
+ // The nominal scenario already covers a midpoint that equals the nominal value.
+ const midpointScenarios=activeDimensions.flatMap(dimension=>{
+  const value=(dimension.min+dimension.max)/2;
+  if(Math.abs(value-dimension.nominal)<=1e-12)return [];
+  return [{
+   name:'середина диапазона '+dimension.key,
+   kind:'one-factor-midpoint',
+   parameterValues:{[dimension.key]:value},
+   endpointSides:{[dimension.key]:'midpoint'},
+   failedParameters:[{key:dimension.key,side:'midpoint',value}]
+  }];
+ });
+ const scenarios=[...endpointScenarios,...midpointScenarios];
+ const totalScenarioCount=scenarios.length+1;
  const totalBudget=perCandidateMaxExpansions*5*reserveScenarioCount*geometryScenarioCount*totalScenarioCount;
  let expandedOffset=0;
  function runScenario(name,params,index){
@@ -1051,9 +1081,10 @@ function planAlternativesWithVehicleParameterBounds(options={}){
   return {
    ...nominal,expanded:expandedOffset,
    parameterSensitivity:{
-    status:'not-varied',coverage:'none',
-    suppliedBounds:boundsSummary,testedScenarioCount:0,
-    activeParameterCount:0,kinematicParameterUncertaintyIncluded:false,
+    status:'not-varied',coverage:'none',interiorCoverage:'none',
+    suppliedBounds:boundsSummary,testedScenarioCount:0,midpointScenarioCount:0,
+    testedMidpointScenarioCount:0,activeParameterCount:0,
+    kinematicParameterUncertaintyIncluded:false,
     allParameterCombinationsEvaluated:false,pairwiseEndpointCoverage:false,
     note:'Все заданные диапазоны имеют нулевую ширину или не заданы; неопределённость размеров автопоезда не проверялась.'
    }
@@ -1063,49 +1094,43 @@ function planAlternativesWithVehicleParameterBounds(options={}){
   'full-endpoint-combinations':'pairwise-endpoint-covering-array';
  const allParameterCombinationsEvaluated=activeDimensions.length<=3;
  const pairwiseEndpointCoverage=activeDimensions.length>=2;
- const coverageNote=allParameterCombinationsEvaluated?
-  'Проверены все сочетания нижних и верхних границ активных параметров, но не промежуточные значения.':
-  'Для четырёх или пяти активных параметров применён 8-строчный парный covering array плюс совместный верхний угол. Каждая пара параметров проверена во всех четырёх сочетаниях min/max, но все многопараметрические комбинации и промежуточные значения не перебирались.';
+ const interiorCoverage='one-factor-midpoints';
+ const coverageNote=(allParameterCombinationsEvaluated?
+  'Проверены все сочетания нижних и верхних границ активных параметров.':
+  'Для четырёх или пяти активных параметров применён 8-строчный парный covering array плюс совместный верхний угол; каждая пара параметров проверена во всех четырёх сочетаниях min/max, но все многопараметрические комбинации не перебирались.')+
+  ' Дополнительно проверяется середина каждого активного диапазона по одному параметру за раз; совместные промежуточные отклонения и непрерывный интервал не проверяются.';
+ const testedMidpoints=()=>completed.filter(item=>item.kind==='one-factor-midpoint').length;
  if(!nominal.ok){
   return {
    ...nominal,expanded:expandedOffset,
    parameterSensitivity:{
-    status:'nominal-unavailable',coverage,
+    status:'nominal-unavailable',coverage,interiorCoverage,
     suppliedBounds:boundsSummary,activeParameterCount:activeDimensions.length,
-    testedScenarioCount:0,allParameterCombinationsEvaluated,
-    pairwiseEndpointCoverage,nominalReason:nominal.reason,note:coverageNote
+    scenarioCount:scenarios.length,testedScenarioCount:0,
+    midpointScenarioCount:midpointScenarios.length,testedMidpointScenarioCount:0,
+    allParameterCombinationsEvaluated,pairwiseEndpointCoverage,
+    nominalReason:nominal.reason,note:coverageNote
    }
   };
  }
  const nominalAction=recommendationAction(nominal);
  const completed=[];
- for(let index=0;index<vectors.length;index++){
-  const vector=vectors[index];
-  const scenarioParams={...baseParams};
-  const parameterValues={},endpointSides={};
-  const failedParameters=[];
-  for(let dimensionIndex=0;dimensionIndex<activeDimensions.length;dimensionIndex++){
-   const dimension=activeDimensions[dimensionIndex];
-   const side=vector[dimensionIndex]?'max':'min';
-   const value=side==='max'?dimension.max:dimension.min;
-   scenarioParams[dimension.key]=value;
-   parameterValues[dimension.key]=value;
-   endpointSides[dimension.key]=side;
-   failedParameters.push({key:dimension.key,side,value});
-  }
-  const scenarioName='совместная комбинация '+String(index+1).padStart(2,'0')+'/'+vectors.length;
+ for(let index=0;index<scenarios.length;index++){
+  const scenario=scenarios[index];
+  const scenarioParams={...baseParams,...scenario.parameterValues};
+  const {name:scenarioName,kind:scenarioKind,parameterValues,endpointSides,failedParameters}=scenario;
   const geometryErrors=rootPhysics.validateVehicleParams(scenarioParams);
   if(geometryErrors.length){
    return {
     ok:false,reason:'parameter-scenario-unavailable',expanded:expandedOffset,candidatesFound:0,
     parameterSensitivity:{
-     status:'joint-scenario-invalid',coverage,
+     status:'joint-scenario-invalid',coverage,interiorCoverage,
      suppliedBounds:boundsSummary,activeParameterCount:activeDimensions.length,
-     scenarioCount:vectors.length,testedScenarioCount:completed.length,
-     completedScenarios:completed,failedScenario:scenarioName,
-     failedParameters,parameterValues,endpointSides,
-     failureReason:'invalid-vehicle-geometry',validationErrors:geometryErrors,
-     nominalAction,allParameterCombinationsEvaluated,
+     scenarioCount:scenarios.length,testedScenarioCount:completed.length,
+     midpointScenarioCount:midpointScenarios.length,testedMidpointScenarioCount:testedMidpoints(),
+     completedScenarios:completed,failedScenario:scenarioName,failedParameters,
+     parameterValues,endpointSides,failureReason:'invalid-vehicle-geometry',
+     validationErrors:geometryErrors,nominalAction,allParameterCombinationsEvaluated,
      pairwiseEndpointCoverage,note:coverageNote
     }
    };
@@ -1116,19 +1141,19 @@ function planAlternativesWithVehicleParameterBounds(options={}){
     ok:false,reason:'parameter-scenario-unavailable',expanded:expandedOffset,
     candidatesFound:result.candidatesFound??0,
     parameterSensitivity:{
-     status:'joint-scenario-unavailable',coverage,
+     status:'joint-scenario-unavailable',coverage,interiorCoverage,
      suppliedBounds:boundsSummary,activeParameterCount:activeDimensions.length,
-     scenarioCount:vectors.length,testedScenarioCount:completed.length,
-     completedScenarios:completed,failedScenario:scenarioName,
-     failedParameters,parameterValues,endpointSides,
-     failureReason:result.reason,nominalAction,
+     scenarioCount:scenarios.length,testedScenarioCount:completed.length,
+     midpointScenarioCount:midpointScenarios.length,testedMidpointScenarioCount:testedMidpoints(),
+     completedScenarios:completed,failedScenario:scenarioName,failedParameters,
+     parameterValues,endpointSides,failureReason:result.reason,nominalAction,
      allParameterCombinationsEvaluated,pairwiseEndpointCoverage,note:coverageNote
     }
    };
   }
   const comparison=compareRecommendationSensitivity(nominal,result);
   const summary={
-   name:scenarioName,parameterValues,endpointSides,
+   name:scenarioName,kind:scenarioKind,parameterValues,endpointSides,
    status:comparison.status,changedFields:comparison.changedFields||[],
    recommendation:recommendationAction(result),
    candidatesFound:result.candidatesFound??0,
@@ -1140,12 +1165,12 @@ function planAlternativesWithVehicleParameterBounds(options={}){
     ok:false,reason:'parameter-sensitive-start',expanded:expandedOffset,
     candidatesFound:result.candidatesFound??0,
     parameterSensitivity:{
-     status:'start-action-changed',coverage,
+     status:'start-action-changed',coverage,interiorCoverage,
      suppliedBounds:boundsSummary,activeParameterCount:activeDimensions.length,
-     scenarioCount:vectors.length,testedScenarioCount:completed.length,
-     completedScenarios:completed,failedScenario:scenarioName,
-     failedParameters,parameterValues,endpointSides,
-     nominalAction,scenarioAction:recommendationAction(result),
+     scenarioCount:scenarios.length,testedScenarioCount:completed.length,
+     midpointScenarioCount:midpointScenarios.length,testedMidpointScenarioCount:testedMidpoints(),
+     completedScenarios:completed,failedScenario:scenarioName,failedParameters,
+     parameterValues,endpointSides,nominalAction,scenarioAction:recommendationAction(result),
      changedFields:comparison.changedFields||[],
      allParameterCombinationsEvaluated,pairwiseEndpointCoverage,note:coverageNote
     }
@@ -1158,9 +1183,10 @@ function planAlternativesWithVehicleParameterBounds(options={}){
    status:allParameterCombinationsEvaluated?
     'stable-across-joint-endpoint-combinations':
     'stable-across-pairwise-endpoint-scenarios',
-   coverage,suppliedBounds:boundsSummary,
+   coverage,interiorCoverage,suppliedBounds,
    activeParameterCount:activeDimensions.length,
-   scenarioCount:vectors.length,testedScenarioCount:completed.length,
+   scenarioCount:scenarios.length,testedScenarioCount:completed.length,
+   midpointScenarioCount:midpointScenarios.length,testedMidpointScenarioCount:testedMidpoints(),
    completedScenarios:completed,nominalAction,
    allParameterCombinationsEvaluated,pairwiseEndpointCoverage,
    kinematicParameterUncertaintyIncluded:true,
