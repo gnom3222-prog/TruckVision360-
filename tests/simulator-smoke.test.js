@@ -152,3 +152,12 @@ test('live assistant fails closed when obstacle checks are disabled',()=>{
  assert.match(elements.assistantAdvice.textContent,/Свободный путь не подтверждён/);
  assert.doesNotMatch(elements.assistantAdvice.textContent,/Путь по текущему положению свободен/);
 });
+
+test('simulator explains joint endpoint and one-factor midpoint parameter coverage',()=>{
+ const root=path.join(__dirname,'..');
+ const source=fs.readFileSync(path.join(root,'truckvision.js'),'utf8');
+ assert.match(source,/stable-across-joint-endpoint-combinations/);
+ assert.match(source,/stable-across-pairwise-endpoint-scenarios/);
+ assert.match(source,/середины отдельных диапазонов по одному параметру/);
+ assert.match(source,/не полный перебор всех комбинаций/);
+});
