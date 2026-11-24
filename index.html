@@ -135,11 +135,11 @@ main{max-width:1400px;padding:10px 10px calc(100px + env(safe-area-inset-bottom)
 #environmentSection .assistant-box{padding:10px}#environmentSection .row{display:grid;grid-template-columns:1fr 1fr}
 .cockpit-views{grid-template-rows:minmax(145px,.75fr) minmax(270px,1.25fr)}
 .map-preview .maneuver-view{min-height:270px}
-#view{min-height:260px}
+#view{min-height:0;aspect-ratio:1400/520}
 @media(max-width:700px){
  .cockpit-views{grid-template-rows:145px 280px}
  .map-preview .maneuver-view{min-height:280px}
- #view{min-height:270px}
+ #view{min-height:0;aspect-ratio:1400/520}
 main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8px;border-radius:15px}.cockpit-grid{grid-template-columns:minmax(0,1fr);gap:7px}
 .cockpit-summary{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px}.summary-heading{grid-column:1/-1;margin-bottom:2px}.summary-result{grid-column:1/-1;margin:0}.summary-line{padding:5px 2px}.summary-vehicle{grid-column:1/-1;margin-top:2px}
 .cockpit-views{grid-template-rows:120px 190px}.cockpit-readouts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:8px}.readout-title,.sensor-state{grid-column:1/-1;margin:0}.readout{margin:0!important}.readout strong{font-size:14px}
@@ -214,7 +214,7 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
   <aside class="cockpit-summary"><div class="summary-heading">СОСТОЯНИЕ МАНЁВРА</div><div class="summary-result"><span>●</span><b>Виртуальная модель</b></div><div class="summary-line"><span>Сложность</span><b id="cockpitDifficulty">Не рассчитана</b></div><div class="summary-line"><span>Скорость</span><b id="cockpitSpeed">0,0 м/с</b></div><div class="summary-line"><span>Угол сочленения</span><b id="cockpitBeta">0,0°</b></div><div class="summary-vehicle">ТЯГАЧ + 3-ОСНЫЙ ПОЛУПРИЦЕП<br><strong>16,50 м · модель</strong></div></aside>
   <div class="cockpit-views">
    <div class="sensor-preview"><div class="view-label"><span>КАМЕРЫ · ПЕРЕДНИЙ ВИД</span><b>НЕТ ВИДЕОСИГНАЛА</b></div><div class="sensor-empty"><span class="sensor-cross">⌗</span><strong>Внешняя камера не подключена</strong><small>Здесь появится поток после подключения оборудования</small></div></div>
-   <div class="map-preview"><div class="view-label"><span>КАРТА · ВИД СВЕРХУ</span><b>ВИРТУАЛЬНАЯ МОДЕЛЬ</b></div><div class="maneuver-view"><canvas id="view" width="1000" height="650" aria-label="Вид сверху на автопоезд"></canvas></div></div>
+   <div class="map-preview"><div class="view-label"><span>КАРТА · ВИД СВЕРХУ</span><b>ВИРТУАЛЬНАЯ МОДЕЛЬ</b></div><div class="maneuver-view"><canvas id="view" width="1400" height="520" aria-label="Вид сверху на автопоезд и препятствия"></canvas></div></div>
   </div>
   <aside class="cockpit-readouts"><div class="readout-title">ТЕЛЕМЕТРИЯ</div><div class="readout"><span>Скорость</span><strong id="cockpitSpeedLarge">0,0 м/с</strong></div><div class="readout"><span>Минимальный зазор</span><strong id="cockpitClearance">—</strong></div><div class="readout"><span>Угол сочленения</span><strong id="cockpitBetaLarge">0,0°</strong></div><div class="readout"><span>Рулевое управление</span><strong id="cockpitSteer">0°</strong></div><div class="sensor-state"><span class="status-dot muted"></span>LiDAR / камеры: ожидание подключения</div></aside>
  </div>
@@ -386,7 +386,7 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 
 <script src="vehicle-physics.js?v=20261124-6"></script>
 <script src="articulated-planner.js?v=20261124-18"></script>\n<script src="sensor-perception.js?v=20261124-1"></script>
-<script src="truckvision.js?v=20261124-36"></script>
+<script src="truckvision.js?v=20261124-37"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261124-13"></script>
 <script src="camera-measure.js?v=20261124-16"></script>
