@@ -230,3 +230,68 @@ test('ambiguous planner results preserve candidate states and simulator draws th
  assert.match(simulatorSource,/drawLine\(candidate\.states,colors\[index%colors\.length\],4,\[9,6\]\)/);
  assert.match(simulatorSource,/if\(plannedRoute\.length<2\|\|!routeAssessment\)/);
 });
+
+
+function conservativeSelectionWorkerResult(){
+ const states=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0},
+  {x:11,y:0,psi:0,psiT:0,gear:1,steer:0},
+  {x:22,y:0,psi:0,psiT:0,gear:1,steer:0}
+ ];
+ return {
+  ok:false,
+  reason:'uncertainty-sensitive-start',
+  conservativeCandidateRoutes:[
+   {index:0,label:'проверенный резервный кандидат',cost:22,states,metrics:{
+    minimumClearanceLowerBound:1.2,
+    sweptClearanceDetail:null
+   }},
+   {index:1,label:'второй резервный кандидат',cost:23,states:states.map(state=>({...state})),metrics:{
+    minimumClearanceLowerBound:1.1,
+    sweptClearanceDetail:null
+   }}
+  ],
+  sensitivity:{
+   measurementUncertainty:0.15,
+   nominalRequiredClearance:0.65,
+   reserveRequiredClearance:0.95,
+   comparison:{
+    nominalAction:{initialGear:1,firstTurn:'left'},
+    reserveAction:{initialGear:-1,firstTurn:'right'}
+   }
+  }
+ };
+}
+
+test('clearing the alternative-route placeholder clears the selected route instead of coercing an empty value to index zero',async()=>{
+ const simulator=bootSimulator({workerResult:conservativeSelectionWorkerResult()});
+ const {elements}=simulator;
+ elements.goalX.value='22';
+ elements.goalY.value='0';
+ elements.goalHeading.value='0';
+ await elements.planRoute.onclick();
+ assert.equal(elements.alternativeRouteSelect.style.display,'block');
+ assert.equal(elements.alternativeRouteSelect.children.length,2);
+ elements.alternativeRouteSelect.value='0';
+ elements.alternativeRouteSelect.onchange();
+ assert.match(elements.routeAdvice.textContent,/Выбран вариант 1/);
+ elements.alternativeRouteSelect.value='';
+ elements.alternativeRouteSelect.onchange();
+ assert.match(elements.routeAdvice.textContent,/Выбор альтернативной траектории снят/);
+ elements.routeStart.onclick();
+ assert.match(elements.routeAdvice.textContent,/Сначала нажмите «Построить путь»/);
+});
+
+test('invalid alternative-route indices fail closed and never keep a stale candidate',async()=>{
+ const simulator=bootSimulator({workerResult:conservativeSelectionWorkerResult()});
+ const {elements}=simulator;
+ elements.goalX.value='22';
+ elements.goalY.value='0';
+ elements.goalHeading.value='0';
+ await elements.planRoute.onclick();
+ elements.alternativeRouteSelect.value='99';
+ elements.alternativeRouteSelect.onchange();
+ assert.match(elements.routeAdvice.textContent,/такого варианта нет/);
+ elements.routeStart.onclick();
+ assert.match(elements.routeAdvice.textContent,/Сначала нажмите «Построить путь»/);
+});
