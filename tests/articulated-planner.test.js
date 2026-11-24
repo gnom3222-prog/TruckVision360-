@@ -213,6 +213,7 @@ test('start recommendation identifies the first steering side after a straight l
  assert.equal(result.initialGear,1);
  assert.equal(result.firstTurn,'left');
  assert.equal(result.firstTurnGear,1);
+ assert.equal(result.tractorYawDirection,'left');
  assert.equal(result.firstTurnAfterGearChange,false);
  assert.ok(Math.abs(result.firstTurnDistance-0.4)<1e-9);
 });
@@ -226,6 +227,7 @@ test('start recommendation keeps steering-wheel direction explicit during revers
  assert.equal(result.initialGear,-1);
  assert.equal(result.firstTurn,'right');
  assert.equal(result.firstTurnGear,-1);
+ assert.equal(result.tractorYawDirection,'left');
  assert.equal(result.firstTurnAfterGearChange,false);
 });
 
@@ -239,6 +241,7 @@ test('start recommendation reports a turn that begins after a gear change',()=>{
  assert.equal(result.initialGear,1);
  assert.equal(result.firstTurn,'left');
  assert.equal(result.firstTurnGear,-1);
+ assert.equal(result.tractorYawDirection,'right');
  assert.equal(result.firstTurnAfterGearChange,true);
  assert.ok(Math.abs(result.firstTurnDistance-0.4)<1e-9);
 });
