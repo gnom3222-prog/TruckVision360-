@@ -701,3 +701,9 @@ test('geometry uncertainty planning rejects invalid bounds and does not mutate i
  assert.deepEqual(obstacle,obstacleCopy);
  assert.deepEqual(params,paramsCopy);
 });
+
+test('swept point-displacement bound grows with the outward footprint envelope',()=>{
+ const nominal=planner.sweptDisplacementPerMeter(0.2,params);
+ const expanded=planner.sweptDisplacementPerMeter(0.2,{...params,footprintUncertainty:0.15});
+ assert.ok(expanded>nominal,`expanded bound ${expanded} must exceed nominal ${nominal}`);
+});
