@@ -648,3 +648,56 @@ test('uncertainty-aware alternatives reject negative or excessive uncertainty',(
  assert.equal(planner.planAlternativesWithReserve({...base,measurementUncertainty:-0.01}).reason,'invalid-input');
  assert.equal(planner.planAlternativesWithReserve({...base,measurementUncertainty:5.1}).reason,'invalid-input');
 });
+
+test('geometry uncertainty planning uses expanded obstacle and vehicle envelopes',()=>{
+ const start={x:0,y:0,psi:0,psiT:0};
+ let target={...start};
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ const result=planner.planAlternativesWithGeometryUncertainty({
+  start,goal:{x:target.x,y:target.y,heading:target.psi},
+  params,obstacles:[],integrate,
+  maxExpansions:1200,alternativeMaxExpansions:1200,
+  positionTolerance:0.02,headingTolerance:0.01,
+  maxTerminalArticulation:0.5,minClearance:0.30,
+  measurementUncertainty:0,
+  obstaclePositionUncertainty:0.05,
+  obstacleSizeUncertainty:0.02,
+  vehicleFootprintUncertainty:0.03
+ });
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.geometrySensitivity.status,'stable-within-bounded-envelope');
+ assert.ok(Math.abs(result.geometrySensitivity.obstacleExpansionPerSide-0.06)<1e-12);
+ assert.equal(result.geometrySensitivity.footprintExpansionPerEdge,0.03);
+ assert.equal(result.geometrySensitivity.kinematicParameterUncertaintyIncluded,false);
+});
+
+test('geometry uncertainty envelope rejects a nominal route with insufficient expanded starting clearance',()=>{
+ const obstacle={x:2,y:2,w:1,h:0.5,name:'near-side wall'};
+ const start={x:0,y:0,psi:0,psiT:0};
+ const initial=planner.clearance(start,[obstacle],params).distance;
+ assert.ok(initial>0.30&&initial<0.50);
+ const result=planner.planAlternativesWithGeometryUncertainty({
+  start,goal:{x:2,y:0},params,obstacles:[obstacle],integrate,
+  maxExpansions:1200,alternativeMaxExpansions:1200,
+  minClearance:0.30,measurementUncertainty:0,
+  obstaclePositionUncertainty:0.05,
+  obstacleSizeUncertainty:0.02,
+  vehicleFootprintUncertainty:0.03,
+  bounds:{minX:-18,maxX:18,minY:-12,maxY:12}
+ });
+ assert.equal(result.ok,false,JSON.stringify(result));
+ assert.equal(result.reason,'geometry-envelope-no-route');
+ assert.equal(result.geometrySensitivity.status,'no-route-under-envelope');
+});
+
+test('geometry uncertainty planning rejects invalid bounds and does not mutate inputs',()=>{
+ const start={x:0,y:0,psi:0,psiT:0};
+ const obstacle={x:8,y:4,w:1,h:1,name:'fixture'};
+ const obstacleCopy={...obstacle};
+ const paramsCopy={...params};
+ const base={start,goal:{x:3,y:0},params,obstacles:[obstacle],integrate,alternativeMaxExpansions:100};
+ assert.equal(planner.planAlternativesWithGeometryUncertainty({...base,obstaclePositionUncertainty:-0.01}).reason,'invalid-input');
+ assert.equal(planner.planAlternativesWithGeometryUncertainty({...base,vehicleFootprintUncertainty:1.1}).reason,'invalid-input');
+ assert.deepEqual(obstacle,obstacleCopy);
+ assert.deepEqual(params,paramsCopy);
+});
