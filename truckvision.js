@@ -422,11 +422,11 @@ function sweptClearanceColor(pathIndex,polygons,obstaclePolygons){
   }
  }
  const reserve=2*Math.max(0,cfg.measurementUncertainty);
- if(!showObstacles)return 'rgba(125,165,205,0.15)';
+ if(!showObstacles)return 'rgba(125,165,205,0.28)';
  const effective=nearest-reserve;
- if(effective<0.45)return 'rgba(255,92,92,0.22)';
- if(effective<1.0)return 'rgba(255,190,82,0.20)';
- return 'rgba(52,190,160,0.17)';
+ if(effective<0.45)return 'rgba(255,92,92,0.42)';
+ if(effective<1.0)return 'rgba(255,190,82,0.38)';
+ return 'rgba(52,190,160,0.34)';
 }
 
 function drawSweptCorridor(path,kind){
@@ -473,8 +473,8 @@ function drawSweptCorridor(path,kind){
    ctx.beginPath();
    points.forEach((point,i)=>i?ctx.lineTo(point.x,point.y):ctx.moveTo(point.x,point.y));
    ctx.closePath();
-   ctx.strokeStyle=kind==='planned'?'rgba(112,238,205,0.62)':'rgba(135,190,225,0.30)';
-   ctx.lineWidth=kind==='planned'?1.5:1;
+   ctx.strokeStyle=kind==='planned'?'rgba(112,238,205,0.95)':'rgba(135,190,225,0.68)';
+   ctx.lineWidth=kind==='planned'?2.4:1.6;
    ctx.stroke();
   });
   previous=polygons;
