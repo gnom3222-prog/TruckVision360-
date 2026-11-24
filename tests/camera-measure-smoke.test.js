@@ -13,7 +13,7 @@ function bootCamera(options={}){
  for(const id of ids){
   elements[id]={
    id,value:({
-    cameraReferenceWidth:'0.297',cameraReferenceHeight:'0.210',
+    cameraReferenceWidth:'2.970',cameraReferenceHeight:'2.100',
     cameraPointSigma:'2',cameraReferenceSigma:'2',gateWidth:'3.50',gateCenterX:'12',gateCenterY:'0',gateHeadingDeg:'90'
    })[id]||'',
    textContent:'',style:{},listeners:{},width:0,height:0,
@@ -30,7 +30,7 @@ function bootCamera(options={}){
  const appliedRegistrations=[];
  const win={
   TruckVisionCameraGeometry:options.geometry||geometry,
-  TruckVisionApplyGateRegistration:options.applyGateRegistration||((registration)=>{appliedRegistrations.push(registration);return true;}),
+  TruckVisionApplyGateRegistration:options.applyGateRegistration||((registration)=>{appliedRegistrations.push(registration);elements.gateWidth.value=registration.clearWidth.toFixed(2);elements.gateCenterX.value=registration.centerX.toFixed(2);elements.gateCenterY.value=registration.centerY.toFixed(2);elements.gateHeadingDeg.value=registration.headingDeg.toFixed(2);return true;}),
   addEventListener(type,fn){(windowListeners[type]??=[]).push(fn);}
  };
  const sandbox={
@@ -69,7 +69,11 @@ test('camera permission is requested only on tap; measurement reports uncertaint
  await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
  assert.match(camera.elements.gateResult.textContent,/оценка чувствительности/);
  assert.match(camera.elements.cameraStatus.textContent,/1σ/);
- assert.ok(Number(camera.elements.gateWidth.value)>0);
+ assert.ok(Number(camera.elements.gateWidth.value)>1);
+ assert.notEqual(camera.elements.gateWidth.value,'3.50','successful registration must replace the previous gate width');
+ assert.equal(camera.elements.gateCenterX.value,'12.00');
+ assert.equal(camera.elements.gateCenterY.value,'0.00');
+ assert.equal(camera.elements.gateHeadingDeg.value,'90.00');
  assert.equal(camera.appliedRegistrations.length,1,'successful measurement must be registered on the simulator map');
  assert.equal(camera.appliedRegistrations[0].centerX,12);
  assert.equal(camera.appliedRegistrations[0].centerY,0);
