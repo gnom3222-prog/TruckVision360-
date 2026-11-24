@@ -926,6 +926,16 @@
     candidateSummaries:reserve.candidateSummaries||[],
     nominalCandidateSummaries:nominal.candidateSummaries||[],
     reserveCandidateSummaries:reserve.candidateSummaries||[],
+    conservativeCandidateRoutes:reserve.ok&&Array.isArray(reserve.states)&&reserve.states.length>=2?[{
+     index:0,label:'Консервативный вариант с резервом погрешности',
+     cost:Number(reserve.cost??reserve.score?.cost??0),
+     states:reserve.states,
+     metrics:{
+      minimumClearanceLowerBound:reserve.minimumClearanceLowerBound,
+      sweptClearanceDetail:reserve.sweptClearanceDetail
+     },
+     recommendation:reserve.recommendation
+    }]:[],
     sensitivity:{
      status:'start-action-changed',measurementUncertainty:uncertainty,
      nominalRequiredClearance,reserveRequiredClearance,
