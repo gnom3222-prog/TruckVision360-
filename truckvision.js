@@ -25,6 +25,11 @@ const cfg={
  brakeDecel:4.5,
  maxAccel:0.8,
  gateWidth:3.5,
+ gateCenterX:12,
+ gateCenterY:0,
+ gateHeadingDeg:90,
+ gatePostWidth:0.25,
+ gateDepth:0.6,
  margin:0.2,
  measurementUncertainty:0.15,
  obstaclePositionUncertainty:0.05,
@@ -53,7 +58,22 @@ const obstacles=[
  {x:16.0,y:-3.3,w:1.0,h:1.0,name:'Паллет B'},
  {x:13.0,y:5.0,w:16.0,h:0.7,name:'Стена слева'},
  {x:13.0,y:-5.0,w:16.0,h:0.7,name:'Стена справа'}
-];
+ ];
+
+function sceneObstacles(){
+ const result=obstacles.map(obstacle=>({...obstacle}));
+ if($('gateEnabled')&&$('gateEnabled').checked){
+  result.push(...planner.createGateObstacles({
+   centerX:cfg.gateCenterX,
+   centerY:cfg.gateCenterY,
+   clearWidth:cfg.gateWidth,
+   postWidth:cfg.gatePostWidth,
+   depth:cfg.gateDepth,
+   heading:cfg.gateHeadingDeg*Math.PI/180
+  }));
+ }
+ return result;
+}
 
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const norm=a=>Math.atan2(Math.sin(a),Math.cos(a));
@@ -81,6 +101,11 @@ function readSettings(){
   brakeDecel:[0.1,12],
   maxAccel:[0.1,3],
   gateWidth:[1,20],
+  gateCenterX:[-100,100],
+  gateCenterY:[-100,100],
+  gateHeadingDeg:[-180,180],
+  gatePostWidth:[0.05,2],
+  gateDepth:[0.05,10],
   margin:[0,5],
   measurementUncertainty:[0,5],
   obstaclePositionUncertainty:[0,1],
@@ -239,6 +264,7 @@ function bodyCorners(origin,angle,front,rear,width){
 function vehiclePolygons(q){return physics.vehiclePolygons(q,cfg);}
 
 function obstaclePolygon(o){
+ if(Array.isArray(o.polygon))return o.polygon.map(point=>({x:point.x,y:point.y}));
  return[
   {x:o.x-o.w/2,y:o.y-o.h/2},
   {x:o.x+o.w/2,y:o.y-o.h/2},
@@ -295,7 +321,7 @@ function assessScene(q=state){
  let collision=false;
 
  if(showObstacles){
-  for(const o of obstacles){
+  for(const o of sceneObstacles()){
    const op=obstaclePolygon(o);
    for(let i=0;i<vehicle.length;i++){
     const d=polygonDistance(vehicle[i],op);
@@ -384,22 +410,26 @@ function drawEnvelopePolygon(poly,color){
 function drawObstacles(){
  if(!showObstacles)return;
  const expansion=cfg.obstaclePositionUncertainty+cfg.obstacleSizeUncertainty/2;
- for(const o of obstacles){
-  const expanded={...o,w:o.w+2*expansion,h:o.h+2*expansion};
-  drawEnvelopePolygon(obstaclePolygon(expanded),'#ffd18b');
-  const p=obstaclePolygon(o).map(toScreen);
+ for(const o of sceneObstacles()){
+  const nominal=obstaclePolygon(o);
+  const expanded=Array.isArray(o.polygon)?
+   planner.inflateConvexPolygon(nominal,Math.SQRT2*expansion):
+   obstaclePolygon({...o,w:o.w+2*expansion,h:o.h+2*expansion});
+  drawEnvelopePolygon(expanded,'#ffd18b');
+  const p=nominal.map(toScreen);
   ctx.beginPath();
   p.forEach((z,i)=>i?ctx.lineTo(z.x,z.y):ctx.moveTo(z.x,z.y));
   ctx.closePath();
-  ctx.fillStyle='#8b4c43';
+  ctx.fillStyle=o.kind==='gate-jamb'?'#9a6635':'#8b4c43';
   ctx.fill();
-  ctx.strokeStyle='#ffc0a8';
+  ctx.strokeStyle=o.kind==='gate-jamb'?'#ffe0a8':'#ffc0a8';
   ctx.lineWidth=2;
   ctx.stroke();
-  const c=toScreen({x:o.x,y:o.y});
+  const center=nominal.reduce((sum,point)=>({x:sum.x+point.x/nominal.length,y:sum.y+point.y/nominal.length}),{x:0,y:0});
+  const label=toScreen(center);
   ctx.fillStyle='#fff';
   ctx.font='12px system-ui';
-  ctx.fillText(o.name,c.x+5,c.y-5);
+  ctx.fillText(o.name,label.x+5,label.y-5);
  }
 }
 
@@ -409,12 +439,22 @@ function routeBlocked(ix,iy){
  const y=iy*0.5;
  const pad=2.2;
 
- return obstacles.some(o=>
-  x>=o.x-o.w/2-pad&&
-  x<=o.x+o.w/2+pad&&
-  y>=o.y-o.h/2-pad&&
-  y<=o.y+o.h/2+pad
- );
+ const point={x,y};
+ return sceneObstacles().some(o=>{
+  const poly=obstaclePolygon(o);
+  let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+   const a=poly[i],b=poly[j];
+   const crosses=((a.y>y)!==(b.y>y))&&
+    x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x;
+   if(crosses)inside=!inside;
+  }
+  if(inside)return true;
+  for(let i=0;i<poly.length;i++){
+   if(pointSegmentDistance(point,poly[i],poly[(i+1)%poly.length])<=pad)return true;
+  }
+  return false;
+ });
 }
 
 function planAStar(start,goal){
@@ -516,7 +556,7 @@ function planAStar(start,goal){
 function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDetail=null){
  let length=0,gearChanges=0,steeringChanges=0,reverseDistance=0,reverseSegments=0;
  let minClearance=Infinity,minClearanceDetail=null,maxBeta=0,collision=false;
- const checkClearance=showObstacles?planner.createClearanceChecker(obstacles,cfg):null;
+ const checkClearance=showObstacles?planner.createClearanceChecker(sceneObstacles(),cfg):null;
  let previousGear=path[0]?.gear||1,previousSteer=path[0]?.steer||0,wasReverse=false;
  for(let i=0;i<path.length;i++){
   const q=path[i];
@@ -697,7 +737,7 @@ async function buildRoute(){
    headingTolerance:routeGoal.headingTolerance,
    maxTerminalArticulation:routeGoal.maxTerminalArticulation,
    params:{...cfg},
-   obstacles:obstacles.map(o=>({...o})),
+   obstacles:sceneObstacles(),
    maxExpansions:mobile?4500:12000,
    alternativeMaxExpansions:mobile?2200:4500,
    costTolerance:0.25,
@@ -1409,6 +1449,11 @@ $('trace').onclick=()=>{
 
 $('apply').onclick=applySettings;
 
+$('gateEnabled').onchange=()=>{
+ invalidateRouteForSettingsChange();
+ draw();
+};
+
 $('obstaclesToggle').onclick=()=>{
  showObstacles=!showObstacles;
  $('obstaclesToggle').textContent=
@@ -1436,6 +1481,7 @@ $('scenarioReset').onclick=()=>{
  resetState();
  showObstacles=true;
  helperEnabled=true;
+ if($('gateEnabled'))$('gateEnabled').checked=false;
  $('obstaclesToggle').textContent='Препятствия: вкл.';
  $('helperToggle').textContent='Помощник: вкл.';
  draw();
@@ -1464,7 +1510,7 @@ $('assess').onclick=()=>{
   result+'. Полезная ширина: '+usable.toFixed(2)+
   ' м; ширина полуприцепа: '+cfg.trailerWidth.toFixed(2)+
   ' м; дополнительный резерв неопределённости: '+uncertainty.toFixed(2)+' м с каждой стороны; остаточный запас: '+difference.toFixed(2)+
-  ' м. Это только сравнение ширины, не анализ траектории и не гарантия проезда.';
+  ' м. '+($('gateEnabled').checked?'Косяки ворот также включены в карту как два ориентированных препятствия; построение маршрута проверяет их вместе со всем автопоездом.':'Косяки ворот пока не включены в карту: включите соответствующий переключатель и задайте положение/курс проёма. Камера измеряет ширину, но не регистрирует положение ворот на карте автоматически.')+' Это не гарантия проезда.';
 };
 
 $('routeStart').onclick=()=>{
