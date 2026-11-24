@@ -101,7 +101,7 @@ canvas{max-width:100%}
 <button id="helperToggle" class="primary">Помощник: вкл.</button>
 <button id="scenarioReset">Сбросить площадку</button>
 </div>
-<div class="obstacle-legend">На площадке показаны условные стены, паллеты и парковочная зона. Их положение можно использовать для проверки манёвра.</div>
+<div class="obstacle-legend">Сплошные фигуры — номинальные размеры. Оранжевый пунктир — расширенная оболочка, которую учитывает планировщик: положение препятствий ±0,05 м по каждой оси, полный размер ±0,02 м; контуры автопоезда расширяются на 0,03 м с каждой грани. Это граница расчётного допуска, а не дополнительный физический объект.</div>
 <div class="assistant-box" aria-live="polite">
 <strong>🤖 Помощник TruckVision 360</strong>
 <p id="assistantAdvice">Система готова. Выберите манёвр и двигайтесь медленно, наблюдая за зазорами.</p>
@@ -239,7 +239,7 @@ canvas{max-width:100%}
 
 <script src="vehicle-physics.js?v=20261124-6"></script>
 <script src="articulated-planner.js?v=20261124-10"></script>
-<script src="truckvision.js?v=20261124-13"></script>
+<script src="truckvision.js?v=20261124-14"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261124-10"></script>
 <script src="camera-measure.js?v=20261124-10"></script>
