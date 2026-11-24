@@ -97,3 +97,16 @@ test('camera stream is stopped if inline video playback fails after permission w
  assert.equal(camera.elements.measureVideo.srcObject,null);
  assert.match(camera.elements.cameraStatus.textContent,/Не удалось включить камеру/);
 });
+
+test('failed projective measurement keeps the previous gate width and explains that it was not updated',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap([{x:100,y:100},{x:500,y:150},{x:400,y:300},{x:200,y:250}]);
+ assert.match(camera.elements.cameraStatus.textContent,/Плоскость откалибрована/);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap([{x:180,y:390},{x:460,y:390},{x:460,y:460},{x:180,y:460}]);
+ assert.equal(camera.elements.gateWidth.value,'3.50');
+ assert.match(camera.elements.cameraStatus.textContent,/пересекает линию вырождения/);
+ assert.match(camera.elements.cameraStatus.textContent,/Ширина ворот не обновлена/);
+});
