@@ -242,8 +242,48 @@
   };
  }
 
+ function registerGateOnMap(measurement,anchor,headingRadians){
+  if(!measurement||!Array.isArray(measurement.points)||measurement.points.length!==4||
+     !Number.isFinite(measurement.width)||measurement.width<=0||measurement.width>50){
+   throw new Error('Измерение ворот должно содержать четыре угла и положительную конечную ширину.');
+  }
+  if(!anchor||!Number.isFinite(anchor.x)||!Number.isFinite(anchor.y)||
+     Math.abs(anchor.x)>10000||Math.abs(anchor.y)>10000||!Number.isFinite(headingRadians)){
+   throw new Error('Для привязки ворот задайте конечные координаты центра и направление линии ворот.');
+  }
+  if(!validQuad(measurement.points,0,0)){
+   throw new Error('Измеренные углы ворот должны образовывать выпуклый четырёхугольник.');
+  }
+  const points=measurement.points;
+  const leftMid={
+   x:(points[0].x+points[3].x)/2,
+   y:(points[0].y+points[3].y)/2
+  };
+  const rightMid={
+   x:(points[1].x+points[2].x)/2,
+   y:(points[1].y+points[2].y)/2
+  };
+  const sourceAxisLength=dist(leftMid,rightMid);
+  if(!Number.isFinite(sourceAxisLength)||sourceAxisLength<1e-9){
+   throw new Error('Невозможно определить ось измеренного проёма.');
+  }
+  const heading=Math.atan2(Math.sin(headingRadians),Math.cos(headingRadians));
+  const ux=Math.cos(heading),uy=Math.sin(heading),half=measurement.width/2;
+  return {
+   centerX:anchor.x,
+   centerY:anchor.y,
+   headingRadians:heading,
+   headingDeg:heading*180/Math.PI,
+   clearWidth:measurement.width,
+   openingStart:{x:anchor.x-half*ux,y:anchor.y-half*uy},
+   openingEnd:{x:anchor.x+half*ux,y:anchor.y+half*uy},
+   sourceAxisLength,
+   mapRegistration:'manual-center-and-heading'
+  };
+ }
+
  return Object.freeze({
-  validQuad,solve,homography,map,measureQuad,estimateUncertainty,
+  validQuad,solve,homography,map,measureQuad,estimateUncertainty,registerGateOnMap,
   MAX_CONDITION_ESTIMATE,CONDITION_WARNING_ESTIMATE
  });
 });
