@@ -1376,6 +1376,41 @@ function startDrive(direction){
  braking=false;
 }
 
+function applyCameraGateRegistration(registration){
+ const centerX=registration&&registration.centerX;
+ const centerY=registration&&registration.centerY;
+ const clearWidth=registration&&registration.clearWidth;
+ const headingDeg=registration&&registration.headingDeg;
+ if(![centerX,centerY,clearWidth,headingDeg].every(Number.isFinite)||
+    Math.abs(centerX)>100||Math.abs(centerY)>100||
+    clearWidth<1||clearWidth>20||headingDeg<-180||headingDeg>180){
+  return false;
+ }
+ try{
+  planner.createGateObstacles({
+   centerX,centerY,clearWidth,
+   postWidth:cfg.gatePostWidth,
+   depth:cfg.gateDepth,
+   heading:headingDeg*Math.PI/180
+  });
+ }catch(error){
+  return false;
+ }
+ cfg.gateWidth=clearWidth;
+ cfg.gateCenterX=centerX;
+ cfg.gateCenterY=centerY;
+ cfg.gateHeadingDeg=headingDeg;
+ $('gateWidth').value=clearWidth.toFixed(2);
+ $('gateCenterX').value=centerX.toFixed(2);
+ $('gateCenterY').value=centerY.toFixed(2);
+ $('gateHeadingDeg').value=headingDeg.toFixed(2);
+ $('gateEnabled').checked=true;
+ invalidateRouteForSettingsChange();
+ draw();
+ return true;
+}
+window.TruckVisionApplyGateRegistration=applyCameraGateRegistration;
+
 function applySettings(){
  const result=readSettings();
  if(!result.ok){
