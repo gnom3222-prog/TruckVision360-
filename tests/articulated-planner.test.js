@@ -509,3 +509,67 @@ test('candidate comparison rejects invalid candidate costs and routes',()=>{
  assert.equal(planner.compareStartCandidates([{states,cost:NaN}]).reason,'invalid-candidate-cost');
  assert.equal(planner.compareStartCandidates([{states:[{x:0,y:0}],cost:1}]).reason,'invalid-candidate-route');
 });
+
+
+test('planner enforces a constrained initial gear and steering side',()=>{
+ const start={x:0,y:0,psi:0,psiT:0};
+ let target={...start};
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ const result=planner.plan({
+  start,goal:{x:target.x,y:target.y,heading:target.psi},
+  params,obstacles:[],integrate,maxExpansions:300,
+  positionTolerance:0.001,headingTolerance:0.001,
+  maxTerminalArticulation:0.5,
+  firstActionConstraint:{initialGear:1,firstTurn:'left'}
+ });
+ assert.equal(result.ok,true,JSON.stringify(result));
+ const advice=planner.recommendStart(result.states);
+ assert.equal(advice.initialGear,1);
+ assert.equal(advice.firstTurn,'left');
+});
+
+test('planner rejects malformed first-action constraints',()=>{
+ const result=planner.plan({
+  start:{x:0,y:0,psi:0,psiT:0},goal:{x:3,y:0},
+  params,obstacles:[],integrate,maxExpansions:100,
+  firstActionConstraint:{initialGear:0,firstTurn:'straight'}
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'invalid-input');
+ assert.ok(result.errors.some(message=>message.includes('Ограничение первого действия')));
+});
+
+test('multi-start planner searches a free route and four constrained first actions',()=>{
+ const start={x:0,y:0,psi:0,psiT:0};
+ let target={...start};
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ const result=planner.planAlternatives({
+  start,goal:{x:target.x,y:target.y,heading:target.psi},
+  params,obstacles:[],integrate,
+  maxExpansions:1200,alternativeMaxExpansions:1200,
+  positionTolerance:0.02,headingTolerance:0.01,
+  maxTerminalArticulation:0.5
+ });
+ assert.equal(result.candidatesAttempted,5);
+ assert.ok(result.candidatesFound>=1,JSON.stringify(result));
+ assert.ok(result.candidateSummaries.some(candidate=>candidate.label==='вперёд, первый поворот влево'),
+  'the matching constrained forward-left route should be found');
+ assert.ok(result.candidateSummaries.every(candidate=>Number.isFinite(candidate.cost)));
+ if(result.ok){
+  assert.ok(['single-candidate','preferred'].includes(result.status));
+  assert.ok(result.states.length>1);
+  assert.ok(result.recommendation);
+ }else{
+  assert.equal(result.reason,'ambiguous-start');
+  assert.equal(result.comparison.recommendation,null);
+ }
+});
+
+test('multi-start planner rejects an invalid per-candidate expansion budget',()=>{
+ const result=planner.planAlternatives({
+  start:{x:0,y:0,psi:0,psiT:0},goal:{x:2,y:0},
+  params,obstacles:[],integrate,alternativeMaxExpansions:0
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'invalid-input');
+});
