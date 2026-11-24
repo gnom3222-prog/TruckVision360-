@@ -29,7 +29,12 @@ const cfg={
  measurementUncertainty:0.15,
  obstaclePositionUncertainty:0.05,
  obstacleSizeUncertainty:0.02,
- vehicleFootprintUncertainty:0.03
+ vehicleFootprintUncertainty:0.03,
+ wheelbaseUncertainty:0,
+ hitchOffsetUncertainty:0,
+ kingpinAxlesUncertainty:0,
+ trailerLengthUncertainty:0,
+ trailerWidthUncertainty:0
 };
 
 let state,steer=0,targetSpeed=2,speed=0,drive=0;
@@ -77,7 +82,12 @@ function readSettings(){
   measurementUncertainty:[0,5],
   obstaclePositionUncertainty:[0,1],
   obstacleSizeUncertainty:[0,1],
-  vehicleFootprintUncertainty:[0,0.5]
+  vehicleFootprintUncertainty:[0,0.5],
+  wheelbaseUncertainty:[0,2],
+  hitchOffsetUncertainty:[0,1],
+  kingpinAxlesUncertainty:[0,5],
+  trailerLengthUncertainty:[0,5],
+  trailerWidthUncertainty:[0,1.5]
  };
  for(const [key,range] of Object.entries(limits)){
   const value=candidate[key];
@@ -85,10 +95,47 @@ function readSettings(){
    errors.push(key+': допустимый диапазон '+range[0]+'–'+range[1]+'.');
   }
  }
+ const parameterUncertaintyMap={
+  wheelbaseUncertainty:'wheelbase',
+  hitchOffsetUncertainty:'hitchOffset',
+  kingpinAxlesUncertainty:'kingpinAxles',
+  trailerLengthUncertainty:'trailerLength',
+  trailerWidthUncertainty:'trailerWidth'
+ };
+ for(const [uncertaintyKey,parameterKey] of Object.entries(parameterUncertaintyMap)){
+  const uncertainty=candidate[uncertaintyKey];
+  if(!Number.isFinite(uncertainty)||uncertainty<0)continue;
+  if(uncertainty===0)continue;
+  for(const endpoint of [candidate[parameterKey]-uncertainty,candidate[parameterKey]+uncertainty]){
+   const endpointErrors=physics.validateVehicleParams({...candidate,[parameterKey]:endpoint});
+   endpointErrors.forEach(message=>errors.push(uncertaintyKey+': крайнее значение '+parameterKey+'='+endpoint.toFixed(3)+' м: '+message));
+  }
+ }
  if(errors.length)return {ok:false,changed:false,errors};
  const changed=Object.keys(cfg).some(key=>!Object.is(cfg[key],candidate[key]));
  Object.assign(cfg,candidate);
  return {ok:true,changed,errors:[]};
+}
+
+function vehicleParameterBoundsFromSettings(){
+ const mapping={
+  wheelbaseUncertainty:'wheelbase',
+  hitchOffsetUncertainty:'hitchOffset',
+  kingpinAxlesUncertainty:'kingpinAxles',
+  trailerLengthUncertainty:'trailerLength',
+  trailerWidthUncertainty:'trailerWidth'
+ };
+ const bounds={};
+ for(const [uncertaintyKey,parameterKey] of Object.entries(mapping)){
+  const uncertainty=cfg[uncertaintyKey];
+  if(uncertainty>0){
+   bounds[parameterKey]={
+    min:cfg[parameterKey]-uncertainty,
+    max:cfg[parameterKey]+uncertainty
+   };
+  }
+ }
+ return bounds;
 }
 
 function invalidateRouteForSettingsChange(){
@@ -643,11 +690,13 @@ async function buildRoute(){
    obstaclePositionUncertainty:cfg.obstaclePositionUncertainty,
    obstacleSizeUncertainty:cfg.obstacleSizeUncertainty,
    vehicleFootprintUncertainty:cfg.vehicleFootprintUncertainty,
+   vehicleParameterBounds:vehicleParameterBoundsFromSettings(),
    bounds:{minX:-20,maxX:42,minY:-20,maxY:20}
   },progress=>{
    if(token!==routeBuildToken)return;
+   const parameterText=progress.parameterScenario?'параметры: '+progress.parameterScenario+' ('+progress.parameterScenarioIndex+'/'+progress.parameterScenarioCount+'); ':'';
    const geometryText=progress.geometryScenario==='expanded-geometry-envelope'?'расширенная геометрия; ':progress.geometryScenario==='nominal-geometry'?'номинальная геометрия; ':'';
-   const scenarioText=geometryText+(progress.scenario==='reserve'?'поиск с резервом неопределённости: ':'базовый поиск: ');
+   const scenarioText=parameterText+geometryText+(progress.scenario==='reserve'?'поиск с резервом неопределённости: ':'базовый поиск: ');
    const candidateText=progress.candidateIndex?'кандидат '+progress.candidateIndex+'/'+progress.candidateCount+'; суммарно проверено ':'проверено ';
    $('routeAdvice').textContent='Рассчитываю варианты траектории… '+scenarioText+candidateText+progress.expanded+
     ' из '+progress.maxExpansions+' состояний; до цели '+
@@ -680,6 +729,27 @@ if(result.reason==='geometry-sensitive-start'||result.reason==='geometry-envelop
   $('difficultyAdvice').textContent='Автопроезд заблокирован: выбранный маршрут не подтверждён при расширении прямоугольных контуров препятствий и автопоезда. Не уменьшайте резерв только ради получения маршрута.';
  }
  $('difficultyAdvice').textContent+=' Границы проверки: положение препятствия ±'+Number(geometry.obstaclePositionUncertainty||0).toFixed(2)+' м по каждой оси; ошибка полного размера препятствия ±'+Number(geometry.obstacleSizeUncertainty||0).toFixed(2)+' м; расширение каждой внешней грани автопоезда '+Number(geometry.vehicleFootprintUncertainty||0).toFixed(2)+' м. Погрешности wheelbase, hitchOffset и kingpinAxles пока не варьируются.';
+ draw();
+ return;
+}
+
+if(result.reason==='parameter-sensitive-start'||result.reason==='parameter-scenario-unavailable'){
+ if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: неопределённость физических размеров не подтверждает начальное действие.');
+ plannedRoute=[];
+ routeAssessment=null;
+ const sensitivity=result.parameterSensitivity||{};
+ if(result.reason==='parameter-sensitive-start'){
+  $('routeAdvice').textContent='Начальное действие меняется при изменении физического параметра «'+
+   (sensitivity.failedParameter||'автопоезд')+'» до '+Number(sensitivity.failedValue).toFixed(3)+
+   ' м. Сторона и передача не выбраны; изменились поля: '+(sensitivity.changedFields||[]).join(', ')+'.';
+  $('difficultyAdvice').textContent='Рекомендация чувствительна к заданному диапазону размеров автопоезда. Проверьте колёсную базу, положение седла, расстояние от шкворня до тележки и габариты полуприцепа по документам или измерениям. Виртуальный автопроезд заблокирован.';
+ }else{
+  $('routeAdvice').textContent='Для крайнего сценария «'+(sensitivity.failedScenario||'неизвестный параметр')+
+   '» планировщик не подтвердил маршрут. Причина: '+(sensitivity.failureReason||'нет результата')+
+   '. Это не доказывает невозможность других траекторий; однозначная рекомендация не выдаётся.';
+  $('difficultyAdvice').textContent='Проверка диапазона физических параметров не завершена для всех сценариев. Уточните размеры и повторите расчёт; не считайте номинальный маршрут устойчивым.';
+ }
+ $('difficultyAdvice').textContent+=' Проверены только крайние значения каждого параметра по одному за раз; совместные комбинации погрешностей не перебирались.';
  draw();
  return;
 }
@@ -795,6 +865,12 @@ const geometrySensitivity=result.geometrySensitivity||{};
 const geometryNote=geometrySensitivity.status==='stable-within-bounded-envelope'?
  ' Дополнительно проверена расширенная геометрия: положение препятствий ±'+geometrySensitivity.obstaclePositionUncertainty.toFixed(2)+' м по каждой оси, ошибка полного размера ±'+geometrySensitivity.obstacleSizeUncertainty.toFixed(2)+' м, внешний контур автопоезда расширен на '+geometrySensitivity.vehicleFootprintUncertainty.toFixed(2)+' м с каждой грани. Параметры wheelbase, hitchOffset и kingpinAxles не варьировались; это ограниченная проверка оболочки, не полный анализ неопределённости.':
  geometrySensitivity.status==='zero-geometry-bounds'?' Геометрические границы неопределённости заданы нулевыми; расширенная проверка не выполнялась.':'';
+const parameterSensitivity=result.parameterSensitivity||{};
+const parameterNote=parameterSensitivity.status==='stable-across-one-at-a-time-bounds'?
+ ' Проверены '+parameterSensitivity.testedScenarioCount+' крайних сценариев физических размеров по одному параметру за раз; начальное действие совпало среди найденных кандидатов. Совместные комбинации диапазонов не проверялись.':
+ parameterSensitivity.status==='not-varied'?
+ ' Неопределённости физических размеров не заданы (нулевые допуски означают «не оценивалось», а не доказанную точность).':
+ ' Устойчивость к диапазонам физических размеров не подтверждена.';
 
   const peakGearText=m.articulationPeak.gear<0?'задним ходом':'вперёд';
   const articulationPeakText='пик угла сочленения '+m.articulationPeak.maxAngleDegrees.toFixed(1)+
@@ -802,12 +878,12 @@ const geometryNote=geometrySensitivity.status==='stable-within-bounded-envelope'
    m.articulationPeak.state.x.toFixed(1)+' м, Y '+m.articulationPeak.state.y.toFixed(1)+' м), '+peakGearText;
   $('routeAdvice').textContent=
    'Начало манёвра: '+gearText+'; первое рулевое действие: '+firstTurnText+
-   '. Сторона определяется по первому значимому управляющему углу планировщика (порог 0,08 рад), а не по одному лишь направлению на цель.'+recommendationNote+sensitivityNote+' Маршрут до точки ('+
+   '. Сторона определяется по первому значимому управляющему углу планировщика (порог 0,08 рад), а не по одному лишь направлению на цель.'+recommendationNote+sensitivityNote+parameterNote+' Маршрут до точки ('+
    gx.toFixed(1)+', '+gy.toFixed(1)+') м; длина '+m.length.toFixed(1)+
    ' м; переключений передачи: '+m.gearChanges+'; изменений руля: '+m.steeringChanges+
    '; задний ход: '+m.reverseDistance.toFixed(1)+' м. Заданный конечный курс '+headingDegrees.toFixed(0)+
    '°; ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+'°; угол сочленения у цели '+
-   m.finalArticulationDeg.toFixed(1)+'° (допуск '+articulationLimitDegrees.toFixed(0)+'°); '+articulationPeakText+'.'+geometryNote;
+   m.finalArticulationDeg.toFixed(1)+'° (допуск '+articulationLimitDegrees.toFixed(0)+'°); '+articulationPeakText+'.'+geometryNote+parameterNote;
 
   const closestLocationText=m.clearanceDetail?
    m.clearanceDetail.vehiclePart+' рядом с препятствием «'+m.clearanceDetail.obstacle+
