@@ -15,7 +15,7 @@
   let sign=0,area=0;
   for(let i=0;i<4;i++){
    const a=q[i],b=q[(i+1)%4],c=q[(i+2)%4];
-   const cross=(b.x-a.x)*(c.x-b.x)-(b.y-a.y)*(c.y-b.y);
+   const cross=(b.x-a.x)*(c.y-b.y)-(b.y-a.y)*(c.x-b.x);
    if(Math.abs(cross)<1e-4)return false;
    const current=Math.sign(cross);
    if(sign&&current!==sign)return false;
