@@ -164,24 +164,20 @@
   const trailerFrontFromAxle=kingpinAxles+1.5;
   const trailerRearFromAxle=kingpinAxles-(trailerLength-1.5);
   const trailerRadius=Math.hypot(Math.max(Math.abs(trailerFrontFromAxle),Math.abs(trailerRearFromAxle)),trailerWidth/2);
-  const globalTrailerYawPerMeter=(1+hitchOffset*tractorYawPerMeter)/kingpinAxles;
-  let maxSin=1,maxCos=1;
-  if(q){
-   if(!Number.isFinite(q.psi)||!Number.isFinite(q.psiT))throw new Error('Articulation state is invalid for swept-clearance checking.');
-   const beta=q.psi-q.psiT;
-   const betaRate=tractorYawPerMeter+globalTrailerYawPerMeter;
-   const halfRange=betaRate*maxDistance;
-   const lo=beta-halfRange,hi=beta+halfRange;
-   maxSin=Math.max(Math.abs(Math.sin(lo)),Math.abs(Math.sin(hi)));
-   if(Math.ceil((lo-Math.PI/2)/Math.PI)<=Math.floor((hi-Math.PI/2)/Math.PI))maxSin=1;
-   maxCos=Math.max(Math.abs(Math.cos(lo)),Math.abs(Math.cos(hi)));
-   if(Math.ceil(lo/Math.PI)<=Math.floor(hi/Math.PI))maxCos=1;
+  if(q&&(!Number.isFinite(q.psi)||!Number.isFinite(q.psiT))){
+   throw new Error('Articulation state is invalid for swept-clearance checking.');
   }
-  const trailerYawPerMeter=(maxSin+hitchOffset*tractorYawPerMeter*maxCos)/kingpinAxles;
+  // For fixed steering, the trailer-frame pair [axle longitudinal speed,
+  // kingpinAxles * trailer yaw rate] has norm sqrt(1 + a^2), with
+  // a = hitchOffset * tractor yaw rate per metre. A Frobenius-norm bound
+  // covers every point at radius R from the equivalent axle-group center.
+  const hitchYawCoupling=hitchOffset*tractorYawPerMeter;
+  const trailerPointRate=Math.hypot(1,hitchYawCoupling)*
+   Math.hypot(1,trailerRadius/kingpinAxles);
   return Math.max(
    1+tractorRadius*tractorYawPerMeter,
    1+cabRadiusFromRearAxle*tractorYawPerMeter,
-   1+hitchOffset*tractorYawPerMeter+trailerRadius*trailerYawPerMeter
+   trailerPointRate
   );
  }
  function clearance(q,obstacles,p){return createClearanceChecker(obstacles,p)(q);}
