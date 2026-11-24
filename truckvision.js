@@ -1504,30 +1504,41 @@ function startDrive(direction){
 }
 
 function applyCameraGateRegistration(registration){
- const settings=readSettings();
- if(!settings.ok)return false;
  const centerX=registration&&registration.centerX;
  const centerY=registration&&registration.centerY;
  const clearWidth=registration&&registration.clearWidth;
  const headingDeg=registration&&registration.headingDeg;
  const widthUncertaintyBound=registration&&registration.widthUncertaintyBound!==undefined?
   registration.widthUncertaintyBound:0;
- if(![centerX,centerY,clearWidth,headingDeg,widthUncertaintyBound].every(Number.isFinite)||
+ const readGateSetting=(id,key)=>{
+  const input=$(id);
+  if(!input)return cfg[key];
+  if(String(input.value).trim()==='')return NaN;
+  return Number(input.value);
+ };
+ const postWidth=readGateSetting('gatePostWidth','gatePostWidth');
+ const depth=readGateSetting('gateDepth','gateDepth');
+ const positionUncertainty=readGateSetting('gatePositionUncertainty','gatePositionUncertainty');
+ const headingUncertaintyDeg=readGateSetting('gateHeadingUncertaintyDeg','gateHeadingUncertaintyDeg');
+ if(![centerX,centerY,clearWidth,headingDeg,widthUncertaintyBound,
+      postWidth,depth,positionUncertainty,headingUncertaintyDeg].every(Number.isFinite)||
     Math.abs(centerX)>100||Math.abs(centerY)>100||
     clearWidth<1||clearWidth>20||headingDeg<-180||headingDeg>180||
     widthUncertaintyBound<0||widthUncertaintyBound>2||
-    widthUncertaintyBound>=clearWidth-0.05){
+    widthUncertaintyBound>=clearWidth-0.05||
+    postWidth<0.05||postWidth>2||depth<0.05||depth>10||
+    positionUncertainty<0||positionUncertainty>2||
+    headingUncertaintyDeg<0||headingUncertaintyDeg>45){
   return false;
  }
  try{
   planner.createGateObstacles({
    centerX,centerY,clearWidth,
-   postWidth:cfg.gatePostWidth,
-   depth:cfg.gateDepth,
+   postWidth,depth,
    heading:headingDeg*Math.PI/180,
    widthUncertainty:widthUncertaintyBound,
-   positionUncertainty:cfg.gatePositionUncertainty,
-   headingUncertaintyDeg:cfg.gateHeadingUncertaintyDeg
+   positionUncertainty,
+   headingUncertaintyDeg
   });
  }catch(error){
   return false;
@@ -1537,6 +1548,10 @@ function applyCameraGateRegistration(registration){
  cfg.gateCenterX=centerX;
  cfg.gateCenterY=centerY;
  cfg.gateHeadingDeg=headingDeg;
+ cfg.gatePostWidth=postWidth;
+ cfg.gateDepth=depth;
+ cfg.gatePositionUncertainty=positionUncertainty;
+ cfg.gateHeadingUncertaintyDeg=headingUncertaintyDeg;
  $('gateWidth').value=clearWidth.toFixed(2);
  $('gateWidthUncertainty').value=widthUncertaintyBound.toFixed(3);
  $('gateCenterX').value=centerX.toFixed(2);
