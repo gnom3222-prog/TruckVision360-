@@ -707,3 +707,39 @@ test('swept point-displacement bound grows with the outward footprint envelope',
  const expanded=planner.sweptDisplacementPerMeter(0.2,{...params,footprintUncertainty:0.15});
  assert.ok(expanded>nominal,`expanded bound ${expanded} must exceed nominal ${nominal}`);
 });
+
+
+test('swept displacement bound contains every body-corner displacement across articulation and reverse motion',()=>{
+ const distance=0.05;
+ const expandedParams={...params,footprintUncertainty:0.15};
+ const articulationAngles=Array.from({length:25},(_,index)=>-Math.PI+2*Math.PI*index/24);
+ const steeringAngles=[-0.55,-0.30,0,0.30,0.55];
+ let checkedCorners=0;
+ for(const beta of articulationAngles){
+  for(const steer of steeringAngles){
+   for(const gear of [-1,1]){
+    const start={x:0,y:0,psi:beta,psiT:0};
+    const bound=planner.sweptDisplacementPerMeter(steer,expandedParams,start,distance);
+    const finish=physics.rk4(start,gear,steer,distance,expandedParams);
+    const before=physics.vehiclePolygons(start,expandedParams);
+    const after=physics.vehiclePolygons(finish,expandedParams);
+    for(let body=0;body<before.length;body++){
+     for(let corner=0;corner<before[body].length;corner++){
+      const displacement=Math.hypot(
+       after[body][corner].x-before[body][corner].x,
+       after[body][corner].y-before[body][corner].y
+      );
+      assert.ok(
+       displacement<=bound*distance+1e-9,
+       'body '+body+' corner '+corner+' displacement '+displacement+
+        ' exceeded bound '+(bound*distance)+' at beta '+beta+
+        ', steer '+steer+', gear '+gear
+      );
+      checkedCorners++;
+     }
+    }
+   }
+  }
+ }
+ assert.equal(checkedCorners,25*5*2*3*4);
+});
