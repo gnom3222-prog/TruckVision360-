@@ -7,6 +7,8 @@ const canvas=$('view');
 const ctx=canvas.getContext('2d');
 const G=9.81;
 const SCALE=22;
+const ARTICULATION_WARNING_DEG=45;
+const ARTICULATION_STOP_DEMO_DEG=55;
 
 const cfg={
  wheelbase:3.8,
@@ -268,10 +270,14 @@ function updateAssistant(){
    message='Стоп! Расчётные контуры автопоезда пересекаются с препятствием '+
     a.nearest.name+'. Остановитесь и измените траекторию.';
    color='#ff8585';
-  }else if(a.beta>55){
+  }else if(a.beta>=ARTICULATION_STOP_DEMO_DEG){
    message='Осторожно! Большой угол сочленения '+
     a.beta.toFixed(0)+
     ' градусов. Уменьшите угол складывания. Не продолжайте резкий задний ход.';
+   color='#ffd18b';
+  }else if(a.beta>=ARTICULATION_WARNING_DEG){
+   message='Предупреждение: угол сочленения достиг '+a.beta.toFixed(0)+
+    '°. Это программный порог внимания, а не предел устойчивости. Снизьте скорость и проверьте положение полуприцепа.';
    color='#ffd18b';
   }else if(effectiveClearance<0.45){
    message='Очень близко к объекту '+a.nearest.name+
@@ -435,7 +441,6 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
  let previousGear=path[0]?.gear||1,previousSteer=path[0]?.steer||0,wasReverse=false;
  for(let i=0;i<path.length;i++){
   const q=path[i];
-  maxBeta=Math.max(maxBeta,Math.abs(norm(q.psi-q.psiT))*180/Math.PI);
   if(i>0){
    const prev=path[i-1];
    const segmentLength=Math.hypot(q.x-prev.x,q.y-prev.y);
@@ -461,6 +466,8 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
    if(c.distance<=1e-9)collision=true;
   }
  }
+ const articulationPeak=planner.articulationExposure(path);
+ maxBeta=articulationPeak.maxAngleDegrees;
  const scrubExposure=physics.trailerAxleScrubExposure(path,cfg,0.7);
  const turns=gearChanges+steeringChanges;
  const clearanceForAssessment=Math.min(minClearance,minimumClearanceLowerBound);
@@ -473,8 +480,9 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
  const finalHeadingErrorDeg=(finalErrors.headingError??0)*180/Math.PI;
  const finalArticulationDeg=finalErrors.articulation*180/Math.PI;
  const clearanceInsufficient=Number.isFinite(effectiveClearance)&&effectiveClearance<0.35;
- const articulationBlocked=maxBeta>=55;
- const score=gearChanges*1.2+steeringChanges*0.4+(reverseDistance>0?1.5:0)+(maxBeta>45?3:maxBeta>30?1.5:0)+
+ const articulationWarning=maxBeta>=ARTICULATION_WARNING_DEG;
+ const articulationBlocked=maxBeta>=ARTICULATION_STOP_DEMO_DEG;
+ const score=gearChanges*1.2+steeringChanges*0.4+(reverseDistance>0?1.5:0)+(articulationWarning?3:maxBeta>30?1.5:0)+
   (effectiveClearance<0.35?4:effectiveClearance<0.75?2:effectiveClearance<1.5?1:0)+(!reached?3:0)+(collision?8:0);
  const reasons=[];
  if(reverseDistance>0)reasons.push('задний ход: '+reverseSegments+' участков, '+reverseDistance.toFixed(1)+' м');
@@ -484,7 +492,13 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
  if(!reached)reasons.push('конечное положение не достигнуто в заданных допусках');
  if(terminalHeadingMismatch)reasons.push('конечный курс тягача вне допуска');
  if(terminalArticulationMismatch)reasons.push('полуприцеп не выровнен в заданном допуске');
- if(articulationBlocked)reasons.push('угол сочленения достиг 55°');
+ if(articulationBlocked){
+  reasons.push('пиковый угол сочленения достиг программного порога '+ARTICULATION_STOP_DEMO_DEG+
+   '° на '+articulationPeak.distanceAlongRoute.toFixed(1)+' м пути');
+ }else if(articulationWarning){
+  reasons.push('повышенный пиковый угол сочленения '+maxBeta.toFixed(1)+'° на '+
+   articulationPeak.distanceAlongRoute.toFixed(1)+' м пути');
+ }
  if(clearanceInsufficient)reasons.push('недостаточный зазор после резерва погрешности');
  if(scrubExposure.maxAbsLateralVelocity>1e-3){
   reasons.push('геометрический индикатор бокового перемещения крайних осей: до '+scrubExposure.maxAbsLateralVelocity.toFixed(3)+' м/с; интегральный proxy '+scrubExposure.totalAbsoluteLateralTravel.toFixed(2)+' м, не модель шин');
@@ -496,7 +510,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   axleScrubTravelByAxle:scrubExposure.cumulativeAbsoluteLateralTravelByAxle,
   axleScrubSpeedByAxle:scrubExposure.maxAbsLateralVelocityByAxle,
   level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',
-  maxBeta,clearance:minClearance,clearanceDetail:minClearanceDetail,
+  maxBeta,articulationPeak,articulationWarning,clearance:minClearance,clearanceDetail:minClearanceDetail,
   clearanceLowerBound:clearanceForAssessment,effectiveClearance,
   sweptClearanceDetail,
   collision,reached,finalHeadingErrorDeg,finalArticulationDeg,clearanceInsufficient,articulationBlocked,reasons};
@@ -658,6 +672,10 @@ async function buildRoute(){
    firstTurnText=side+' '+timing+gearNote;
   }
 
+  const peakGearText=m.articulationPeak.gear<0?'задним ходом':'вперёд';
+  const articulationPeakText='пик угла сочленения '+m.articulationPeak.maxAngleDegrees.toFixed(1)+
+   '° на '+m.articulationPeak.distanceAlongRoute.toFixed(1)+' м пути (X '+
+   m.articulationPeak.state.x.toFixed(1)+' м, Y '+m.articulationPeak.state.y.toFixed(1)+' м), '+peakGearText;
   $('routeAdvice').textContent=
    'Начало манёвра: '+gearText+'; первое рулевое действие: '+firstTurnText+
    '. Сторона определяется по первому значимому управляющему углу планировщика (порог 0,08 рад), а не по одному лишь направлению на цель. Маршрут до точки ('+
@@ -665,7 +683,7 @@ async function buildRoute(){
    ' м; переключений передачи: '+m.gearChanges+'; изменений руля: '+m.steeringChanges+
    '; задний ход: '+m.reverseDistance.toFixed(1)+' м. Заданный конечный курс '+headingDegrees.toFixed(0)+
    '°; ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+'°; угол сочленения у цели '+
-   m.finalArticulationDeg.toFixed(1)+'° (допуск '+articulationLimitDegrees.toFixed(0)+'°).';
+   m.finalArticulationDeg.toFixed(1)+'° (допуск '+articulationLimitDegrees.toFixed(0)+'°); '+articulationPeakText+'.';
 
   const closestLocationText=m.clearanceDetail?
    m.clearanceDetail.vehiclePart+' рядом с препятствием «'+m.clearanceDetail.obstacle+
@@ -678,7 +696,7 @@ async function buildRoute(){
    'отдельный ограничивающий сегмент не выделен';
   $('difficultyAdvice').textContent=
    'Сложность: '+m.level+'. Причины: '+m.reasons.join('; ')+
-   '. Максимальный угол сочленения '+m.maxBeta.toFixed(1)+'°; конечная ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+
+   '. Максимальный угол сочленения '+m.maxBeta.toFixed(1)+'°; '+articulationPeakText+'; конечная ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+
    '°; конечный угол тягач–полуприцеп '+m.finalArticulationDeg.toFixed(1)+'°; геометрический индикатор боковой скорости крайних осей при расчётной скорости 0,7 м/с '+m.maxAxleScrubSpeed.toFixed(3)+' м/с; по осям (передняя/средняя/задняя): '+m.axleScrubSpeedByAxle.map(value=>value.toFixed(3)).join('/')+' м/с; накопленный proxy по осям: '+m.axleScrubTravelByAxle.map(value=>value.toFixed(2)).join('/')+' м; суммарный proxy '+m.axleScrubTravelProxy.toFixed(2)+' м (не модель шин); минимальный зазор до тестовых препятствий '+
    (Number.isFinite(m.clearance)?m.clearance.toFixed(2)+' м':'не определён')+
    '; ближайшая проверенная часть автопоезда: '+closestLocationText+
@@ -707,6 +725,24 @@ function drawRoute(){
  const swept=routeAssessment&&routeAssessment.sweptClearanceDetail;
  if(swept&&swept.kind==='segment-lower-bound'&&swept.from&&swept.to){
   drawLine([swept.from,swept.to],'#ff8585',3,[4,4]);
+ }
+ const peak=routeAssessment&&routeAssessment.articulationPeak;
+ if(peak&&peak.state){
+  const marker=toScreen(peak.state);
+  ctx.beginPath();
+  ctx.moveTo(marker.x,marker.y-10);
+  ctx.lineTo(marker.x+10,marker.y);
+  ctx.lineTo(marker.x,marker.y+10);
+  ctx.lineTo(marker.x-10,marker.y);
+  ctx.closePath();
+  ctx.fillStyle='#ffb74d';
+  ctx.fill();
+  ctx.strokeStyle='#172536';
+  ctx.lineWidth=2;
+  ctx.stroke();
+  ctx.fillStyle='#fff';
+  ctx.font='12px system-ui';
+  ctx.fillText('β MAX '+peak.maxAngleDegrees.toFixed(1)+'°',marker.x+12,marker.y+16);
  }
  const closest=routeAssessment&&routeAssessment.clearanceDetail;
  if(closest&&closest.state&&Number.isFinite(closest.distance)){
@@ -859,10 +895,10 @@ function updateReadouts(){
 
  const angle=Math.abs(beta*180/Math.PI);
 
- if(angle>60){
+ if(angle>=ARTICULATION_STOP_DEMO_DEG){
   $('mode').textContent='ВНИМАНИЕ: большой угол сочленения';
   $('mode').style.color='#ff8585';
- }else if(angle>45){
+ }else if(angle>=ARTICULATION_WARNING_DEG){
   $('mode').textContent='Предупреждение: угол сочленения';
   $('mode').style.color='#ffd18b';
  }else{
