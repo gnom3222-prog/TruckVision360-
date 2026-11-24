@@ -33,7 +33,7 @@ The reported 1σ value remains a first-order sensitivity estimate under independ
 - glare, blur, occlusion, and ambiguous corners;
 - systematic touch-coordinate or video-crop offsets.
 
-The camera result must not automatically reduce the manually entered clearance reserve. Verify dimensions with a tape measure and use a conservative manually selected reserve.
+On successful map registration, the local width sensitivity estimate is passed to the gate geometry as a separate full-width envelope of ±2σ. The planner narrows the modeled clear opening by that amount; this is only an approximate one-dimensional normal assumption, not a deterministic bound or validated 95% guarantee. It does not reduce or replace the manually entered general clearance reserve. The map center and gate heading are still entered manually, with separate per-axis position and angular uncertainty fields. Verify dimensions with a tape measure, independently establish the map anchor and heading, and use a conservative manually selected clearance reserve.
 
 ## iPhone field check
 
