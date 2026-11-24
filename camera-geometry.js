@@ -56,7 +56,15 @@
   const widthSpreadRatio=Math.abs(widthTop-widthBottom)/Math.max(width,1e-9);
   const heightSpreadRatio=Math.abs(heightLeft-heightRight)/Math.max(height,1e-9);
   const diagonalSpreadRatio=Math.abs(diagonalA-diagonalB)/Math.max((diagonalA+diagonalB)/2,1e-9);
-  const maxOrthogonalityErrorDeg=Math.abs(90-angleBetweenDeg(top,right));
+  const edgeVectors=[
+   top,right,
+   {x:points[3].x-points[2].x,y:points[3].y-points[2].y},
+   {x:points[0].x-points[3].x,y:points[0].y-points[3].y}
+  ];
+  const cornerAngles=edgeVectors.map((edge,index)=>
+   angleBetweenDeg(edge,edgeVectors[(index+1)%edgeVectors.length])
+  );
+  const maxOrthogonalityErrorDeg=Math.max(...cornerAngles.map(angle=>Math.abs(90-angle)));
   const widthParallelismErrorDeg=parallelDeviationDeg(top,bottom);
   const heightParallelismErrorDeg=parallelDeviationDeg(left,right);
   const maxParallelismErrorDeg=Math.max(widthParallelismErrorDeg,heightParallelismErrorDeg);
