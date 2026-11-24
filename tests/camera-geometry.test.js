@@ -212,7 +212,7 @@ test('camera registration carries a two-sigma width envelope into gate geometry'
  );
  assert.throws(
   ()=>camera.registerGateOnMap({width:4,sigmaWidth:2.1,points},{x:0,y:0},0),
-  /сопоставима с самим проёмом/
+  /превышает поддерживаемый предел/
  );
 });
 
