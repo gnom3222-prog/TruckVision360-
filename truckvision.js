@@ -1289,10 +1289,14 @@ function drawVehicleDetails(){
   drawWheel(localPoint(point,state.psiT,0,cfg.trailerWidth/2+0.12),state.psiT);
   drawWheel(localPoint(point,state.psiT,0,-cfg.trailerWidth/2-0.12),state.psiT);
  });
- // Передняя управляемая ось и ведущая ось тягача.
- [-cfg.wheelbase*0.25,-cfg.wheelbase*0.92].forEach(longitudinal=>{
-  drawWheel(localPoint(state,state.psi,longitudinal,cfg.trailerWidth/2+0.10),state.psi);
-  drawWheel(localPoint(state,state.psi,longitudinal,-cfg.trailerWidth/2-0.10),state.psi);
+ // q is the rear-axle reference: front steer axle is +wheelbase, rear drive axle is q.
+ const [frontAxle,rearAxle]=physics.tractorAxlePoints(state,cfg);
+ // Display-only inset keeps illustrative tires inside the 2.55 m body outline;
+ // it is not a measured Volvo track width and is not used by the dynamics.
+ const tractorHalfTrackVisual=2.55/2-0.25;
+ [1,-1].forEach(side=>{
+  drawWheel(localPoint(frontAxle,state.psi,0,side*tractorHalfTrackVisual),state.psi+steer);
+  drawWheel(localPoint(rearAxle,state.psi,0,side*tractorHalfTrackVisual),state.psi);
  });
  // Кабина: контрастное ветровое стекло и нос автомобиля.
  const windshield=bodyCorners(localPoint(state,state.psi,2.1),state.psi,1.15,0.25,2.20).map(toScreen);
