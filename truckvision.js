@@ -87,8 +87,8 @@ function sceneObstacles(){
   updatePerceptionStatus('Данные датчиков устарели. Объекты удалены из активной карты; требуется новый кадр.');
   if(typeof invalidateRouteForSettingsChange==='function')invalidateRouteForSettingsChange();
  }
- const result=obstacles.map(obstacle=>({...obstacle}));
- result.push(...cameraObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point}))})));
+ const result=perceptionFrameTimestamp?[]:obstacles.map(obstacle=>({...obstacle}));
+ if(!perceptionFrameTimestamp)result.push(...cameraObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point}))})));
  result.push(...perceptionObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point}))})));
  const gateGeometry=gateGeometryForPlanner();
  if(gateGeometry)result.push(...planner.createGateObstacles(gateGeometry));
@@ -559,7 +559,7 @@ function drawObstacles(){
   const label=toScreen(center);
   ctx.fillStyle='#fff';
   ctx.font='12px system-ui';
-  ctx.fillText(o.name,label.x+5,label.y-5);
+  const confidenceText=o.kind==='perception-obstacle'?' · '+Math.round(o.confidence*100)+'% · '+o.source:'';\n  ctx.fillText(o.name+confidenceText,label.x+5,label.y-5);
  }
 }
 
