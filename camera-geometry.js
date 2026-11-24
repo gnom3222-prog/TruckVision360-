@@ -66,6 +66,17 @@
  function measureQuad(referencePoints,referenceWidth,referenceHeight,measuredPoints){
   if(!validQuad(referencePoints,0,0)||!validQuad(measuredPoints,0,0))throw new Error('Четыре угла эталона и проёма должны образовывать правильные четырёхугольники.');
   const transform=homography(referencePoints,referenceWidth,referenceHeight);
+  // The projective denominator is affine in image coordinates. If its sign
+  // changes across a convex measured quad, the quad crosses the homography
+  // horizon and its mapped dimensions are not physically meaningful.
+  const g=transform[6],k=transform[7];
+  const denominators=measuredPoints.map(({x,y})=>g*x+k*y+1);
+  const denominatorScale=Math.max(1,...measuredPoints.map(({x,y})=>Math.abs(g*x)+Math.abs(k*y)+1));
+  const denominatorTolerance=denominatorScale*1e-9;
+  if(denominators.some(value=>!Number.isFinite(value)||Math.abs(value)<=denominatorTolerance)||
+     denominators.some(value=>Math.sign(value)!==Math.sign(denominators[0]))){
+   throw new Error('Контур измерения пересекает линию вырождения перспективного преобразования. Проверьте порядок углов и повторите калибровку с эталоном рядом с проёмом и в той же плоскости.');
+  }
   const points=measuredPoints.map(point=>map(point,transform));
   const width=(dist(points[0],points[1])+dist(points[3],points[2]))/2;
   const height=(dist(points[0],points[3])+dist(points[1],points[2]))/2;
