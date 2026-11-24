@@ -1,0 +1,33 @@
+name: TruckVision 360 checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Syntax-check application modules
+        run: |
+          for file in vehicle-physics.js articulated-planner.js truckvision.js planner-worker.js camera-geometry.js camera-measure.js sw.js; do
+            node --check "$file"
+          done
+
+      - name: Run all unit and smoke tests
+        run: node --test tests/*.test.js
