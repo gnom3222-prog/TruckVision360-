@@ -96,6 +96,12 @@
   if(options.maxExpansions!==undefined&&(!Number.isInteger(options.maxExpansions)||options.maxExpansions<1||options.maxExpansions>500000)){
    errors.push('Лимит расширений должен быть целым числом от 1 до 500000.');
   }
+  if(options.firstActionConstraint!==undefined){
+   const constraint=options.firstActionConstraint;
+   if(!constraint||![-1,1].includes(constraint.initialGear)||!['left','right'].includes(constraint.firstTurn)){
+    errors.push('Ограничение первого действия должно задавать initialGear -1/1 и firstTurn left/right.');
+   }
+  }
   if(options.maxSteer!==undefined&&(!Number.isFinite(options.maxSteer)||options.maxSteer<=0||options.maxSteer>=Math.PI/2)){
    errors.push('Максимальный угол поворота должен быть больше нуля и меньше 90°.');
   }
@@ -260,7 +266,7 @@
   }
   const requiredClearance=minClearance;
   const initial={
-   q:{...start},g:0,f:h(start),parent:null,gear:1,steer:0,samples:[],
+   q:{...start},g:0,f:h(start),parent:null,gear:1,steer:0,samples:[],firstTurnChosen:false,
    clearance:startClearance,clearanceDetail:startDetail,
    sweptLowerBound:startClearance,sweptLowerBoundDetail:initialSweptDetail
   };
@@ -287,7 +293,16 @@
     try{options.onProgress({expanded,maxExpansions,goalDistance:dist,headingError:errors.headingError,articulationAngle:errors.articulation,closest:{x:closest.q.x,y:closest.q.y}});}catch(_){}
    }
    if(goalReached(cur.q,goal,goalOptions)){finish=cur;break;}
-   for(const [gear,steer] of controls){
+   let activeControls=controls;
+   const firstActionConstraint=options.firstActionConstraint;
+   if(firstActionConstraint&&!cur.firstTurnChosen){
+    activeControls=controls.filter(([gear,steer])=>{
+     if(!cur.parent&&gear!==firstActionConstraint.initialGear)return false;
+     if(Math.abs(steer)<0.08)return true;
+     return firstActionConstraint.firstTurn==='left'?steer>0:steer<0;
+    }).sort((a,b)=>Math.abs(a[1])-Math.abs(b[1]));
+   }
+   for(const [gear,steer] of activeControls){
     let q={...cur.q},valid=true,minD=Infinity,minClearanceDetail=null,samples=[];
     let currentClearance=cur.clearance,currentClearanceDetail=cur.clearanceDetail;
     let sweptLowerBound=cur.sweptLowerBound,sweptLowerBoundDetail=cur.sweptLowerBoundDetail,travelled=0;
@@ -343,6 +358,7 @@
     best.set(nk,ng);
     push(open,{
      q,g:ng,f:ng+h(q),parent:cur,gear,steer,minClearance:minD,
+     firstTurnChosen:cur.firstTurnChosen||Math.abs(steer)>=0.08,
      minClearanceDetail,samples,clearance:currentClearance,
      clearanceDetail:currentClearanceDetail,
      sweptLowerBound,sweptLowerBoundDetail
@@ -510,5 +526,134 @@
   };
  }
 
-return Object.freeze({plan,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions});
+ function scoreCandidateRoute(route){
+  const states=route.states;
+  let pathLength=0,gearChanges=0;
+  let previousGear=(states[1]?.gear??1)<0?-1:1;
+  for(let i=1;i<states.length;i++){
+   if(i>0){
+    const previous=states[i-1],current=states[i];
+    pathLength+=Math.hypot(current.x-previous.x,current.y-previous.y);
+   }
+   if(i>1){
+    const gear=(states[i].gear??previousGear)<0?-1:1;
+    if(gear!==previousGear)gearChanges++;
+    previousGear=gear;
+   }
+  }
+  const peak=articulationExposure(states);
+  const clearance=route.minimumClearanceLowerBound;
+  const clearanceMargin=Number.isFinite(clearance)?
+   Math.max(0,clearance-route.requiredClearance):Infinity;
+  const gearChangePenalty=gearChanges*0.75;
+  const articulationPenalty=Math.max(0,peak.maxAngleDegrees-20)*0.02;
+  const clearancePenalty=Number.isFinite(clearanceMargin)?
+   0.20/Math.max(0.05,clearanceMargin+0.05):0;
+  return {
+   cost:pathLength+gearChangePenalty+articulationPenalty+clearancePenalty,
+   pathLength,gearChanges,maxArticulationDegrees:peak.maxAngleDegrees,
+   minimumClearanceLowerBound:Number.isFinite(clearance)?clearance:null,
+   components:{pathLength,gearChangePenalty,articulationPenalty,clearancePenalty}
+  };
+ }
+ function planAlternatives(options={}){
+  const inputErrors=validatePlanOptions(options);
+  if(inputErrors.length)return {ok:false,reason:'invalid-input',errors:inputErrors,expanded:0};
+  if(options.firstActionConstraint!==undefined){
+   return {ok:false,reason:'invalid-input',errors:['planAlternatives самостоятельно задаёт ограничения первых действий.'],expanded:0};
+  }
+  const perCandidateMaxExpansions=options.alternativeMaxExpansions??options.maxExpansions??24000;
+  if(!Number.isInteger(perCandidateMaxExpansions)||perCandidateMaxExpansions<1||perCandidateMaxExpansions>500000){
+   return {ok:false,reason:'invalid-input',errors:['Лимит расширений каждого альтернативного поиска должен быть целым числом от 1 до 500000.'],expanded:0};
+  }
+  const costTolerance=options.costTolerance??0.25;
+  if(!Number.isFinite(costTolerance)||costTolerance<0){
+   return {ok:false,reason:'invalid-input',errors:['Допуск сравнения стоимости должен быть конечным неотрицательным числом.'],expanded:0};
+  }
+  const constraints=[
+   {initialGear:1,firstTurn:'left',label:'вперёд, первый поворот влево'},
+   {initialGear:1,firstTurn:'right',label:'вперёд, первый поворот вправо'},
+   {initialGear:-1,firstTurn:'left',label:'назад, первый поворот влево'},
+   {initialGear:-1,firstTurn:'right',label:'назад, первый поворот вправо'}
+  ];
+  const candidates=[],failures=[];
+  let expanded=0;
+  for(let index=0;index<constraints.length;index++){
+   const constraint=constraints[index];
+   const result=plan({
+    ...options,
+    maxExpansions:perCandidateMaxExpansions,
+    firstActionConstraint:{initialGear:constraint.initialGear,firstTurn:constraint.firstTurn},
+    onProgress:progress=>{
+     if(typeof options.onProgress==='function'){
+      try{
+       options.onProgress({
+        ...progress,
+        candidateIndex:index+1,
+        candidateCount:constraints.length,
+        expanded:expanded+progress.expanded,
+        maxExpansions:perCandidateMaxExpansions*constraints.length
+       });
+      }catch(_){}
+     }
+    }
+   });
+   expanded+=result.expanded||0;
+   if(!result.ok){
+    failures.push({label:constraint.label,reason:result.reason,expanded:result.expanded||0});
+    continue;
+   }
+   const recommendation=recommendStart(result.states);
+   const score=scoreCandidateRoute(result);
+   candidates.push({
+    states:result.states,cost:score.cost,label:constraint.label,
+    route:result,recommendation,score
+   });
+  }
+  if(!candidates.length){
+   return {
+    ok:false,reason:'no-candidate-route',expanded,
+    candidatesFound:0,candidatesAttempted:constraints.length,failures
+   };
+  }
+  const comparison=compareStartCandidates(
+   candidates.map(candidate=>({states:candidate.states,cost:candidate.cost,label:candidate.label})),
+   {costTolerance}
+  );
+  if(!comparison.ok){
+   return {ok:false,reason:'candidate-comparison-failed',expanded,candidatesFound:candidates.length,failures,comparison};
+  }
+  const candidateSummaries=candidates.map(candidate=>({
+   label:candidate.label,cost:candidate.cost,
+   initialGear:candidate.recommendation.initialGear,
+   firstTurn:candidate.recommendation.firstTurn,
+   firstTurnGear:candidate.recommendation.firstTurnGear,
+   tractorYawDirection:candidate.recommendation.tractorYawDirection,
+   pathLength:candidate.score.pathLength,
+   gearChanges:candidate.score.gearChanges,
+   maxArticulationDegrees:candidate.score.maxArticulationDegrees,
+   minimumClearanceLowerBound:candidate.score.minimumClearanceLowerBound,
+   scoreComponents:candidate.score.components
+  }));
+  if(comparison.status==='ambiguous'){
+   return {
+    ok:false,reason:'ambiguous-start',status:comparison.status,
+    expanded,candidatesFound:candidates.length,candidatesAttempted:constraints.length,
+    candidateSummaries,failures,comparison
+   };
+  }
+  const selected=candidates[comparison.bestCandidate.index];
+  return {
+   ...selected.route,
+   ok:true,status:comparison.status,
+   recommendation:comparison.recommendation||selected.recommendation,
+   recommendationComparison:comparison,
+   selectedCandidate:comparison.bestCandidate.index,
+   candidatesFound:candidates.length,candidatesAttempted:constraints.length,
+   candidateSummaries,failures,
+   totalExpanded:expanded
+  };
+ }
+
+return Object.freeze({plan,planAlternatives,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions});
 });
