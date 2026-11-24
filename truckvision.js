@@ -719,6 +719,8 @@ async function buildRoute(){
  }
 
  alternativeRoutes=[];
+ $('alternativeRouteSelect').style.display='none';
+ $('alternativeRouteSelect').value='';
  const startState={...state};
  const heading=headingDegrees*Math.PI/180;
  const headingTolerance=headingToleranceDegrees*Math.PI/180;
