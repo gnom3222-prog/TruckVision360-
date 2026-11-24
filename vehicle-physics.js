@@ -116,6 +116,18 @@
   return localPoint(h,q.psiT,-params.kingpinAxles);
  }
 
+ function tractorAxlePoints(q,params){
+  if(!q||![q.x,q.y,q.psi].every(Number.isFinite)||!params||
+   !Number.isFinite(params.wheelbase)||params.wheelbase<=0){
+   throw new Error('Параметры осей тягача некорректны.');
+  }
+  // q is the rear-axle reference: the steer axle is one wheelbase forward.
+  return [
+   localPoint(q,q.psi,params.wheelbase),
+   {x:q.x,y:q.y}
+  ];
+ }
+
  function bodyCorners(origin,angle,front,rear,width){
   return[
    localPoint(origin,angle,front,width/2),
@@ -242,5 +254,5 @@
   };
  }
 
- return Object.freeze({norm,validateVehicleParams,derivative,rk4,hitchPoint,axlePoint,trailerAxlePoints,trailerAxleDiagnostics,trailerAxleScrubExposure,vehiclePolygons});
+ return Object.freeze({norm,validateVehicleParams,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,trailerAxleDiagnostics,trailerAxleScrubExposure,vehiclePolygons});
 });
