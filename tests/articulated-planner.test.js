@@ -743,3 +743,71 @@ test('swept displacement bound contains every body-corner displacement across ar
  }
  assert.equal(checkedCorners,25*5*2*3*4);
 });
+
+
+test('vehicle parameter bounds run one-at-a-time endpoint scenarios and report limited coverage',()=>{
+ const start={x:0,y:0,psi:0,psiT:0};
+ let target={...start};
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ const originalParams={...params};
+ const bounds={wheelbase:{min:3.7999,max:3.8}};
+ const result=planner.planAlternativesWithVehicleParameterBounds({
+  start,goal:{x:target.x,y:target.y,heading:target.psi},
+  params,obstacles:[],integrate,
+  alternativeMaxExpansions:1200,
+  positionTolerance:0.02,headingTolerance:0.01,
+  maxTerminalArticulation:0.5,minClearance:0.30,
+  measurementUncertainty:0,
+  obstaclePositionUncertainty:0,
+  obstacleSizeUncertainty:0,
+  vehicleFootprintUncertainty:0,
+  vehicleParameterBounds:bounds
+ });
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.parameterSensitivity.status,'stable-across-one-at-a-time-bounds');
+ assert.equal(result.parameterSensitivity.coverage,'one-parameter-at-a-time-endpoints');
+ assert.equal(result.parameterSensitivity.testedScenarioCount,1);
+ assert.equal(result.parameterSensitivity.allParameterCombinationsEvaluated,false);
+ assert.equal(result.parameterSensitivity.completedScenarios[0].parameter,'wheelbase');
+ assert.equal(result.parameterSensitivity.completedScenarios[0].value,3.7999);
+ assert.deepEqual(params,originalParams);
+ assert.deepEqual(bounds,{wheelbase:{min:3.7999,max:3.8}});
+});
+
+test('vehicle parameter bounds report not-varied instead of implying zero physical uncertainty',()=>{
+ const start={x:0,y:0,psi:0,psiT:0};
+ let target={...start};
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ const result=planner.planAlternativesWithVehicleParameterBounds({
+  start,goal:{x:target.x,y:target.y,heading:target.psi},
+  params,obstacles:[],integrate,
+  alternativeMaxExpansions:1200,
+  positionTolerance:0.02,headingTolerance:0.01,
+  maxTerminalArticulation:0.5,
+  vehicleParameterBounds:{wheelbase:{min:3.8,max:3.8}}
+ });
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.parameterSensitivity.status,'not-varied');
+ assert.equal(result.parameterSensitivity.testedScenarioCount,0);
+ assert.equal(result.parameterSensitivity.kinematicParameterUncertaintyIncluded,false);
+});
+
+test('vehicle parameter bounds reject unknown, inverted, out-of-range, and non-containing intervals',()=>{
+ const base={
+  start:{x:0,y:0,psi:0,psiT:0},goal:{x:2,y:0},
+  params,obstacles:[],integrate,alternativeMaxExpansions:100
+ };
+ for(const bounds of [
+  {unknown:{min:0,max:1}},
+  {wheelbase:{min:4,max:3}},
+  {wheelbase:{min:0,max:3.8}},
+  {hitchOffset:{min:-0.1,max:0.575}},
+  {kingpinAxles:{min:7,max:7.5}}
+ ]){
+  const result=planner.planAlternativesWithVehicleParameterBounds({
+   ...base,vehicleParameterBounds:bounds
+  });
+  assert.equal(result.ok,false,JSON.stringify({bounds,result}));
+  assert.equal(result.reason,'invalid-input');
+ }
+});
