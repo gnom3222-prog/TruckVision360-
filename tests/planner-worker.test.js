@@ -31,10 +31,12 @@ test('planner worker reports ambiguous reverse starts instead of choosing one ar
    params:{wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55},
    obstacles:[],
    maxExpansions:5000,
-   minClearance:0.3
+   minClearance:0.3,
+   measurementUncertainty:0.1
   }
  }});
  assert.ok(messages.some(m=>m.id===17&&m.type==='progress'),'worker should send progress');
+ assert.ok(messages.some(m=>m.id===17&&m.type==='progress'&&m.progress.scenario==='reserve'),'worker should report the uncertainty-reserve scenario');
  const resultMessage=messages.find(m=>m.id===17&&m.type==='result');
  assert.ok(resultMessage,'worker should return a result');
  assert.equal(resultMessage.result.ok,false,JSON.stringify(resultMessage.result));
