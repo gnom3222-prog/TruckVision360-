@@ -86,6 +86,29 @@ test('planner rejects a positional match with incorrect terminal course or trail
  assert.equal(planner.goalReached({x:0.1,y:0,psi:0,psiT:-20*Math.PI/180},goal,tolerances),false);
 });
 
+test('live perception frame enters the scene and triggers whole-vehicle collision warning',()=>{
+ const {elements,windowObject}=bootSimulator();
+ const result=windowObject.TruckVisionSetPerceptionFrame({
+  frameId:'smoke-perception-001',
+  timestamp:Date.now(),
+  coordinateFrame:'vehicle-local',
+  vehiclePose:{x:0,y:0,heading:0},
+  objects:[{
+   id:'obstacle-at-tractor',
+   type:'pallet',
+   pose:{x:0,y:0,heading:0},
+   dimensions:{length:2,width:2,height:1},
+   confidence:0.99,
+   source:'fused'
+  }]
+ });
+ assert.equal(result.ok,true);
+ assert.equal(result.accepted,1);
+ assert.match(elements.perceptionStatus.textContent,/smoke-perception-001/);
+ assert.match(elements.assistantAdvice.textContent,/пересекаются с препятствием/);
+ assert.match(elements.assistantAdvice.textContent,/pallet · obstacle-at-tractor/);
+});
+
 test('simulator starts and exposes route controls',()=>{
  const {elements}=bootSimulator();
  assert.equal(typeof elements.planRoute.onclick,'function');
