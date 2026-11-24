@@ -9,12 +9,12 @@ const geometry=require('../camera-geometry.js');
 function bootCamera(options={}){
  const elements={},windowListeners={};
  const context={clearRect(){},beginPath(){},moveTo(){},lineTo(){},closePath(){},stroke(){},arc(){},fill(){},fillText(){}};
- const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateResult'];
+ const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateCenterX','gateCenterY','gateHeadingDeg','gateResult'];
  for(const id of ids){
   elements[id]={
    id,value:({
     cameraReferenceWidth:'0.297',cameraReferenceHeight:'0.210',
-    cameraPointSigma:'2',cameraReferenceSigma:'2',gateWidth:'3.50'
+    cameraPointSigma:'2',cameraReferenceSigma:'2',gateWidth:'3.50',gateCenterX:'12',gateCenterY:'0',gateHeadingDeg:'90'
    })[id]||'',
    textContent:'',style:{},listeners:{},width:0,height:0,
    videoWidth:id==='measureVideo'?640:0,
@@ -27,8 +27,10 @@ function bootCamera(options={}){
   };
  }
  let permissionRequests=0,trackStops=0;
+ const appliedRegistrations=[];
  const win={
   TruckVisionCameraGeometry:options.geometry||geometry,
+  TruckVisionApplyGateRegistration:options.applyGateRegistration||((registration)=>{appliedRegistrations.push(registration);return true;}),
   addEventListener(type,fn){(windowListeners[type]??=[]).push(fn);}
  };
  const sandbox={
@@ -44,7 +46,7 @@ function bootCamera(options={}){
  const tap=async points=>{
   for(const p of points)fire('measureOverlay','pointerdown',{clientX:p.x,clientY:p.y});
  };
- return {elements,windowListeners,fire,tap,get permissionRequests(){return permissionRequests;},get trackStops(){return trackStops;}};
+ return {elements,windowListeners,fire,tap,appliedRegistrations,get permissionRequests(){return permissionRequests;},get trackStops(){return trackStops;}};
 }
 
 test('camera permission is requested only on tap; measurement reports uncertainty and orientation invalidates calibration',async()=>{
@@ -68,6 +70,10 @@ test('camera permission is requested only on tap; measurement reports uncertaint
  assert.match(camera.elements.gateResult.textContent,/оценка чувствительности/);
  assert.match(camera.elements.cameraStatus.textContent,/1σ/);
  assert.ok(Number(camera.elements.gateWidth.value)>0);
+ assert.equal(camera.appliedRegistrations.length,1,'successful measurement must be registered on the simulator map');
+ assert.equal(camera.appliedRegistrations[0].centerX,12);
+ assert.equal(camera.appliedRegistrations[0].centerY,0);
+ assert.equal(camera.appliedRegistrations[0].headingDeg,90);
  camera.fire('cameraStop','click');
  assert.equal(camera.trackStops,1,'stopping the camera must stop its media track');
 });
@@ -129,5 +135,20 @@ test('poorly conditioned camera calibration never overwrites the previous gate w
  assert.equal(camera.elements.gateWidth.value,'3.50');
  assert.match(camera.elements.cameraStatus.textContent,/Калибровка плохо обусловлена/);
  assert.match(camera.elements.gateResult.textContent,/не передан в настройки ворот/);
+ assert.equal(camera.appliedRegistrations.length,0,'poor conditioning must not register gate geometry');
+ camera.fire('cameraStop','click');
+});
+
+
+test('camera measurement fails closed when simulator map registration rejects the result',async()=>{
+ const camera=bootCamera({applyGateRegistration:()=>false});
+ await camera.fire('cameraStart','click');
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
+ assert.equal(camera.elements.gateWidth.value,'3.50');
+ assert.match(camera.elements.cameraStatus.textContent,/Привязка ворот не прошла проверку/);
+ assert.equal(camera.appliedRegistrations.length,0);
  camera.fire('cameraStop','click');
 });
