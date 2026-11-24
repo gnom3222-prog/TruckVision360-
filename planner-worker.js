@@ -7,7 +7,7 @@ self.addEventListener('message',event=>{
  try{
   if(!self.TruckVisionPhysics||!self.TruckVisionPlanner)throw new Error('Модули физики или планировщика не загрузились.');
   const options=data.options||{};
-  const result=self.TruckVisionPlanner.planAlternatives({
+  const result=self.TruckVisionPlanner.planAlternativesWithReserve({
    ...options,
    integrate:(q,v,delta,dt,params)=>self.TruckVisionPhysics.rk4(q,v,delta,dt,params),
    onProgress:progress=>self.postMessage({id,type:'progress',progress})
