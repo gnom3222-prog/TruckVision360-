@@ -166,10 +166,6 @@
   if(q&&(!Number.isFinite(q.psi)||!Number.isFinite(q.psiT))){
    throw new Error('Articulation state is invalid for swept-clearance checking.');
   }
-  // For fixed steering, the trailer-frame pair [axle longitudinal speed,
-  // kingpinAxles * trailer yaw rate] has norm sqrt(1 + a^2), with
-  // a = hitchOffset * tractor yaw rate per metre. A Frobenius-norm bound
-  // covers every point at radius R from the equivalent axle-group center.
   // For fixed steering, each trailer corner's velocity in trailer coordinates
   // is a 2x2 linear map of [cos(beta), sin(beta)]. Its spectral norm is the
   // exact maximum speed over every articulation angle. Evaluate all four
