@@ -3,7 +3,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const perception=require('../sensor-perception.js');
 function frame(overrides={}){
- return {frameId:'frame-1',timestamp:Date.now(),coordinateFrame:'vehicle-local',objects:[{
+ return {frameId:'frame-1',timestamp:Date.now(),coordinateFrame:'vehicle-local',vehiclePose:{x:5,y:7,heading:Math.PI/2},objects:[{
   id:'obj-1',type:'pallet',pose:{x:10,y:2,heading:0},dimensions:{length:1.2,width:0.8},confidence:0.98,source:'fused'
  }],...overrides};
 }
@@ -26,7 +26,7 @@ test('rejects duplicate IDs, invalid confidence and unsupported frame',()=>{
  assert.ok(errors.some(e=>e.includes('confidence')));
 });
 test('converts vehicle-local oriented boxes into map polygons',()=>{
- const result=perception.toObstacles(frame(),{x:5,y:7,psi:Math.PI/2});
+ const result=perception.toObstacles(frame());
  assert.equal(result.length,1);
  assert.equal(result[0].kind,'perception-obstacle');
  assert.equal(result[0].polygon.length,4);
