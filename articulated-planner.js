@@ -168,13 +168,14 @@
   const kingpinAxles=Number(p.kingpinAxles),trailerLength=Number(p.trailerLength),trailerWidth=Number(p.trailerWidth);
   if(!Number.isFinite(maxDistance)||maxDistance<=0)throw new Error('Swept-check distance must be positive.');
   const tractorYawPerMeter=Math.abs(Math.tan(steer)/wheelbase);
-  const tractorRadius=Math.hypot(5,2.55/2);
-  const cabRadiusFromRearAxle=2.1+Math.hypot(1.35,2.25/2);
+  const footprintUncertainty=Number.isFinite(p.footprintUncertainty)?p.footprintUncertainty:0;
+  const tractorRadius=Math.hypot(5+footprintUncertainty,(2.55+2*footprintUncertainty)/2);
+  const cabRadiusFromRearAxle=2.1+Math.hypot(1.35+footprintUncertainty,(2.25+2*footprintUncertainty)/2);
   // vehiclePolygons() places the trailer body relative to the kingpin, while
   // the articulated yaw reference is the equivalent axle-group center.
-  // Bound the farthest body corner from that center, not from the kingpin.
-  const trailerFrontFromAxle=kingpinAxles+1.5;
-  const trailerRearFromAxle=kingpinAxles-(trailerLength-1.5);
+  // Include the same outward footprint envelope used by the clearance checker.
+  const trailerFrontFromAxle=kingpinAxles+1.5+footprintUncertainty;
+  const trailerRearFromAxle=kingpinAxles-(trailerLength-1.5+footprintUncertainty);
   if(q&&(!Number.isFinite(q.psi)||!Number.isFinite(q.psiT))){
    throw new Error('Articulation state is invalid for swept-clearance checking.');
   }
@@ -183,11 +184,12 @@
   // exact maximum speed over every articulation angle. Evaluate all four
   // corners and both gear signs to cover forward and reverse motion.
   const hitchYawCoupling=hitchOffset*tractorYawPerMeter;
+  const trailerWidthWithUncertainty=trailerWidth+2*footprintUncertainty;
   const trailerLongitudinalOffsets=[trailerFrontFromAxle,trailerRearFromAxle];
   let trailerPointRate=0;
   for(const coupling of [-hitchYawCoupling,hitchYawCoupling]){
    for(const longitudinal of trailerLongitudinalOffsets){
-    for(const lateral of [-trailerWidth/2,trailerWidth/2]){
+    for(const lateral of [-trailerWidthWithUncertainty/2,trailerWidthWithUncertainty/2]){
      const m11=1+coupling*lateral/kingpinAxles;
      const m12=coupling-lateral/kingpinAxles;
      const m21=-coupling*longitudinal/kingpinAxles;
@@ -836,5 +838,125 @@
   };
  }
 
-return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions});
+
+function planAlternativesWithGeometryUncertainty(options={}){
+ const inputErrors=validatePlanOptions(options);
+ if(inputErrors.length)return {ok:false,reason:'invalid-input',errors:inputErrors,expanded:0};
+ const obstaclePositionUncertainty=options.obstaclePositionUncertainty??0;
+ const obstacleSizeUncertainty=options.obstacleSizeUncertainty??0;
+ const vehicleFootprintUncertainty=options.vehicleFootprintUncertainty??0;
+ const bounds=[
+  ['obstaclePositionUncertainty',obstaclePositionUncertainty,0,2],
+  ['obstacleSizeUncertainty',obstacleSizeUncertainty,0,2],
+  ['vehicleFootprintUncertainty',vehicleFootprintUncertainty,0,1]
+ ];
+ for(const [name,value,min,max] of bounds){
+  if(!Number.isFinite(value)||value<min||value>max){
+   return {ok:false,reason:'invalid-input',errors:[name+' должен быть конечным числом от '+min+' до '+max+' м.'],expanded:0};
+  }
+ }
+ const baseFootprint=options.params.footprintUncertainty??0;
+ const expandedFootprint=baseFootprint+vehicleFootprintUncertainty;
+ if(expandedFootprint>1){
+  return {ok:false,reason:'invalid-input',errors:['Суммарное расширение контура автопоезда не должно превышать 1 м на каждую внешнюю грань.'],expanded:0};
+ }
+ const obstacleExpansionPerSide=obstaclePositionUncertainty+obstacleSizeUncertainty/2;
+ const expandedObstacles=options.obstacles.map(obstacle=>({
+  ...obstacle,
+  w:obstacle.w+2*obstacleExpansionPerSide,
+  h:obstacle.h+2*obstacleExpansionPerSide
+ }));
+ const baseOptions={...options};
+ delete baseOptions.obstaclePositionUncertainty;
+ delete baseOptions.obstacleSizeUncertainty;
+ delete baseOptions.vehicleFootprintUncertainty;
+ const originalProgress=options.onProgress;
+ const perCandidateMaxExpansions=options.alternativeMaxExpansions??options.maxExpansions??24000;
+ const innerScenarioCount=(options.measurementUncertainty??0)>0?2:1;
+ const totalBudget=perCandidateMaxExpansions*5*innerScenarioCount*2;
+ function runScenario(geometryScenario,scenarioOptions,expandedOffset){
+  return planAlternativesWithReserve({
+   ...scenarioOptions,
+   onProgress:typeof originalProgress==='function'?progress=>{
+    try{
+     originalProgress({
+      ...progress,geometryScenario,
+      expanded:expandedOffset+progress.expanded,
+      maxExpansions:totalBudget
+     });
+    }catch(_){}
+   }:undefined
+  });
+ }
+ const nominal=runScenario('nominal-geometry',baseOptions,0);
+ const geometryBounds={
+  obstaclePositionUncertainty,obstacleSizeUncertainty,
+  vehicleFootprintUncertainty,obstacleExpansionPerSide,
+  footprintExpansionPerEdge:vehicleFootprintUncertainty,
+  obstacleModel:'axis-aligned rectangles expanded by bounded center and full-size tolerances',
+  vehicleModel:'all three rectangular body contours expanded outward on every edge',
+  kinematicParameterUncertaintyIncluded:false
+ };
+ if(!nominal.ok){
+  return {
+   ...nominal,
+   geometrySensitivity:{...geometryBounds,status:'nominal-unavailable'}
+  };
+ }
+ if(obstaclePositionUncertainty===0&&obstacleSizeUncertainty===0&&vehicleFootprintUncertainty===0){
+  return {
+   ...nominal,
+   geometrySensitivity:{...geometryBounds,status:'zero-geometry-bounds'}
+  };
+ }
+ const expandedParams={...options.params,footprintUncertainty:expandedFootprint};
+ const parameterErrors=rootPhysics.validateVehicleParams(expandedParams);
+ if(parameterErrors.length){
+  return {ok:false,reason:'invalid-input',errors:parameterErrors,expanded:nominal.expanded||0};
+ }
+ const expandedOptions={
+  ...baseOptions,
+  params:expandedParams,
+  obstacles:expandedObstacles
+ };
+ const robust=runScenario('expanded-geometry-envelope',expandedOptions,nominal.expanded||0);
+ const totalExpanded=(nominal.expanded||0)+(robust.expanded||0);
+ if(!robust.ok){
+  return {
+   ok:false,reason:'geometry-envelope-no-route',expanded:totalExpanded,
+   nominalCandidateSummaries:nominal.candidateSummaries||[],
+   envelopeFailure:{reason:robust.reason,failures:robust.failures||[]},
+   requiredClearance:robust.requiredClearance??null,
+   geometrySensitivity:{
+    ...geometryBounds,status:robust.reason==='ambiguous-start'?'ambiguous-under-envelope':'no-route-under-envelope',
+    nominalStatus:nominal.status,envelopeStatus:robust.reason
+   }
+  };
+ }
+ const comparison=compareRecommendationSensitivity(nominal,robust);
+ if(comparison.status!=='stable'){
+  return {
+   ok:false,reason:'geometry-sensitive-start',expanded:totalExpanded,
+   nominalCandidateSummaries:nominal.candidateSummaries||[],
+   envelopeCandidateSummaries:robust.candidateSummaries||[],
+   geometrySensitivity:{
+    ...geometryBounds,status:'start-action-changed',
+    nominalStatus:nominal.status,envelopeStatus:robust.status,comparison
+   }
+  };
+ }
+ return {
+  ...robust,expanded:totalExpanded,
+  geometrySensitivity:{
+   ...geometryBounds,status:'stable-within-bounded-envelope',
+   nominalStatus:nominal.status,envelopeStatus:robust.status,
+   nominalCandidatesFound:nominal.candidatesFound,
+   envelopeCandidatesFound:robust.candidatesFound,
+   candidateCoverageChanged:nominal.candidatesFound!==robust.candidatesFound,
+   comparison
+  }
+ };
+}
+
+return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions});
 });
