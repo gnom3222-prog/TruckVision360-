@@ -181,42 +181,57 @@
    if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2){
     throw new Error('Угол руля в состоянии '+(index+1)+' некорректен.');
    }
-   return {gear,steer};
+   return {q,gear,steer};
   };
-  const axleTravel=trailerAxleOffsets(params).map(()=>0);
-  let maxAbsLateralVelocity=0;
-  const states=path.map((q,index)=>{
-   const control=readState(q,index);
-   const diagnostic=trailerAxleDiagnostics(q,control.gear*nominalSpeed,control.steer,params);
-   maxAbsLateralVelocity=Math.max(maxAbsLateralVelocity,diagnostic.maxAbsLateralVelocity);
-   return {q,control};
+  const offsets=trailerAxleOffsets(params);
+  const axleTravel=offsets.map(()=>0);
+  const maxAbsLateralVelocityByAxle=offsets.map(()=>0);
+  const states=path.map(readState);
+  const evaluate=(q,steer)=>{
+   // Absolute lateral speed is identical in forward and reverse for the same pose and steering angle.
+   const diagnostic=trailerAxleDiagnostics(q,nominalSpeed,steer,params);
+   return diagnostic.axles.map((axle,index)=>{
+    const speed=Math.abs(axle.lateralVelocity);
+    maxAbsLateralVelocityByAxle[index]=Math.max(maxAbsLateralVelocityByAxle[index],speed);
+    return speed;
+   });
+  };
+  states.forEach(state=>evaluate(state.q,state.steer));
+  const interpolateState=(a,b,t)=>({
+   x:a.q.x+(b.q.x-a.q.x)*t,
+   y:a.q.y+(b.q.y-a.q.y)*t,
+   psi:norm(a.q.psi+norm(b.q.psi-a.q.psi)*t),
+   psiT:norm(a.q.psiT+norm(b.q.psiT-a.q.psiT)*t)
   });
+  // Composite Simpson quadrature (4 equal subintervals) reduces midpoint bias.
+  // It remains a sampled-path diagnostic, not a certified integration-error bound.
+  const sampleTimes=[0,0.25,0.5,0.75,1];
   for(let i=1;i<states.length;i++){
    const previous=states[i-1],current=states[i];
    const distance=Math.hypot(current.q.x-previous.q.x,current.q.y-previous.q.y);
    if(distance<=0)continue;
-   const midpoint={
-    x:(previous.q.x+current.q.x)/2,
-    y:(previous.q.y+current.q.y)/2,
-    psi:norm(previous.q.psi+norm(current.q.psi-previous.q.psi)/2),
-    psiT:norm(previous.q.psiT+norm(current.q.psiT-previous.q.psiT)/2)
-   };
-   const diagnostic=trailerAxleDiagnostics(
-    midpoint,current.control.gear*nominalSpeed,current.control.steer,params
-   );
-   maxAbsLateralVelocity=Math.max(maxAbsLateralVelocity,diagnostic.maxAbsLateralVelocity);
-   const elapsed=distance/nominalSpeed;
-   diagnostic.axles.forEach((axle,index)=>{
-    axleTravel[index]+=Math.abs(axle.lateralVelocity)*elapsed;
+   const samples=sampleTimes.map(t=>{
+    const q=interpolateState(previous,current,t);
+    const steer=previous.steer+(current.steer-previous.steer)*t;
+    return evaluate(q,steer);
    });
+   const elapsed=distance/nominalSpeed;
+   for(let axle=0;axle<offsets.length;axle++){
+    const f0=samples[0][axle],f1=samples[1][axle],f2=samples[2][axle];
+    const f3=samples[3][axle],f4=samples[4][axle];
+    axleTravel[axle]+=elapsed*(f0+4*f1+2*f2+4*f3+f4)/12;
+   }
   }
   const totalAbsoluteLateralTravel=axleTravel.reduce((sum,value)=>sum+value,0);
+  const maxAbsLateralVelocity=Math.max(0,...maxAbsLateralVelocityByAxle);
   return {
    nominalSpeed,
    maxAbsLateralVelocity,
+   maxAbsLateralVelocityByAxle,
    cumulativeAbsoluteLateralTravelByAxle:axleTravel,
    maxAbsoluteLateralTravelByAxle:axleTravel.length?Math.max(...axleTravel):0,
    totalAbsoluteLateralTravel,
+   integration:'composite-simpson-4-subintervals',
    model:'rigid-axle-group-kinematic-proxy'
   };
  }
