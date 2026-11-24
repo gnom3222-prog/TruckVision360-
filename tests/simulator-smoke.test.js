@@ -274,6 +274,8 @@ test('ambiguous planner results preserve candidate states and simulator draws th
  assert.match(plannerSource,/states:candidate\.states/);
  assert.match(simulatorSource,/alternativeRoutes=Array\.isArray\(result\.candidateRoutes\)/);
  assert.match(simulatorSource,/drawLine\(candidate\.states,colors\[index%colors\.length\],4,\[9,6\]\)/);
+ assert.match(simulatorSource,/geometrySensitivity\.status==='nominal-ambiguous'/);
+ assert.match(simulatorSource,/Совместная оболочка погрешности ворот не проверялась/);
  assert.match(simulatorSource,/if\(plannedRoute\.length<2\|\|!routeAssessment\)/);
 });
 
