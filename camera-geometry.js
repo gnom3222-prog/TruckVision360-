@@ -310,6 +310,16 @@
      !Number.isFinite(measurement.width)||measurement.width<=0||measurement.width>50){
    throw new Error('Измерение ворот должно содержать четыре угла и положительную конечную ширину.');
   }
+  const sigmaWidth=measurement.sigmaWidth??0;
+  if(!Number.isFinite(sigmaWidth)||sigmaWidth<0||sigmaWidth>25){
+   throw new Error('Оценка 1σ ширины должна быть конечной и неотрицательной.');
+  }
+  // Convert the camera's local 1σ sensitivity into a clearly-labelled 2σ
+  // screening envelope. This is not a deterministic bound or a safety claim.
+  const widthUncertaintyBound=2*sigmaWidth;
+  if(widthUncertaintyBound>=measurement.width){
+   throw new Error('Неопределённость ширины сопоставима с самим проёмом. Измерение нельзя переносить на карту.');
+  }
   if(!anchor||!Number.isFinite(anchor.x)||!Number.isFinite(anchor.y)||
      Math.abs(anchor.x)>10000||Math.abs(anchor.y)>10000||!Number.isFinite(headingRadians)){
    throw new Error('Для привязки ворот задайте конечные координаты центра и направление линии ворот.');
@@ -346,6 +356,10 @@
    headingRadians:heading,
    headingDeg:heading*180/Math.PI,
    clearWidth:measurement.width,
+   widthSigma:sigmaWidth,
+   widthUncertaintyBound,
+   widthUncertaintyMultiplier:2,
+   widthUncertaintyModel:sigmaWidth>0?'2-sigma-normal-approximation':'not-provided',
    openingStart:{x:anchor.x-half*ux,y:anchor.y-half*uy},
    openingEnd:{x:anchor.x+half*ux,y:anchor.y+half*uy},
    sourceAxisLength,
