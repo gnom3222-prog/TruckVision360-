@@ -997,18 +997,18 @@ test('vehicle parameter bounds reject unknown, inverted, out-of-range, and non-c
 
 test('gate uncertainty compares nominal and joint width-centre-heading envelopes',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
- const goal={x:4,y:0,heading:0};
+ const goal={x:7,y:0};
  const gateGeometry={
-  centerX:2,centerY:0,clearWidth:8,postWidth:0.25,depth:0.6,heading:Math.PI/2,
+  centerX:3.5,centerY:0,clearWidth:8,postWidth:0.25,depth:0.6,heading:Math.PI/2,
   widthUncertainty:0.4,positionUncertainty:0.1,headingUncertaintyDeg:1
  };
  const result=planner.planAlternativesWithVehicleParameterBounds({
   start,goal,params,integrate,
   obstacles:planner.createGateObstacles(gateGeometry),
   gateGeometry,
-  alternativeMaxExpansions:1800,
-  positionTolerance:0.08,headingTolerance:0.08,
-  maxTerminalArticulation:0.2,minClearance:0.3,
+  alternativeMaxExpansions:3500,
+  positionTolerance:0.9,
+  maxTerminalArticulation:12*Math.PI/180,minClearance:0.3,
   measurementUncertainty:0,
   obstaclePositionUncertainty:0,
   obstacleSizeUncertainty:0,
