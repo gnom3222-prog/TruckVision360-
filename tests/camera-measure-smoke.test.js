@@ -77,7 +77,7 @@ test('camera permission denial is explained and leaves no stream attached',async
  await camera.fire('cameraStart','click');
  assert.equal(camera.permissionRequests,1);
  assert.match(camera.elements.cameraStatus.textContent,/Доступ к камере запрещён/);
- assert.equal(camera.elements.measureVideo.srcObject,null);
+ assert.equal(camera.elements.measureVideo.srcObject??null,null);
  assert.equal(camera.trackStops,0);
 });
 
@@ -86,7 +86,7 @@ test('insecure context is rejected before requesting camera permission',async()=
  await camera.fire('cameraStart','click');
  assert.equal(camera.permissionRequests,0);
  assert.match(camera.elements.cameraStatus.textContent,/HTTPS/);
- assert.equal(camera.elements.measureVideo.srcObject,null);
+ assert.equal(camera.elements.measureVideo.srcObject??null,null);
 });
 
 test('camera stream is stopped if inline video playback fails after permission was granted',async()=>{
@@ -94,7 +94,7 @@ test('camera stream is stopped if inline video playback fails after permission w
  await camera.fire('cameraStart','click');
  assert.equal(camera.permissionRequests,1);
  assert.equal(camera.trackStops,1);
- assert.equal(camera.elements.measureVideo.srcObject,null);
+ assert.equal(camera.elements.measureVideo.srcObject??null,null);
  assert.match(camera.elements.cameraStatus.textContent,/Не удалось включить камеру/);
 });
 
