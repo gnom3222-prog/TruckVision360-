@@ -46,7 +46,7 @@
   return frame.objects.map(o=>{
    const x=vehiclePose.x+o.pose.x*c-o.pose.y*s;
    const y=vehiclePose.y+o.pose.x*s+o.pose.y*c;
-   const heading=o.pose.heading+vehiclePose.psi;
+   const heading=o.pose.heading+vehiclePose.heading;
    const ux=Math.cos(heading),uy=Math.sin(heading),nx=-uy,ny=ux;
    const hl=o.dimensions.length/2,hw=o.dimensions.width/2;
    const polygon=[
