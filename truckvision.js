@@ -553,7 +553,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261124-3');
+   worker=new Worker('./planner-worker.js?v=20261124-4');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
@@ -630,11 +630,14 @@ async function buildRoute(){
    params:{...cfg},
    obstacles:obstacles.map(o=>({...o})),
    maxExpansions:mobile?4500:12000,
+   alternativeMaxExpansions:mobile?2200:4500,
+   costTolerance:0.25,
    minClearance:0.65,
    bounds:{minX:-20,maxX:42,minY:-20,maxY:20}
   },progress=>{
    if(token!==routeBuildToken)return;
-   $('routeAdvice').textContent='Рассчитываю траекторию… проверено '+progress.expanded+
+   const candidateText=progress.candidateIndex?'Кандидат '+progress.candidateIndex+'/'+progress.candidateCount+'; суммарно проверено ':'Проверено ';
+   $('routeAdvice').textContent='Рассчитываю варианты траектории… '+candidateText+progress.expanded+
     ' из '+progress.maxExpansions+' состояний; до цели '+
     progress.goalDistance.toFixed(1)+' м; ошибка курса '+
     (Number.isFinite(progress.headingError)?(progress.headingError*180/Math.PI).toFixed(1)+'°':'не задана')+
@@ -650,6 +653,20 @@ async function buildRoute(){
    return;
   }
 
+  if(result.reason==='ambiguous-start'){
+   plannedRoute=[];
+   routeAssessment=null;
+   const alternatives=(result.candidateSummaries||[]).map(candidate=>{
+    const gear=candidate.initialGear<0?'задний ход':'вперёд';
+    const turn=candidate.firstTurn==='left'?'руль влево':
+     candidate.firstTurn==='right'?'руль вправо':'без значимого поворота';
+    return candidate.label+': '+gear+', '+turn+', эвристический балл '+candidate.cost.toFixed(2);
+   }).join('; ');
+   $('routeAdvice').textContent='Найдено несколько близких по эвристической стоимости вариантов с разными начальными действиями. Однозначная сторона и передача не выбраны. '+alternatives+'. Балл объединяет длину пути, переключения, пиковый угол и запас зазора; это не вероятность безопасности и не доказательство глобального оптимума.';
+   $('difficultyAdvice').textContent='Сложность не присвоена одному маршруту: варианты требуют разных начальных действий. Сравните геометрию площадки и повторите расчёт с уточнёнными измерениями. Виртуальный автопроезд не запускается.';
+   draw();
+   return;
+  }
   plannedRoute=result.ok?result.states:[];
   if(plannedRoute.length<2){
    routeAssessment=null;
@@ -670,12 +687,12 @@ async function buildRoute(){
 
   const m=routeMetrics(plannedRoute,result.minimumClearanceLowerBound,result.sweptClearanceDetail);
   routeAssessment=m;
-  const startCandidates=[{states:plannedRoute,cost:result.length,label:'основной маршрут'}];
-  if(Array.isArray(result.alternativeRoutes))startCandidates.push(...result.alternativeRoutes);
-  const recommendationComparison=planner.compareStartCandidates(startCandidates,{costTolerance:0.25});
-  const recommendation=recommendationComparison.ok?
-   (recommendationComparison.recommendation||recommendationComparison.bestCandidate.recommendation):
-   planner.recommendStart(plannedRoute);
+  const recommendationComparison=result.recommendationComparison||
+   planner.compareStartCandidates([{states:plannedRoute,cost:result.length,label:'одиночный маршрут'}],{costTolerance:0.25});
+  const recommendation=result.recommendation||
+   (recommendationComparison.ok?
+    (recommendationComparison.recommendation||recommendationComparison.bestCandidate.recommendation):
+    planner.recommendStart(plannedRoute));
   const ambiguousFields=recommendationComparison.ok?recommendationComparison.ambiguousFields:[];
   const firstGear=recommendation.initialGear;
   const gearText=ambiguousFields.includes('initialGear')?
@@ -695,12 +712,10 @@ async function buildRoute(){
    firstTurnText=side+' '+timing+gearNote+'; '+yawSide;
   }
   const recommendationNote=recommendationComparison.status==='single-candidate'?
-   ' Альтернативные варианты начала манёвра не сравнивались: планировщик вернул один маршрут.':
-   recommendationComparison.status==='ambiguous'?
-   ' Найдены близкие по стоимости варианты с разными начальными действиями; однозначная рекомендация не выдаётся.':
+   ' Найден только '+(result.candidatesFound||1)+' из '+(result.candidatesAttempted||1)+' проверенных стартовых вариантов; остальные не подтвердили путь в заданном лимите поиска, поэтому преимущество стороны не доказано.':
    recommendationComparison.status==='preferred'?
-   ' Начальное действие выбрано сравнением переданных вариантов маршрута.':
-   ' Сравнение вариантов начала манёвра недоступно; показано только действие найденного маршрута.';
+   ' Выбран меньший эвристический балл среди '+(result.candidatesFound||1)+' найденных стартовых вариантов из '+(result.candidatesAttempted||1)+'; это ограниченное сравнение, не доказательство глобального оптимума.':
+   ' Показано начальное действие найденного маршрута без подтверждённого сравнения альтернатив.';
 
   const peakGearText=m.articulationPeak.gear<0?'задним ходом':'вперёд';
   const articulationPeakText='пик угла сочленения '+m.articulationPeak.maxAngleDegrees.toFixed(1)+
