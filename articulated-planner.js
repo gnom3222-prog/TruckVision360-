@@ -665,5 +665,176 @@
   };
  }
 
-return Object.freeze({plan,planAlternatives,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions});
+
+ function recommendationAction(result){
+  if(!result||!result.ok)return null;
+  const recommendation=result.recommendation||
+   result.recommendationComparison?.recommendation||
+   result.recommendationComparison?.bestCandidate?.recommendation||
+   result.bestCandidate?.recommendation;
+  if(!recommendation||![-1,1].includes(recommendation.initialGear))return null;
+  return {
+   initialGear:recommendation.initialGear,
+   firstTurn:recommendation.firstTurn??null,
+   firstTurnGear:recommendation.firstTurnGear??null,
+   tractorYawDirection:recommendation.tractorYawDirection??null
+  };
+ }
+ function compareRecommendationSensitivity(nominal,reserve){
+  if(!nominal||!reserve)return {ok:false,reason:'invalid-scenarios'};
+  const nominalAction=recommendationAction(nominal);
+  const reserveAction=recommendationAction(reserve);
+  if(!nominalAction&&!reserveAction){
+   return {
+    ok:true,status:'ambiguous',stable:false,
+    changedFields:['recommendation'],nominalAction:null,reserveAction:null
+   };
+  }
+  if(!nominalAction||!reserveAction){
+   return {
+    ok:true,status:'changed',stable:false,
+    changedFields:['recommendation'],nominalAction,reserveAction
+   };
+  }
+  const fields=['initialGear','firstTurn','firstTurnGear','tractorYawDirection'];
+  const changedFields=fields.filter(field=>nominalAction[field]!==reserveAction[field]);
+  return {
+   ok:true,status:changedFields.length?'changed':'stable',
+   stable:changedFields.length===0,changedFields,nominalAction,reserveAction
+  };
+ }
+ function planAlternativesWithReserve(options={}){
+  const inputErrors=validatePlanOptions(options);
+  if(inputErrors.length)return {ok:false,reason:'invalid-input',errors:inputErrors,expanded:0};
+  if(options.firstActionConstraint!==undefined){
+   return {ok:false,reason:'invalid-input',errors:['Проверка резерва самостоятельно задаёт альтернативные первые действия.'],expanded:0};
+  }
+  const uncertainty=options.measurementUncertainty??0;
+  if(!Number.isFinite(uncertainty)||uncertainty<0||uncertainty>5){
+   return {ok:false,reason:'invalid-input',errors:['measurementUncertainty должен быть конечным числом от 0 до 5 м на каждую сторону.'],expanded:0};
+  }
+  const nominalRequiredClearance=options.minClearance??0.30;
+  const reserveRequiredClearance=nominalRequiredClearance+2*uncertainty;
+  if(reserveRequiredClearance>10){
+   return {ok:false,reason:'invalid-input',errors:['Требуемый зазор вместе с резервом неопределённости превышает 10 м.'],expanded:0};
+  }
+  const perCandidateMaxExpansions=options.alternativeMaxExpansions??options.maxExpansions??24000;
+  if(!Number.isInteger(perCandidateMaxExpansions)||perCandidateMaxExpansions<1||perCandidateMaxExpansions>500000){
+   return {ok:false,reason:'invalid-input',errors:['Лимит расширений каждого альтернативного поиска должен быть целым числом от 1 до 500000.'],expanded:0};
+  }
+  const baseOptions={...options};
+  delete baseOptions.measurementUncertainty;
+  const originalProgress=options.onProgress;
+  const scenarioCount=uncertainty>0?2:1;
+  const totalBudget=perCandidateMaxExpansions*5*scenarioCount;
+  function runScenario(scenario,minClearance,expandedOffset){
+   return planAlternatives({
+    ...baseOptions,
+    minClearance,
+    onProgress:typeof originalProgress==='function'?progress=>{
+     try{
+      originalProgress({
+       ...progress,scenario,
+       expanded:expandedOffset+progress.expanded,
+       maxExpansions:totalBudget
+      });
+     }catch(_){}
+    }:undefined
+   });
+  }
+  const nominal=runScenario('nominal',nominalRequiredClearance,0);
+  if(uncertainty===0){
+   return {
+    ...nominal,
+    sensitivity:{
+     status:'zero-reserve',measurementUncertainty:0,
+     nominalRequiredClearance,reserveRequiredClearance:nominalRequiredClearance,
+     note:'Дополнительный резерв неопределённости равен нулю; отдельный повторный поиск не выполнялся.'
+    }
+   };
+  }
+  if(!nominal.ok&&nominal.reason!=='ambiguous-start'){
+   return {
+    ...nominal,
+    sensitivity:{
+     status:'nominal-unavailable',measurementUncertainty:uncertainty,
+     nominalRequiredClearance,reserveRequiredClearance,
+     nominalReason:nominal.reason
+    }
+   };
+  }
+  const nominalExpanded=nominal.expanded||0;
+  const reserve=runScenario('reserve',reserveRequiredClearance,nominalExpanded);
+  const totalExpanded=nominalExpanded+(reserve.expanded||0);
+  if(!reserve.ok){
+   if(reserve.reason==='ambiguous-start'){
+    return {
+     ...reserve,expanded:totalExpanded,
+     nominalCandidateSummaries:nominal.candidateSummaries||[],
+     sensitivity:{
+      status:'reserve-ambiguous',measurementUncertainty:uncertainty,
+      nominalRequiredClearance,reserveRequiredClearance,
+      nominalStatus:nominal.status,reserveStatus:reserve.status
+     }
+    };
+   }
+   return {
+    ok:false,reason:'uncertainty-no-route',expanded:totalExpanded,
+    candidatesFound:0,candidatesAttempted:reserve.candidatesAttempted||5,
+    candidateSummaries:nominal.candidateSummaries||[],
+    nominalCandidateSummaries:nominal.candidateSummaries||[],
+    reserveFailure:{reason:reserve.reason,failures:reserve.failures||[]},
+    requiredClearance:reserveRequiredClearance,
+    sensitivity:{
+     status:'no-route-under-reserve',measurementUncertainty:uncertainty,
+     nominalRequiredClearance,reserveRequiredClearance,
+     nominalStatus:nominal.status,reserveStatus:reserve.reason
+    }
+   };
+  }
+  const comparison=compareRecommendationSensitivity(nominal,reserve);
+  if(comparison.status==='ambiguous'){
+   return {
+    ...reserve,ok:false,reason:'ambiguous-start',expanded:totalExpanded,
+    nominalCandidateSummaries:nominal.candidateSummaries||[],
+    sensitivity:{
+     status:'ambiguous-across-scenarios',measurementUncertainty:uncertainty,
+     nominalRequiredClearance,reserveRequiredClearance,
+     nominalStatus:nominal.status,reserveStatus:reserve.status,
+     comparison
+    }
+   };
+  }
+  if(comparison.status==='changed'){
+   return {
+    ok:false,reason:'uncertainty-sensitive-start',expanded:totalExpanded,
+    candidatesFound:reserve.candidatesFound,candidatesAttempted:reserve.candidatesAttempted,
+    candidateSummaries:reserve.candidateSummaries||[],
+    nominalCandidateSummaries:nominal.candidateSummaries||[],
+    reserveCandidateSummaries:reserve.candidateSummaries||[],
+    sensitivity:{
+     status:'start-action-changed',measurementUncertainty:uncertainty,
+     nominalRequiredClearance,reserveRequiredClearance,
+     nominalStatus:nominal.status,reserveStatus:reserve.status,
+     nominalCandidatesFound:nominal.candidatesFound,
+     reserveCandidatesFound:reserve.candidatesFound,
+     comparison
+    }
+   };
+  }
+  return {
+   ...reserve,expanded:totalExpanded,
+   sensitivity:{
+    status:'stable-start-action',measurementUncertainty:uncertainty,
+    nominalRequiredClearance,reserveRequiredClearance,
+    nominalStatus:nominal.status,reserveStatus:reserve.status,
+    nominalCandidatesFound:nominal.candidatesFound,
+    reserveCandidatesFound:reserve.candidatesFound,
+    candidateCoverageChanged:nominal.candidatesFound!==reserve.candidatesFound,
+    comparison
+   }
+  };
+ }
+
+return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions});
 });
