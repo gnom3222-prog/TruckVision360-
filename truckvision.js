@@ -988,9 +988,13 @@ if(result.reason==='uncertainty-sensitive-start'){
      candidate.firstTurn==='right'?'руль вправо':'без значимого поворота';
     return candidate.label+': '+gear+', '+turn+', эвристический балл '+candidate.cost.toFixed(2);
    }).join('; ');
-   $('routeAdvice').textContent='Найдено несколько близких по эвристической стоимости вариантов с разными начальными действиями. Однозначная сторона и передача не выбраны. '+alternatives+'. Балл объединяет длину пути, переключения, пиковый угол и запас зазора; это не вероятность безопасности и не доказательство глобального оптимума.';
+   const geometrySensitivity=result.geometrySensitivity||{};
+   const gateUncertainty=geometrySensitivity.gateGeometryUncertainty;
+   const gateEnvelopeNote=gateUncertainty?.enabled&&geometrySensitivity.status==='nominal-ambiguous'?
+    ' Совместная оболочка погрешности ворот не проверялась: номинальный поиск уже неоднозначен. Сначала нужно устранить неоднозначность стартовых действий; отсутствие проверки оболочки не трактуется как устойчивость.':'';
+   $('routeAdvice').textContent='Найдено несколько близких по эвристической стоимости вариантов с разными начальными действиями. Однозначная сторона и передача не выбраны. '+alternatives+'. Балл объединяет длину пути, переключения, пиковый угол и запас зазора; это не вероятность безопасности и не доказательство глобального оптимума.'+gateEnvelopeNote;
    const reserveNote=result.sensitivity?.status==='reserve-ambiguous'?' Повторный поиск с резервом неопределённости также дал неоднозначные варианты.':'';
-   $('difficultyAdvice').textContent='Показаны '+alternativeRoutes.length+' найденных траекторий разными линиями. Выбор и автопроезд пока заблокированы: сначала нужно сравнить варианты и подтвердить один маршрут. '+reserveNote;
+   $('difficultyAdvice').textContent='Показаны '+alternativeRoutes.length+' найденных траекторий разными линиями. Выбор и автопроезд пока заблокированы: сначала нужно сравнить варианты и подтвердить один маршрут. '+reserveNote+gateEnvelopeNote;
    draw();
    return;
   }
