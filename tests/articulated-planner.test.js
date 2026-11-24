@@ -114,6 +114,40 @@ test('gate helper creates two oriented convex jamb polygons with the requested c
  assert.ok(Math.abs((rightInside-leftInside)-4)<1e-9,'inside faces must preserve the measured clear width');
 });
 
+test('gate width uncertainty narrows the opening and map pose uncertainty expands both jambs',()=>{
+ const nominal=planner.createGateObstacles({
+  centerX:10,centerY:-2,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2
+ });
+ const widthBound=planner.createGateObstacles({
+  centerX:10,centerY:-2,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2,
+  widthUncertainty:0.2
+ });
+ const axis={x:Math.cos(Math.PI/2),y:Math.sin(Math.PI/2)};
+ const opening=items=>{
+  const projections=items.map(item=>item.polygon.map(point=>point.x*axis.x+point.y*axis.y));
+  return Math.min(...projections[1])-Math.max(...projections[0]);
+ };
+ assert.ok(Math.abs(opening(widthBound)-3.8)<1e-9);
+ assert.equal(widthBound[0].gateUncertainty.conservativeClearWidth,3.8);
+ const poseBound=planner.createGateObstacles({
+  centerX:10,centerY:-2,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2,
+  widthUncertainty:0.2,positionUncertainty:0.1,headingUncertaintyDeg:2
+ });
+ assert.equal(planner.validateObstacles(poseBound).length,0);
+ const maxRadius=items=>Math.max(...items.flatMap(item=>item.polygon.map(point=>Math.hypot(point.x-10,point.y+2))));
+ assert.ok(maxRadius(poseBound)>maxRadius(widthBound));
+ assert.ok(poseBound[0].gateUncertainty.totalInflation>0);
+ assert.ok(poseBound[0].gateUncertainty.headingInflation>0);
+ assert.ok(poseBound[0].gateUncertainty.positionInflation>0);
+});
+
+test('gate obstacle uncertainty rejects invalid bounds and a collapsed conservative opening',()=>{
+ const base={centerX:0,centerY:0,clearWidth:3,postWidth:0.2,depth:0.6,heading:0};
+ assert.throws(()=>planner.createGateObstacles({...base,widthUncertainty:3}));
+ assert.throws(()=>planner.createGateObstacles({...base,positionUncertainty:-0.01}));
+ assert.throws(()=>planner.createGateObstacles({...base,headingUncertaintyDeg:46}));
+});
+
 test('oriented gate jamb polygons participate in whole-vehicle clearance',()=>{
  const q={x:0,y:0,psi:0,psiT:0};
  const narrow=planner.createGateObstacles({
