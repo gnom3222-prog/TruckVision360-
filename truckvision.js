@@ -679,7 +679,8 @@ async function buildRoute(){
    const timing=recommendation.firstTurnDistance<=0.3?'сразу':'примерно через '+recommendation.firstTurnDistance.toFixed(1)+' м';
    const turnGear=recommendation.firstTurnGear<0?'задним ходом':'вперёд';
    const gearNote=recommendation.firstTurnAfterGearChange?' после переключения на движение '+turnGear:' при движении '+turnGear;
-   firstTurnText=side+' '+timing+gearNote;
+   const yawSide=recommendation.tractorYawDirection==='left'?'курс тягача начнёт меняться влево':'курс тягача начнёт меняться вправо';
+   firstTurnText=side+' '+timing+gearNote+'; '+yawSide;
   }
 
   const peakGearText=m.articulationPeak.gear<0?'задним ходом':'вперёд';
