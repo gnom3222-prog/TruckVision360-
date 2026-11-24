@@ -187,7 +187,7 @@ function resetState(){
  drive=0;
  braking=false;
  distance=0;
- trace=[];
+ trace=[{...state,ax:axlePoint(state).x,ay:axlePoint(state).y}];
  camera={x:0,y:0};
 }
 
@@ -398,6 +398,72 @@ function updateAssistant(){
   el.style.color=color;
  }
 }
+function sweptClearanceColor(pathIndex,polygons,obstaclePolygons){
+ let nearest=Infinity;
+ for(const body of polygons){
+  for(const obstacle of obstaclePolygons){
+   nearest=Math.min(nearest,polygonDistance(body,obstacle));
+  }
+ }
+ const reserve=2*Math.max(0,cfg.measurementUncertainty);
+ const effective=nearest-reserve;
+ if(effective<0.45)return 'rgba(255,92,92,0.22)';
+ if(effective<1.0)return 'rgba(255,190,82,0.20)';
+ return 'rgba(52,190,160,0.17)';
+}
+
+function drawSweptCorridor(path,kind){
+ if(!Array.isArray(path)||path.length<2)return;
+ const stride=Math.max(1,Math.ceil(path.length/650));
+ const samples=[];
+ for(let i=0;i<path.length;i+=stride){
+  const q=path[i];
+  if(q&&[q.x,q.y,q.psi,q.psiT].every(Number.isFinite))samples.push(q);
+ }
+ const last=path[path.length-1];
+ if(last&&samples[samples.length-1]!==last&&[last.x,last.y,last.psi,last.psiT].every(Number.isFinite))samples.push(last);
+ if(samples.length<2)return;
+ const obstaclePolygons=showObstacles?sceneObstacles().map(obstaclePolygon):[];
+ let previous=null;
+ for(const q of samples){
+  const polygons=physics.vehiclePolygons(q,{...cfg,footprintUncertainty:cfg.vehicleFootprintUncertainty});
+  const fill=sweptClearanceColor(0,polygons,obstaclePolygons);
+  polygons.forEach((poly,index)=>{
+   const points=poly.map(toScreen);
+   ctx.beginPath();
+   points.forEach((point,i)=>i?ctx.lineTo(point.x,point.y):ctx.moveTo(point.x,point.y));
+   ctx.closePath();
+   ctx.fillStyle=fill;
+   ctx.fill();
+   if(previous&&previous[index]&&previous[index].length===poly.length){
+    const before=previous[index];
+    for(let corner=0;corner<poly.length;corner++){
+     const next=(corner+1)%poly.length;
+     const quad=[before[corner],before[next],poly[next],poly[corner]].map(toScreen);
+     ctx.beginPath();
+     quad.forEach((point,i)=>i?ctx.lineTo(point.x,point.y):ctx.moveTo(point.x,point.y));
+     ctx.closePath();
+     ctx.fillStyle=fill;
+     ctx.fill();
+    }
+   }
+   ctx.beginPath();
+   points.forEach((point,i)=>i?ctx.lineTo(point.x,point.y):ctx.moveTo(point.x,point.y));
+   ctx.closePath();
+   ctx.strokeStyle=kind==='planned'?'rgba(112,238,205,0.62)':'rgba(135,190,225,0.30)';
+   ctx.lineWidth=kind==='planned'?1.5:1;
+   ctx.stroke();
+  });
+  previous=polygons;
+ }
+ const label=toScreen(samples[Math.floor(samples.length*0.55)]);
+ ctx.save();
+ ctx.font='bold 12px system-ui';
+ ctx.fillStyle=kind==='planned'?'#7df0c9':'#a9cde5';
+ ctx.fillText(kind==='planned'?'РАСЧЁТНЫЙ КОРИДОР':'ПРОЙДЕННЫЙ ГАБАРИТ',label.x+8,label.y-18);
+ ctx.restore();
+}
+
 function drawEnvelopePolygon(poly,color){
  const points=poly.map(toScreen);
  ctx.beginPath();
@@ -1125,6 +1191,8 @@ function draw(){
 
  drawObstacles();
  drawRoute();
+ if(trace.length>1)drawSweptCorridor(trace,'actual');
+ if(plannedRoute.length>1)drawSweptCorridor(plannedRoute,'planned');
 
  if(showTrace&&trace.length>1){
   drawLine(
@@ -1377,7 +1445,7 @@ function simulationStep(dt){
  distance+=Math.hypot(state.x-oldX,state.y-oldY);
 
  const a=axlePoint(state);
- trace.push({x:state.x,y:state.y,ax:a.x,ay:a.y});
+ trace.push({x:state.x,y:state.y,psi:state.psi,psiT:state.psiT,ax:a.x,ay:a.y});
  if(trace.length>2500)trace.shift();
 
  camera={x:state.x,y:state.y};
