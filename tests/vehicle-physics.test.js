@@ -199,3 +199,10 @@ test('three-axle scrub exposure rejects an empty route instead of reporting zero
  const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3};
  assert.throws(()=>physics.trailerAxleScrubExposure([],p),/хотя бы одно состояние/);
 });
+
+
+test('three-axle scrub exposure rejects sparse route arrays',()=>{
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3};
+ assert.throws(()=>physics.trailerAxleScrubExposure(new Array(1),p),/некорректные координаты/);
+ assert.throws(()=>physics.trailerAxleScrubExposure([{x:0,y:0,psi:0,psiT:0},,],p),/некорректные координаты/);
+});
