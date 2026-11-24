@@ -193,6 +193,29 @@ test('camera gate map registration rejects missing or invalid manual map pose',(
 });
 
 
+test('camera registration carries a two-sigma width envelope into gate geometry',()=>{
+ const points=[
+  {x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2}
+ ];
+ const registration=camera.registerGateOnMap(
+  {width:4,sigmaWidth:0.03,points},
+  {x:12,y:0},
+  Math.PI/2
+ );
+ near(registration.widthSigma,0.03);
+ near(registration.widthUncertaintyBound,0.06);
+ assert.equal(registration.widthUncertaintyMultiplier,2);
+ assert.equal(registration.widthUncertaintyModel,'2-sigma-normal-approximation');
+ assert.throws(
+  ()=>camera.registerGateOnMap({width:4,sigmaWidth:-0.01,points},{x:0,y:0},0),
+  /1σ ширины/
+ );
+ assert.throws(
+  ()=>camera.registerGateOnMap({width:4,sigmaWidth:2.1,points},{x:0,y:0},0),
+  /сопоставима с самим проёмом/
+ );
+});
+
 const rectangularReference=[
  {x:0,y:0},{x:100,y:0},{x:100,y:50},{x:0,y:50}
 ];
