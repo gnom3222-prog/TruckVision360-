@@ -6,7 +6,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 const geometry=require('../camera-geometry.js');
 
-function bootCamera(){
+function bootCamera(options={}){
  const elements={},windowListeners={};
  const context={clearRect(){},beginPath(){},moveTo(){},lineTo(){},closePath(){},stroke(){},arc(){},fill(){},fillText(){}};
  const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateResult'];
@@ -23,7 +23,7 @@ function bootCamera(){
    addEventListener(type,fn){(this.listeners[type]??=[]).push(fn);},
    getBoundingClientRect(){return{left:0,top:0,width:640,height:480};},
    getContext(){return context;},
-   play(){return Promise.resolve();}
+   play(){return options.playError?Promise.reject(new Error('video playback failed')):Promise.resolve();}
   };
  }
  let permissionRequests=0,trackStops=0;
@@ -34,8 +34,8 @@ function bootCamera(){
  const sandbox={
   window:win,
   document:{getElementById:id=>elements[id]},
-  navigator:{mediaDevices:{getUserMedia:async()=>{permissionRequests++;return{getTracks:()=>[{stop(){trackStops++;}}]};}}},
-  isSecureContext:true,
+  navigator:{mediaDevices:{getUserMedia:async()=>{permissionRequests++;if(options.permissionError){const error=new Error('camera permission error');error.name=options.permissionError;throw error;}return{getTracks:()=>[{stop(){trackStops++;}}]};}}},
+  isSecureContext:options.secureContext!==false,
   console
  };
  const source=fs.readFileSync(path.join(__dirname,'..','camera-measure.js'),'utf8');
@@ -70,4 +70,30 @@ test('camera permission is requested only on tap; measurement reports uncertaint
  assert.ok(Number(camera.elements.gateWidth.value)>0);
  camera.fire('cameraStop','click');
  assert.equal(camera.trackStops,1,'stopping the camera must stop its media track');
+});
+
+test('camera permission denial is explained and leaves no stream attached',async()=>{
+ const camera=bootCamera({permissionError:'NotAllowedError'});
+ await camera.fire('cameraStart','click');
+ assert.equal(camera.permissionRequests,1);
+ assert.match(camera.elements.cameraStatus.textContent,/Доступ к камере запрещён/);
+ assert.equal(camera.elements.measureVideo.srcObject,null);
+ assert.equal(camera.trackStops,0);
+});
+
+test('insecure context is rejected before requesting camera permission',async()=>{
+ const camera=bootCamera({secureContext:false});
+ await camera.fire('cameraStart','click');
+ assert.equal(camera.permissionRequests,0);
+ assert.match(camera.elements.cameraStatus.textContent,/HTTPS/);
+ assert.equal(camera.elements.measureVideo.srcObject,null);
+});
+
+test('camera stream is stopped if inline video playback fails after permission was granted',async()=>{
+ const camera=bootCamera({playError:true});
+ await camera.fire('cameraStart','click');
+ assert.equal(camera.permissionRequests,1);
+ assert.equal(camera.trackStops,1);
+ assert.equal(camera.elements.measureVideo.srcObject,null);
+ assert.match(camera.elements.cameraStatus.textContent,/Не удалось включить камеру/);
 });
