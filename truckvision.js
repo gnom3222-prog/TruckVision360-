@@ -366,10 +366,24 @@ function updateAssistant(){
   el.style.color=color;
  }
 }
+function drawEnvelopePolygon(poly,color){
+ const points=poly.map(toScreen);
+ ctx.beginPath();
+ points.forEach((point,index)=>index?ctx.lineTo(point.x,point.y):ctx.moveTo(point.x,point.y));
+ ctx.closePath();
+ ctx.strokeStyle=color;
+ ctx.lineWidth=1.5;
+ ctx.setLineDash([5,4]);
+ ctx.stroke();
+ ctx.setLineDash([]);
+}
+
 function drawObstacles(){
  if(!showObstacles)return;
-
+ const expansion=cfg.obstaclePositionUncertainty+cfg.obstacleSizeUncertainty/2;
  for(const o of obstacles){
+  const expanded={...o,w:o.w+2*expansion,h:o.h+2*expansion};
+  drawEnvelopePolygon(obstaclePolygon(expanded),'#ffd18b');
   const p=obstaclePolygon(o).map(toScreen);
   ctx.beginPath();
   p.forEach((z,i)=>i?ctx.lineTo(z.x,z.y):ctx.moveTo(z.x,z.y));
@@ -379,7 +393,6 @@ function drawObstacles(){
   ctx.strokeStyle='#ffc0a8';
   ctx.lineWidth=2;
   ctx.stroke();
-
   const c=toScreen({x:o.x,y:o.y});
   ctx.fillStyle='#fff';
   ctx.font='12px system-ui';
@@ -1039,6 +1052,8 @@ function draw(){
   ],'#101820',7);
  }
 
+ physics.vehiclePolygons(state,{...cfg,footprintUncertainty:cfg.vehicleFootprintUncertainty})
+  .forEach(poly=>drawEnvelopePolygon(poly,'#ffd18b'));
  drawBody(state,state.psi,5,-1.2,2.55,'#087fa5');
  drawBody(
   localPoint(state,state.psi,2.1),
