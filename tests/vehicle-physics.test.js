@@ -206,3 +206,34 @@ test('three-axle scrub exposure rejects sparse route arrays',()=>{
  assert.throws(()=>physics.trailerAxleScrubExposure(new Array(1),p),/некорректные координаты/);
  assert.throws(()=>physics.trailerAxleScrubExposure([{x:0,y:0,psi:0,psiT:0},,],p),/некорректные координаты/);
 });
+ 
+test('RK4 trajectory converges under step refinement across steering reversals',()=>{
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8};
+ const integrate=dt=>{
+  let q={x:0,y:0,psi:0.2,psiT:-0.15};
+  const duration=10;
+  const steps=Math.round(duration/dt);
+  for(let i=0;i<steps;i++){
+   const time=i*dt;
+   const steer=time<3?0.55:(time<6?-0.5:0.4);
+   q=physics.rk4(q,2,steer,dt,p);
+  }
+  return q;
+ };
+ const reference=integrate(0.002);
+ const coarse=integrate(0.5);
+ const refined=integrate(0.25);
+ const stateError=q=>Math.hypot(
+  q.x-reference.x,
+  q.y-reference.y,
+  physics.norm(q.psi-reference.psi),
+  physics.norm(q.psiT-reference.psiT)
+ );
+ const coarseError=stateError(coarse);
+ const refinedError=stateError(refined);
+ assert.ok(coarseError>0);
+ assert.ok(refinedError<coarseError/8,
+  'halving the RK4 step should substantially reduce the trajectory error');
+ assert.ok(refinedError<1e-6,
+  'the refined trajectory should remain close to the fine-step reference');
+});
