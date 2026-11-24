@@ -1012,8 +1012,42 @@ function planAlternativesWithGeometryUncertainty(options={}){
  if(expandedFootprint>1){
   return {ok:false,reason:'invalid-input',errors:['Суммарное расширение контура автопоезда не должно превышать 1 м на каждую внешнюю грань.'],expanded:0};
  }
+ const gateGeometry=options.gateGeometry??null;
+ let obstaclesForNominal=options.obstacles;
+ let obstaclesForEnvelope=options.obstacles;
+ let gateBoundsActive=false;
+ let gateGeometryUncertainty=null;
+ if(gateGeometry!==null){
+  if(!gateGeometry||typeof gateGeometry!=='object'||Array.isArray(gateGeometry)){
+   return {ok:false,reason:'invalid-input',errors:['gateGeometry должен быть объектом геометрии ворот.'],expanded:0};
+  }
+  try{
+   const nominalGatePosts=createGateObstacles({
+    ...gateGeometry,widthUncertainty:0,positionUncertainty:0,headingUncertaintyDeg:0
+   });
+   const boundedGatePosts=createGateObstacles(gateGeometry);
+   const staticObstacles=options.obstacles.filter(obstacle=>obstacle?.kind!=='gate-jamb');
+   obstaclesForNominal=[...staticObstacles,...nominalGatePosts];
+   obstaclesForEnvelope=[...staticObstacles,...boundedGatePosts];
+   const widthUncertainty=gateGeometry.widthUncertainty??0;
+   const positionUncertainty=gateGeometry.positionUncertainty??0;
+   const headingUncertaintyDeg=gateGeometry.headingUncertaintyDeg??0;
+   gateBoundsActive=widthUncertainty>0||positionUncertainty>0||headingUncertaintyDeg>0;
+   gateGeometryUncertainty={
+    enabled:true,
+    nominalClearWidth:gateGeometry.clearWidth,
+    conservativeClearWidth:gateGeometry.clearWidth-widthUncertainty,
+    widthUncertainty,
+    positionUncertaintyPerAxis:positionUncertainty,
+    headingUncertaintyDeg,
+    model:'joint bounded envelope: inward jamb shift for width plus radial per-jamb expansion for simultaneous centre X/Y and heading error'
+   };
+  }catch(error){
+   return {ok:false,reason:'invalid-input',errors:[error&&error.message?error.message:'Некорректная геометрия ворот.'],expanded:0};
+  }
+ }
  const obstacleExpansionPerSide=obstaclePositionUncertainty+obstacleSizeUncertainty/2;
- const expandedObstacles=options.obstacles.map(obstacle=>{
+ const expandedObstacles=obstaclesForEnvelope.map(obstacle=>{
   if(Array.isArray(obstacle.polygon)){
    // A radial offset of sqrt(2) times the per-axis bound contains every
    // simultaneous X/Y translation within the configured rectangular error box.
@@ -1028,14 +1062,17 @@ function planAlternativesWithGeometryUncertainty(options={}){
    h:obstacle.h+2*obstacleExpansionPerSide
   };
  });
- const baseOptions={...options};
+ const hasGeometryBounds=obstaclePositionUncertainty>0||
+  obstacleSizeUncertainty>0||vehicleFootprintUncertainty>0||gateBoundsActive;
+ const baseOptions={...options,obstacles:obstaclesForNominal};
  delete baseOptions.obstaclePositionUncertainty;
  delete baseOptions.obstacleSizeUncertainty;
  delete baseOptions.vehicleFootprintUncertainty;
+ delete baseOptions.gateGeometry;
  const originalProgress=options.onProgress;
  const perCandidateMaxExpansions=options.alternativeMaxExpansions??options.maxExpansions??24000;
  const innerScenarioCount=(options.measurementUncertainty??0)>0?2:1;
- const totalBudget=perCandidateMaxExpansions*5*innerScenarioCount*2;
+ const totalBudget=perCandidateMaxExpansions*5*innerScenarioCount*(hasGeometryBounds?2:1);
  function runScenario(geometryScenario,scenarioOptions,expandedOffset){
   return planAlternativesWithReserve({
    ...scenarioOptions,
@@ -1055,6 +1092,7 @@ function planAlternativesWithGeometryUncertainty(options={}){
   obstaclePositionUncertainty,obstacleSizeUncertainty,
   vehicleFootprintUncertainty,obstacleExpansionPerSide,
   footprintExpansionPerEdge:vehicleFootprintUncertainty,
+  gateGeometryUncertainty,
   obstacleModel:'axis-aligned rectangles expanded per axis; convex polygons receive a conservative radial offset covering the same per-axis bound',
   vehicleModel:'all three rectangular body contours expanded outward on every edge',
   kinematicParameterUncertaintyIncluded:false
@@ -1065,7 +1103,7 @@ function planAlternativesWithGeometryUncertainty(options={}){
    geometrySensitivity:{...geometryBounds,status:'nominal-unavailable'}
   };
  }
- if(obstaclePositionUncertainty===0&&obstacleSizeUncertainty===0&&vehicleFootprintUncertainty===0){
+ if(!hasGeometryBounds){
   return {
    ...nominal,
    geometrySensitivity:{...geometryBounds,status:'zero-geometry-bounds'}
@@ -1163,7 +1201,13 @@ function planAlternativesWithVehicleParameterBounds(options={}){
  const hasGeometryBounds=(options.obstaclePositionUncertainty??0)>0||
   (options.obstacleSizeUncertainty??0)>0||
   (options.vehicleFootprintUncertainty??0)>0;
- const geometryScenarioCount=hasGeometryBounds?2:1;
+ const gateBounds=options.gateGeometry;
+ const hasGateBounds=!!gateBounds&&[
+  gateBounds.widthUncertainty??0,
+  gateBounds.positionUncertainty??0,
+  gateBounds.headingUncertaintyDeg??0
+ ].some(value=>Number.isFinite(value)&&value>0);
+ const geometryScenarioCount=hasGeometryBounds||hasGateBounds?2:1;
  function endpointVectors(count){
   if(count<=3){
    return Array.from({length:1<<count},(_,mask)=>
