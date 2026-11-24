@@ -6,7 +6,7 @@ const $=id=>document.getElementById(id);
 const canvas=$('view');
 const ctx=canvas.getContext('2d');
 const G=9.81;
-const SCALE=34;
+const SCALE=26;
 const ARTICULATION_WARNING_DEG=45;
 const ARTICULATION_STOP_DEMO_DEG=55;
 
@@ -47,7 +47,7 @@ const cfg={
 
 let state,steer=0,targetSpeed=2,speed=0,drive=0;
 let braking=false,distance=0,trace=[],showTrace=true;
-let camera={x:7.5,y:0},lastTime=0;
+let camera={x:5.5,y:0},lastTime=0;
 let showObstacles=true,helperEnabled=true;
 let plannedRoute=[],alternativeRoutes=[],routeGoal=null,routeAssessment=null;
 let routePlayback={active:false,paused:false,index:1,stopReason:'',currentGear:1};
@@ -242,7 +242,7 @@ function resetState(){
  braking=false;
  distance=0;
  trace=[{...state,ax:axlePoint(state).x,ay:axlePoint(state).y}];
- camera={x:0,y:0};
+ camera={x:5.5,y:0};
 }
 
 function hitchPoint(q){return physics.hitchPoint(q,cfg);}
