@@ -573,3 +573,78 @@ test('multi-start planner rejects an invalid per-candidate expansion budget',()=
  assert.equal(result.ok,false);
  assert.equal(result.reason,'invalid-input');
 });
+
+
+test('recommendation sensitivity detects a changed initial action across clearance scenarios',()=>{
+ const nominal={
+  ok:true,recommendation:{initialGear:1,firstTurn:'left',firstTurnGear:1,tractorYawDirection:'left'}
+ };
+ const reserve={
+  ok:true,recommendation:{initialGear:-1,firstTurn:'right',firstTurnGear:-1,tractorYawDirection:'left'}
+ };
+ const result=planner.compareRecommendationSensitivity(nominal,reserve);
+ assert.equal(result.ok,true);
+ assert.equal(result.status,'changed');
+ assert.equal(result.stable,false);
+ assert.ok(result.changedFields.includes('initialGear'));
+ assert.ok(result.changedFields.includes('firstTurn'));
+});
+ 
+test('recommendation sensitivity reports a stable action without claiming global optimality',()=>{
+ const action={initialGear:-1,firstTurn:'right',firstTurnGear:-1,tractorYawDirection:'left'};
+ const result=planner.compareRecommendationSensitivity(
+  {ok:true,recommendation:action,status:'single-candidate'},
+  {ok:true,recommendation:{...action},status:'preferred'}
+ );
+ assert.equal(result.ok,true);
+ assert.equal(result.status,'stable');
+ assert.equal(result.stable,true);
+ assert.deepEqual(result.changedFields,[]);
+});
+ 
+test('uncertainty-aware alternatives add twice the per-side reserve to required clearance',()=>{
+ const start={x:0,y:0,psi:0,psiT:0};
+ let target={...start};
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ const result=planner.planAlternativesWithReserve({
+  start,goal:{x:target.x,y:target.y,heading:target.psi},
+  params,obstacles:[],integrate,
+  alternativeMaxExpansions:1200,
+  positionTolerance:0.02,headingTolerance:0.01,
+  maxTerminalArticulation:0.5,
+  minClearance:0.30,measurementUncertainty:0.10
+ });
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.requiredClearance,0.50);
+ assert.equal(result.sensitivity.status,'stable-start-action');
+ assert.equal(result.sensitivity.nominalRequiredClearance,0.30);
+ assert.equal(result.sensitivity.reserveRequiredClearance,0.50);
+ assert.equal(result.sensitivity.comparison.stable,true);
+});
+ 
+test('uncertainty-aware alternatives reject a route that only meets the nominal clearance',()=>{
+ const obstacle={x:2,y:2,w:1,h:0.5,name:'near-side wall'};
+ const start={x:0,y:0,psi:0,psiT:0};
+ const initialClearance=planner.clearance(start,[obstacle],params).distance;
+ assert.ok(initialClearance>0.30&&initialClearance<0.50,
+  'test obstacle must leave a nominal but not uncertainty-adjusted starting gap');
+ const result=planner.planAlternativesWithReserve({
+  start,goal:{x:2,y:0},params,obstacles:[obstacle],integrate,
+  alternativeMaxExpansions:1200,maxExpansions:1200,
+  minClearance:0.30,measurementUncertainty:0.10,
+  bounds:{minX:-18,maxX:18,minY:-12,maxY:12}
+ });
+ assert.equal(result.ok,false,JSON.stringify(result));
+ assert.equal(result.reason,'uncertainty-no-route');
+ assert.equal(result.sensitivity.status,'no-route-under-reserve');
+ assert.equal(result.requiredClearance,0.50);
+});
+ 
+test('uncertainty-aware alternatives reject negative or excessive uncertainty',()=>{
+ const base={
+  start:{x:0,y:0,psi:0,psiT:0},goal:{x:2,y:0},
+  params,obstacles:[],integrate,alternativeMaxExpansions:100
+ };
+ assert.equal(planner.planAlternativesWithReserve({...base,measurementUncertainty:-0.01}).reason,'invalid-input');
+ assert.equal(planner.planAlternativesWithReserve({...base,measurementUncertainty:5.1}).reason,'invalid-input');
+});
