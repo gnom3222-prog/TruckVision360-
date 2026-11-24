@@ -428,9 +428,9 @@ function planAStar(start,goal){
  return compact;
 }
 
-function routeMetrics(path,minimumClearanceLowerBound=Infinity){
+function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDetail=null){
  let length=0,gearChanges=0,steeringChanges=0,reverseDistance=0,reverseSegments=0;
- let minClearance=Infinity,maxBeta=0,collision=false;
+ let minClearance=Infinity,minClearanceDetail=null,maxBeta=0,collision=false;
  const checkClearance=showObstacles?planner.createClearanceChecker(obstacles,cfg):null;
  let previousGear=path[0]?.gear||1,previousSteer=path[0]?.steer||0,wasReverse=false;
  for(let i=0;i<path.length;i++){
@@ -453,7 +453,11 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity){
   previousSteer=q.steer||0;
   if(showObstacles){
    const c=checkClearance(q);
-   minClearance=Math.min(minClearance,c.distance);
+   if(c.distance<minClearance){
+    minClearance=c.distance;
+    minClearanceDetail=Number.isFinite(c.distance)?
+     {...c,state:{x:q.x,y:q.y,psi:q.psi,psiT:q.psiT,gear:q.gear,steer:q.steer}}:null;
+   }
    if(c.distance<=1e-9)collision=true;
   }
  }
@@ -492,7 +496,9 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity){
   axleScrubTravelByAxle:scrubExposure.cumulativeAbsoluteLateralTravelByAxle,
   axleScrubSpeedByAxle:scrubExposure.maxAbsLateralVelocityByAxle,
   level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',
-  maxBeta,clearance:minClearance,clearanceLowerBound:clearanceForAssessment,effectiveClearance,
+  maxBeta,clearance:minClearance,clearanceDetail:minClearanceDetail,
+  clearanceLowerBound:clearanceForAssessment,effectiveClearance,
+  sweptClearanceDetail,
   collision,reached,finalHeadingErrorDeg,finalArticulationDeg,clearanceInsufficient,articulationBlocked,reasons};
 }
 
@@ -638,7 +644,7 @@ async function buildRoute(){
    return;
   }
 
-  const m=routeMetrics(plannedRoute,result.minimumClearanceLowerBound);
+  const m=routeMetrics(plannedRoute,result.minimumClearanceLowerBound,result.sweptClearanceDetail);
   routeAssessment=m;
   const recommendation=planner.recommendStart(plannedRoute);
   const firstGear=recommendation.initialGear;
@@ -661,12 +667,23 @@ async function buildRoute(){
    '°; ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+'°; угол сочленения у цели '+
    m.finalArticulationDeg.toFixed(1)+'° (допуск '+articulationLimitDegrees.toFixed(0)+'°).';
 
+  const closestLocationText=m.clearanceDetail?
+   m.clearanceDetail.vehiclePart+' рядом с препятствием «'+m.clearanceDetail.obstacle+
+   '» около X '+m.clearanceDetail.state.x.toFixed(1)+' м, Y '+
+   m.clearanceDetail.state.y.toFixed(1)+' м':
+   'не определена (препятствия выключены или зазор бесконечен)';
+  const sweptLocationText=m.sweptClearanceDetail&&m.sweptClearanceDetail.kind==='segment-lower-bound'?
+   'сегмент X '+m.sweptClearanceDetail.from.x.toFixed(1)+', Y '+m.sweptClearanceDetail.from.y.toFixed(1)+
+   ' → X '+m.sweptClearanceDetail.to.x.toFixed(1)+', Y '+m.sweptClearanceDetail.to.y.toFixed(1):
+   'отдельный ограничивающий сегмент не выделен';
   $('difficultyAdvice').textContent=
    'Сложность: '+m.level+'. Причины: '+m.reasons.join('; ')+
    '. Максимальный угол сочленения '+m.maxBeta.toFixed(1)+'°; конечная ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+
    '°; конечный угол тягач–полуприцеп '+m.finalArticulationDeg.toFixed(1)+'°; геометрический индикатор боковой скорости крайних осей при расчётной скорости 0,7 м/с '+m.maxAxleScrubSpeed.toFixed(3)+' м/с; по осям (передняя/средняя/задняя): '+m.axleScrubSpeedByAxle.map(value=>value.toFixed(3)).join('/')+' м/с; накопленный proxy по осям: '+m.axleScrubTravelByAxle.map(value=>value.toFixed(2)).join('/')+' м; суммарный proxy '+m.axleScrubTravelProxy.toFixed(2)+' м (не модель шин); минимальный зазор до тестовых препятствий '+
    (Number.isFinite(m.clearance)?m.clearance.toFixed(2)+' м':'не определён')+
-   '; консервативная нижняя оценка между узлами '+(Number.isFinite(m.clearanceLowerBound)?m.clearanceLowerBound.toFixed(2)+' м':'не ограничена')+
+   '; ближайшая проверенная часть автопоезда: '+closestLocationText+
+   '; нижняя оценка между узлами '+(Number.isFinite(m.clearanceLowerBound)?m.clearanceLowerBound.toFixed(2)+' м':'не ограничена')+
+   ' на '+sweptLocationText+' (общая оценка движения контура; точная часть в середине сегмента не атрибутируется)'+
    '; после резерва погрешности: '+(Number.isFinite(m.effectiveClearance)?m.effectiveClearance.toFixed(2)+' м':'не определено')+
    '; столкновение: '+(m.collision?'да':'не выявлено')+
    '. Курс у цели проверен относительно заданного угла и допуска; учебный расчёт, не гарантия безопасности.';
@@ -686,6 +703,25 @@ function drawRoute(){
  if(plannedRoute.length<2)return;
 
  drawLine(plannedRoute,'#ffe082',4,[9,6]);
+
+ const swept=routeAssessment&&routeAssessment.sweptClearanceDetail;
+ if(swept&&swept.kind==='segment-lower-bound'&&swept.from&&swept.to){
+  drawLine([swept.from,swept.to],'#ff8585',3,[4,4]);
+ }
+ const closest=routeAssessment&&routeAssessment.clearanceDetail;
+ if(closest&&closest.state&&Number.isFinite(closest.distance)){
+  const marker=toScreen(closest.state);
+  ctx.beginPath();
+  ctx.arc(marker.x,marker.y,8,0,Math.PI*2);
+  ctx.fillStyle='#ff8585';
+  ctx.fill();
+  ctx.strokeStyle='#fff';
+  ctx.lineWidth=2;
+  ctx.stroke();
+  ctx.fillStyle='#fff';
+  ctx.font='12px system-ui';
+  ctx.fillText('MIN '+closest.distance.toFixed(2)+' м',marker.x+11,marker.y-9);
+ }
 
  if(routeGoal){
   const z=toScreen(routeGoal);
