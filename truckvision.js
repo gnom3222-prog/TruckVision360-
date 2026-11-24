@@ -1368,11 +1368,6 @@ function draw(){
  }
 
  const h=hitchPoint(state);
- drawBody(
-  h,state.psiT,1.5,
-  -(cfg.trailerLength-1.5),
-  cfg.trailerWidth,'#315b78'
- );
 
  physics.vehiclePolygons(state,{...cfg,footprintUncertainty:cfg.vehicleFootprintUncertainty})
   .forEach(poly=>drawEnvelopePolygon(poly,'#ffd18b'));
