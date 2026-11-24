@@ -56,6 +56,7 @@ let plannerWorker=null,plannerRequestId=0,plannerReject=null,routeBuildToken=0;
 // Учебный коридор: стены параллельны направлению движения (+X).
 // Между внутренними гранями стен остаётся 9.3 м; паллеты стоят
 // снаружи коридора и не перекрывают прямой тестовый маршрут к цели (22, 0).
+const cameraObstacles=[];
 const obstacles=[
  {x:8.0,y:3.3,w:1.2,h:1.2,name:'Паллет A'},
  {x:16.0,y:-3.3,w:1.0,h:1.0,name:'Паллет B'},
@@ -79,6 +80,7 @@ function gateGeometryForPlanner(){
 }
 function sceneObstacles(){
  const result=obstacles.map(obstacle=>({...obstacle}));
+ result.push(...cameraObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point}))})));
  const gateGeometry=gateGeometryForPlanner();
  if(gateGeometry)result.push(...planner.createGateObstacles(gateGeometry));
  return result;
@@ -1614,7 +1616,43 @@ function applyCameraGateRegistration(registration){
  draw();
  return true;
 }
+
 window.TruckVisionApplyGateRegistration=applyCameraGateRegistration;
+
+function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name){
+ if(!measurement||!Number.isFinite(measurement.width)||!Number.isFinite(measurement.height)||
+    measurement.width<0.08||measurement.height<0.08||
+    measurement.width>20||measurement.height>20||
+    !anchor||![anchor.x,anchor.y,headingRadians].every(Number.isFinite)||
+    Math.abs(anchor.x)>100||Math.abs(anchor.y)>100||
+    Math.abs(headingRadians)>Math.PI+1e-9||
+    measurement.conditioningWarning===true||measurement.shapeWarning===true||
+    cameraObstacles.length>=30)return false;
+ const ux=Math.cos(headingRadians),uy=Math.sin(headingRadians);
+ const nx=-uy,ny=ux,hw=measurement.width/2,hh=measurement.height/2;
+ const polygon=[
+  {x:anchor.x-hw*ux-hh*nx,y:anchor.y-hw*uy-hh*ny},
+  {x:anchor.x+hw*ux-hh*nx,y:anchor.y+hw*uy-hh*ny},
+  {x:anchor.x+hw*ux+hh*nx,y:anchor.y+hw*uy+hh*ny},
+  {x:anchor.x-hw*ux+hh*nx,y:anchor.y-hw*uy+hh*ny}
+ ];
+ const obstacle={kind:'camera-obstacle',name:String(name||'Препятствие камеры').trim().slice(0,48)||'Препятствие камеры',polygon,
+  measuredWidth:measurement.width,measuredDepth:measurement.height,
+  sigmaWidth:Number(measurement.sigmaWidth)||0,sigmaDepth:Number(measurement.sigmaHeight)||0};
+ try{if(planner.validateObstacles([obstacle]).length)return false;}catch(_){return false;}
+ cameraObstacles.push(obstacle);
+ invalidateRouteForSettingsChange();
+ draw();
+ return true;
+}
+window.TruckVisionAddCameraObstacle=applyCameraObstacleRegistration;
+window.TruckVisionClearCameraObstacles=()=>{
+ if(!cameraObstacles.length)return true;
+ cameraObstacles.length=0;
+ invalidateRouteForSettingsChange();
+ draw();
+ return true;
+};
 
 function applySettings(){
  const result=readSettings();
