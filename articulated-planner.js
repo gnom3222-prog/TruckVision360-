@@ -29,10 +29,96 @@
   if(!rootPhysics||typeof rootPhysics.vehiclePolygons!=='function')throw new Error('Shared vehicle geometry is unavailable.');
   return rootPhysics.vehiclePolygons(q,p);
  }
- function obstaclePoly(o){return[
-  {x:o.x-o.w/2,y:o.y-o.h/2},{x:o.x+o.w/2,y:o.y-o.h/2},
-  {x:o.x+o.w/2,y:o.y+o.h/2},{x:o.x-o.w/2,y:o.y+o.h/2}
- ];}
+ function polygonSignedArea(poly){
+  let area=0;
+  for(let i=0;i<poly.length;i++){
+   const a=poly[i],b=poly[(i+1)%poly.length];
+   area+=a.x*b.y-b.x*a.y;
+  }
+  return area/2;
+ }
+ function isConvexPolygon(poly){
+  if(!Array.isArray(poly)||poly.length<3||poly.length>32)return false;
+  let sign=0;
+  for(let i=0;i<poly.length;i++){
+   const a=poly[i],b=poly[(i+1)%poly.length],c=poly[(i+2)%poly.length];
+   if(!a||!b||!c||![a.x,a.y,b.x,b.y,c.x,c.y].every(Number.isFinite))return false;
+   const abx=b.x-a.x,aby=b.y-a.y,bcx=c.x-b.x,bcy=c.y-b.y;
+   if(Math.hypot(abx,aby)<1e-9)return false;
+   const cross=abx*bcy-aby*bcx;
+   if(Math.abs(cross)<1e-10)return false;
+   const current=Math.sign(cross);
+   if(sign&&current!==sign)return false;
+   sign=current;
+  }
+  return Math.abs(polygonSignedArea(poly))>1e-8;
+ }
+ function obstaclePoly(o){
+  if(Array.isArray(o.polygon))return o.polygon.map(point=>({x:point.x,y:point.y}));
+  return[
+   {x:o.x-o.w/2,y:o.y-o.h/2},{x:o.x+o.w/2,y:o.y-o.h/2},
+   {x:o.x+o.w/2,y:o.y+o.h/2},{x:o.x-o.w/2,y:o.y+o.h/2}
+  ];
+ }
+ function inflateConvexPolygon(poly,distance){
+  if(!isConvexPolygon(poly))throw new Error('Для расширения требуется конечный выпуклый многоугольник без вырожденных рёбер.');
+  if(!Number.isFinite(distance)||distance<0)throw new Error('Расстояние расширения должно быть конечным неотрицательным числом.');
+  let points=poly.map(point=>({x:point.x,y:point.y}));
+  if(polygonSignedArea(points)<0)points.reverse();
+  if(distance===0)return points;
+  const edges=points.map((a,index)=>{
+   const b=points[(index+1)%points.length];
+   const dx=b.x-a.x,dy=b.y-a.y,length=Math.hypot(dx,dy);
+   return {
+    a:{x:a.x+dy/length*distance,y:a.y-dx/length*distance},
+    b:{x:b.x+dy/length*distance,y:b.y-dx/length*distance},
+    direction:{x:dx,y:dy}
+   };
+  });
+  return points.map((_,index)=>{
+   const previous=edges[(index+edges.length-1)%edges.length];
+   const current=edges[index];
+   const rx=previous.direction.x,ry=previous.direction.y;
+   const sx=current.direction.x,sy=current.direction.y;
+   const denominator=rx*sy-ry*sx;
+   if(Math.abs(denominator)<1e-10)throw new Error('Невозможно устойчиво расширить почти вырожденный многоугольник.');
+   const qx=current.a.x-previous.a.x,qy=current.a.y-previous.a.y;
+   const t=(qx*sy-qy*sx)/denominator;
+   return {x:previous.a.x+t*rx,y:previous.a.y+t*ry};
+  });
+ }
+ function createGateObstacles(gate){
+  if(!gate||typeof gate!=='object')throw new Error('Параметры ворот отсутствуют.');
+  const {centerX,centerY,clearWidth,postWidth,depth,heading}=gate;
+  if(![centerX,centerY,clearWidth,postWidth,depth,heading].every(Number.isFinite)||
+     Math.abs(centerX)>10000||Math.abs(centerY)>10000||
+     clearWidth<=0||clearWidth>50||postWidth<=0||postWidth>5||
+     depth<=0||depth>10){
+   throw new Error('Ворота должны иметь конечное положение, курс, ширину проёма и положительные размеры косяков.');
+  }
+  const ux=Math.cos(heading),uy=Math.sin(heading);
+  const nx=-uy,ny=ux;
+  const halfOffset=clearWidth/2+postWidth/2;
+  const makePost=(side,name)=>{
+   const cx=centerX+side*halfOffset*ux;
+   const cy=centerY+side*halfOffset*uy;
+   const point=(along,across)=>({
+    x:cx+along*ux+across*nx,
+    y:cy+along*uy+across*ny
+   });
+   const polygon=[
+    point(-postWidth/2,-depth/2),
+    point(postWidth/2,-depth/2),
+    point(postWidth/2,depth/2),
+    point(-postWidth/2,depth/2)
+   ];
+   return {name,kind:'gate-jamb',polygon};
+  };
+  return [
+   makePost(-1,'Левый косяк ворот'),
+   makePost(1,'Правый косяк ворот')
+  ];
+ }
  function intersects(a,b){
   for(const poly of [a,b])for(let i=0;i<poly.length;i++){
    const n=poly[(i+1)%poly.length],c=poly[i],dx=n.x-c.x,dy=n.y-c.y,l=Math.hypot(dx,dy)||1;
@@ -70,9 +156,13 @@
     errors.push('Препятствие '+(index+1)+' имеет неверный формат.');
     return;
    }
-   if(!Number.isFinite(o.x)||!Number.isFinite(o.y)||
+   if(Array.isArray(o.polygon)){
+    if(!isConvexPolygon(o.polygon)){
+     errors.push('Препятствие '+(index+1)+' должно быть конечным невырожденным выпуклым многоугольником.');
+    }
+   }else if(!Number.isFinite(o.x)||!Number.isFinite(o.y)||
       !Number.isFinite(o.w)||!Number.isFinite(o.h)||o.w<=0||o.h<=0){
-    errors.push('Препятствие '+(index+1)+' должно иметь конечные координаты и положительные ширину/высоту.');
+    errors.push('Препятствие '+(index+1)+' должно иметь конечные координаты и положительные ширину/высоту либо выпуклый polygon.');
    }
   });
   return errors;
@@ -861,11 +951,21 @@ function planAlternativesWithGeometryUncertainty(options={}){
   return {ok:false,reason:'invalid-input',errors:['Суммарное расширение контура автопоезда не должно превышать 1 м на каждую внешнюю грань.'],expanded:0};
  }
  const obstacleExpansionPerSide=obstaclePositionUncertainty+obstacleSizeUncertainty/2;
- const expandedObstacles=options.obstacles.map(obstacle=>({
-  ...obstacle,
-  w:obstacle.w+2*obstacleExpansionPerSide,
-  h:obstacle.h+2*obstacleExpansionPerSide
- }));
+ const expandedObstacles=options.obstacles.map(obstacle=>{
+  if(Array.isArray(obstacle.polygon)){
+   // A radial offset of sqrt(2) times the per-axis bound contains every
+   // simultaneous X/Y translation within the configured rectangular error box.
+   return {
+    ...obstacle,
+    polygon:inflateConvexPolygon(obstacle.polygon,Math.SQRT2*obstacleExpansionPerSide)
+   };
+  }
+  return {
+   ...obstacle,
+   w:obstacle.w+2*obstacleExpansionPerSide,
+   h:obstacle.h+2*obstacleExpansionPerSide
+  };
+ });
  const baseOptions={...options};
  delete baseOptions.obstaclePositionUncertainty;
  delete baseOptions.obstacleSizeUncertainty;
@@ -893,7 +993,7 @@ function planAlternativesWithGeometryUncertainty(options={}){
   obstaclePositionUncertainty,obstacleSizeUncertainty,
   vehicleFootprintUncertainty,obstacleExpansionPerSide,
   footprintExpansionPerEdge:vehicleFootprintUncertainty,
-  obstacleModel:'axis-aligned rectangles expanded by bounded center and full-size tolerances',
+  obstacleModel:'axis-aligned rectangles expanded per axis; convex polygons receive a conservative radial offset covering the same per-axis bound',
   vehicleModel:'all three rectangular body contours expanded outward on every edge',
   kinematicParameterUncertaintyIncluded:false
  };
@@ -1195,5 +1295,5 @@ function planAlternativesWithVehicleParameterBounds(options={}){
  };
 }
 
-return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions});
+return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon});
 });
