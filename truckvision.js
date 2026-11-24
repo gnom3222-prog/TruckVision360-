@@ -831,6 +831,16 @@ if(result.reason==='uncertainty-sensitive-start'){
    if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: рекомендация меняется при учёте погрешности измерений.');
    plannedRoute=[];
    routeAssessment=null;
+   alternativeRoutes=Array.isArray(result.conservativeCandidateRoutes)?result.conservativeCandidateRoutes:[];
+   const chooser=$('alternativeRouteSelect');
+   chooser.innerHTML='<option value="">Выберите консервативный вариант…</option>';
+   alternativeRoutes.forEach((candidate,index)=>{
+    const option=document.createElement('option');
+    option.value=String(index);
+    option.textContent='Консервативный вариант '+(index+1)+' — '+candidate.label;
+    chooser.appendChild(option);
+   });
+   chooser.style.display=alternativeRoutes.length?'block':'none';
    const sensitivity=result.sensitivity||{};
    const describeAction=action=>{
     if(!action)return 'не выбрано';
@@ -845,7 +855,9 @@ if(result.reason==='uncertainty-sensitive-start'){
     ' м на каждую сторону ('+Number(sensitivity.reserveRequiredClearance||0).toFixed(2)+
     ' м требуемого зазора) дал '+describeAction(sensitivity.comparison?.reserveAction)+
     '. Однозначная сторона и передача не выбраны.';
-   $('difficultyAdvice').textContent='Маршрут не показывается как рекомендация и виртуальный автопроезд не запускается: учёт заданного резерва неопределённости меняет начальное действие. Уточните размеры ворот и препятствий, проверьте их рулеткой и повторите расчёт. Это проверка резерва зазора, а не полный анализ распределения ошибок камеры и геометрии автомобиля.';
+   $('difficultyAdvice').textContent=alternativeRoutes.length?
+    'Найден консервативный вариант с увеличенным запасом зазора. Выберите его в списке: после выбора программа отдельно проверит траекторию. Различие базового и резервного поиска останется отмеченным; это ограниченная проверка погрешности, а не полный анализ распределения ошибок камеры и геометрии автомобиля.':
+    'Маршрут не подтверждён даже консервативным поиском. Уточните размеры ворот и препятствий и повторите расчёт. Это проверка резерва зазора, а не полный анализ распределения ошибок камеры и геометрии автомобиля.';
    draw();
    return;
   }
