@@ -24,6 +24,8 @@ function bootSimulator(options={}){
  for(const name of ['beginPath','moveTo','lineTo','setLineDash','stroke','closePath','fill','fillText','arc','clearRect','fillRect']){
   ctx[name]=()=>{if(name==='clearRect')drawCalls++;};
  }
+ ctx.save=()=>{};
+ ctx.restore=()=>{};
  const makeElement=(id,value='')=>({
   id,value,textContent:'',style:{},onclick:null,oninput:null,onchange:null,
   children:[],appendChild(child){this.children.push(child);return child;}
