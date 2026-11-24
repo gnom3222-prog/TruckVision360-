@@ -56,7 +56,10 @@ let plannerWorker=null,plannerRequestId=0,plannerReject=null,routeBuildToken=0;
 // Учебный коридор: стены параллельны направлению движения (+X).
 // Между внутренними гранями стен остаётся 9.3 м; паллеты стоят
 // снаружи коридора и не перекрывают прямой тестовый маршрут к цели (22, 0).
-const cameraObstacles=[]; // Legacy diagnostic API; not part of the normal driver workflow.\nlet perceptionObstacles=[];\nlet perceptionFrameId=null;\nlet perceptionFrameTimestamp=0;
+const cameraObstacles=[]; // Legacy diagnostic API; not part of the normal driver workflow.
+let perceptionObstacles=[];
+let perceptionFrameId=null;
+let perceptionFrameTimestamp=0;
 const obstacles=[
  {x:8.0,y:3.3,w:1.2,h:1.2,name:'Паллет A'},
  {x:16.0,y:-3.3,w:1.0,h:1.0,name:'Паллет B'},
@@ -85,7 +88,8 @@ function sceneObstacles(){
   if(typeof invalidateRouteForSettingsChange==='function')invalidateRouteForSettingsChange();
  }
  const result=obstacles.map(obstacle=>({...obstacle}));
- result.push(...cameraObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point}))})));\n result.push(...perceptionObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point}))})));
+ result.push(...cameraObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point}))})));
+ result.push(...perceptionObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point}))})));
  const gateGeometry=gateGeometryForPlanner();
  if(gateGeometry)result.push(...planner.createGateObstacles(gateGeometry));
  return result;
@@ -96,7 +100,34 @@ const norm=a=>Math.atan2(Math.sin(a),Math.cos(a));
 const physics=window.TruckVisionPhysics;
 if(!physics)throw new Error('TruckVision physics module failed to load.');
 const planner=window.TruckVisionPlanner;
-if(!planner)throw new Error('TruckVision articulated planner module failed to load.');\nconst perception=window.TruckVisionPerception;\nif(!perception)throw new Error('TruckVision perception adapter failed to load.');\nfunction updatePerceptionStatus(message){\n const el=$('perceptionStatus');\n if(el)el.textContent=message;\n}\nwindow.TruckVisionSetPerceptionFrame=frame=>{\n const errors=perception.validateFrame(frame);\n if(errors.length){updatePerceptionStatus('Кадр отклонён: '+errors.join(' '));return {ok:false,errors};}\n let converted;\n try{converted=perception.toObstacles(frame,state);}\n catch(error){const list=[error.message||'Не удалось преобразовать координаты.'];updatePerceptionStatus('Кадр отклонён: '+list.join(' '));return {ok:false,errors:list};}\n perceptionObstacles=converted;\n perceptionFrameId=frame.frameId;\n perceptionFrameTimestamp=frame.timestamp;\n invalidateRouteForSettingsChange();\n updatePerceptionStatus('Датчики передали '+converted.length+' объектов · кадр '+frame.frameId+' · '+frame.objects.map(o=>o.source).filter((v,i,a)=>a.indexOf(v)===i).join(', '));\n draw();\n return {ok:true,accepted:converted.length,frameId:perceptionFrameId};\n};\nwindow.TruckVisionClearPerceptionFrame=()=>{\n perceptionObstacles=[];perceptionFrameId=null;perceptionFrameTimestamp=0;\n invalidateRouteForSettingsChange();\n updatePerceptionStatus('Нет активного кадра датчиков. Ожидание данных LiDAR/камер.');\n draw();return true;\n};\n
+if(!planner)throw new Error('TruckVision articulated planner module failed to load.');
+const perception=window.TruckVisionPerception;
+if(!perception)throw new Error('TruckVision perception adapter failed to load.');
+function updatePerceptionStatus(message){
+ const el=$('perceptionStatus');
+ if(el)el.textContent=message;
+}
+window.TruckVisionSetPerceptionFrame=frame=>{
+ const errors=perception.validateFrame(frame);
+ if(errors.length){updatePerceptionStatus('Кадр отклонён: '+errors.join(' '));return {ok:false,errors};}
+ let converted;
+ try{converted=perception.toObstacles(frame,state);}
+ catch(error){const list=[error.message||'Не удалось преобразовать координаты.'];updatePerceptionStatus('Кадр отклонён: '+list.join(' '));return {ok:false,errors:list};}
+ perceptionObstacles=converted;
+ perceptionFrameId=frame.frameId;
+ perceptionFrameTimestamp=frame.timestamp;
+ invalidateRouteForSettingsChange();
+ updatePerceptionStatus('Датчики передали '+converted.length+' объектов · кадр '+frame.frameId+' · '+frame.objects.map(o=>o.source).filter((v,i,a)=>a.indexOf(v)===i).join(', '));
+ draw();
+ return {ok:true,accepted:converted.length,frameId:perceptionFrameId};
+};
+window.TruckVisionClearPerceptionFrame=()=>{
+ perceptionObstacles=[];perceptionFrameId=null;perceptionFrameTimestamp=0;
+ invalidateRouteForSettingsChange();
+ updatePerceptionStatus('Нет активного кадра датчиков. Ожидание данных LiDAR/камер.');
+ draw();return true;
+};
+
 
 function readSettings(){
  const candidate={...cfg};
