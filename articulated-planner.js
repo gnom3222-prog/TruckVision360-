@@ -1100,7 +1100,11 @@ function planAlternativesWithGeometryUncertainty(options={}){
  if(!nominal.ok){
   return {
    ...nominal,
-   geometrySensitivity:{...geometryBounds,status:'nominal-unavailable'}
+   geometrySensitivity:{
+    ...geometryBounds,
+    status:nominal.reason==='ambiguous-start'?'nominal-ambiguous':'nominal-unavailable',
+    envelopeEvaluated:false
+   }
   };
  }
  if(!hasGeometryBounds){
