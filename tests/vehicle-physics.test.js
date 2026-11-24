@@ -97,8 +97,8 @@ test('vehicle geometry rejects a three-axle group extending beyond the trailer b
  const base={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55};
  const tooWide={...base,trailerAxleSpacing:5};
  const tooFarRear={...base,kingpinAxles:12,trailerAxleSpacing:1.3};
- assert.ok(physics.validateVehicleParams(tooWide).some(message=>message.includes('ось 3 выходит за границы')));
- assert.ok(physics.validateVehicleParams(tooFarRear).some(message=>message.includes('ось 3 выходит за границы')));
+ assert.ok(physics.validateVehicleParams(tooWide).some(message=>message.includes('положение оси 3')));
+ assert.ok(physics.validateVehicleParams(tooFarRear).some(message=>message.includes('положение оси 3')));
 });
 
 test('vehicle geometry accepts a long trailer with a correspondingly rearward axle group',()=>{
