@@ -22,9 +22,10 @@ The current adapter accepts `coordinateFrame: "vehicle-local"` only:
 - X: forward from the tractor reference point.
 - Y: left of the tractor.
 - Heading: radians, counter-clockwise from +X.
-- The frame's object pose is transformed into the simulator map using the tractor pose at ingestion time.
+- Every frame must include `vehiclePose: {x, y, heading}`: the tractor reference point and heading in the map coordinate system **at the same timestamp as the detections**.
+- Object positions and headings are transformed into map coordinates using that timestamped pose, never the browser's later/current pose.
 
-This first adapter uses the simulator's current tractor pose. A production vehicle integration must provide time-synchronized vehicle localization / pose at the sensor frame timestamp and transform detections using that timestamped pose. Do not feed moving-vehicle sensor frames into this prototype without that synchronization.
+The external localization source must synchronize its pose with the sensor timestamp. If that pose is unavailable or not synchronized, reject the frame rather than applying a guessed transform.
 
 ## Example frame
 
@@ -33,6 +34,7 @@ window.TruckVisionSetPerceptionFrame({
   frameId: "perception-000042",
   timestamp: Date.now(), // Unix epoch milliseconds
   coordinateFrame: "vehicle-local",
+  vehiclePose: { x: 100.0, y: 25.0, heading: 1.5708 }, // map pose at this exact timestamp
   objects: [{
     id: "track-17",
     type: "pallet",
@@ -49,6 +51,7 @@ window.TruckVisionSetPerceptionFrame({
 - Frame timestamp: no more than 1500 ms old and no more than 250 ms in the future.
 - Maximum 300 objects per frame.
 - Unique non-empty object IDs.
+- Finite timestamp-synchronized `vehiclePose` in map coordinates.
 - Object center within 60 m of the tractor reference point.
 - Finite pose; dimensions length 0.05–30 m and width 0.05–15 m.
 - Confidence in [0, 1]; source is lidar, camera or fused.
