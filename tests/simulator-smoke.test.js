@@ -137,3 +137,18 @@ test('negative measurement uncertainty blocks route playback instead of weakenin
  elements.routeStart.onclick();
  assert.match(elements.routeAdvice.textContent,/Автопроезд заблокирован/);
 });
+
+test('live assistant identifies the nearest vehicle part and named obstacle',()=>{
+ const {elements}=bootSimulator();
+ assert.match(elements.assistantAdvice.textContent,/Ближайший объект:/);
+ assert.match(elements.assistantAdvice.textContent,/Часть автопоезда: (тягач|кабина|полуприцеп)\./);
+ assert.match(elements.assistantAdvice.textContent,/Расчётный зазор/);
+});
+
+test('live assistant fails closed when obstacle checks are disabled',()=>{
+ const {elements}=bootSimulator();
+ elements.obstaclesToggle.onclick();
+ assert.match(elements.assistantAdvice.textContent,/Проверка препятствий отключена/);
+ assert.match(elements.assistantAdvice.textContent,/Свободный путь не подтверждён/);
+ assert.doesNotMatch(elements.assistantAdvice.textContent,/Путь по текущему положению свободен/);
+});
