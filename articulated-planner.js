@@ -133,17 +133,23 @@
    const poly=obstaclePoly(o);
    return {poly,bounds:polygonBounds(poly),name:o.name||'препятствие'};
   });
+  const bodyNames=['тягач','кабина','полуприцеп'];
   return function(q){
    const bodies=polygons(q,p),bodyBounds=bodies.map(polygonBounds);
-   let min=Infinity,hit=null;
+   let min=Infinity,hit=null,vehiclePart=null,bodyIndex=null;
    for(const obstacle of prepared){
     for(let i=0;i<bodies.length;i++){
      if(aabbDistance(bodyBounds[i],obstacle.bounds)>=min)continue;
      const d=polyDist(bodies[i],obstacle.poly);
-     if(d<min){min=d;hit=obstacle.name;}
+     if(d<min){
+      min=d;
+      hit=obstacle.name;
+      vehiclePart=bodyNames[i]||('часть '+(i+1));
+      bodyIndex=i;
+     }
     }
    }
-   return {distance:min,hit};
+   return {distance:min,hit,obstacle:hit,vehiclePart,bodyIndex};
   };
  }
  function sweptDisplacementPerMeter(steer,p,q=null,maxDistance=0.05){
@@ -228,13 +234,36 @@
    const e=goalErrors(q,goal);
    return e.position+0.45*(e.headingError??0)+0.35*e.articulation;
   };
-  const startClearance=checkClearance(start).distance;
-  if(startClearance===0)return {ok:false,reason:'start-collision',expanded:0};
+  const startCheck=checkClearance(start);
+  const startClearance=startCheck.distance;
+  const snapshot=(q,gear=1,steer=0)=>({
+   x:q.x,y:q.y,psi:q.psi,psiT:q.psiT,gear,steer
+  });
+  const startDetail=Number.isFinite(startClearance)?
+   {...startCheck,state:snapshot(start,1,0)}:null;
+  const initialSweptDetail=Number.isFinite(startClearance)?{
+   kind:'initial-pose',
+   lowerBound:startClearance,
+   state:snapshot(start,1,0),
+   referenceVehiclePart:startCheck.vehiclePart,
+   referenceObstacle:startCheck.obstacle
+  }:null;
+  if(startClearance===0)return {
+   ok:false,reason:'start-collision',expanded:0,startClearance,
+   minimumClearanceDetail:startDetail
+  };
   if(Number.isFinite(startClearance)&&startClearance<minClearance-1e-9){
-   return {ok:false,reason:'start-clearance-insufficient',expanded:0,startClearance,requiredClearance:minClearance};
+   return {
+    ok:false,reason:'start-clearance-insufficient',expanded:0,startClearance,
+    requiredClearance:minClearance,minimumClearanceDetail:startDetail
+   };
   }
   const requiredClearance=minClearance;
-  const initial={q:{...start},g:0,f:h(start),parent:null,gear:1,steer:0,samples:[],clearance:startClearance,sweptLowerBound:startClearance};
+  const initial={
+   q:{...start},g:0,f:h(start),parent:null,gear:1,steer:0,samples:[],
+   clearance:startClearance,clearanceDetail:startDetail,
+   sweptLowerBound:startClearance,sweptLowerBoundDetail:initialSweptDetail
+  };
   const open=[];push(open,initial);
   const best=new Map([[key(start),0]]);
   let expanded=0,finish=null,closest=initial;
@@ -259,8 +288,9 @@
    }
    if(goalReached(cur.q,goal,goalOptions)){finish=cur;break;}
    for(const [gear,steer] of controls){
-    let q={...cur.q},valid=true,minD=Infinity,samples=[];
-    let currentClearance=cur.clearance,sweptLowerBound=cur.sweptLowerBound,travelled=0;
+    let q={...cur.q},valid=true,minD=Infinity,minClearanceDetail=null,samples=[];
+    let currentClearance=cur.clearance,currentClearanceDetail=cur.clearanceDetail;
+    let sweptLowerBound=cur.sweptLowerBound,sweptLowerBoundDetail=cur.sweptLowerBoundDetail,travelled=0;
     while(travelled<primitive-1e-9){
      const remaining=primitive-travelled;
      let travel=Math.min(ds,remaining),displacementRate=0;
@@ -271,16 +301,36 @@
       travel=Math.min(travel,0.8*margin/displacementRate);
      }
      if(travel<5e-3){valid=false;break;}
+     const segmentStart={...q};
      const next=options.integrate(q,gear*0.7,steer,travel/0.7,params);
      if(next.x<bounds.minX||next.x>bounds.maxX||next.y<bounds.minY||next.y>bounds.maxY||
         Math.abs(norm(next.psi-next.psiT))>Math.PI*0.92){valid=false;break;}
      const c=checkClearance(next);
      if(c.distance<requiredClearance-1e-9){valid=false;break;}
      const segmentLowerBound=Number.isFinite(currentClearance)?currentClearance-displacementRate*travel:Infinity;
-     sweptLowerBound=Math.min(sweptLowerBound,segmentLowerBound);
-     minD=Math.min(minD,c.distance);
+     if(segmentLowerBound<sweptLowerBound-1e-12){
+      sweptLowerBound=segmentLowerBound;
+      sweptLowerBoundDetail={
+       kind:'segment-lower-bound',
+       lowerBound:segmentLowerBound,
+       from:snapshot(segmentStart,gear,steer),
+       to:snapshot(next,gear,steer),
+       stepDistance:travel,
+       displacementRate,
+       referenceDistance:currentClearance,
+       referenceVehiclePart:currentClearanceDetail?.vehiclePart||null,
+       referenceObstacle:currentClearanceDetail?.obstacle||null
+      };
+     }
+     if(c.distance<minD){
+      minD=c.distance;
+      minClearanceDetail=Number.isFinite(c.distance)?
+       {...c,state:snapshot(next,gear,steer)}:null;
+     }
      q=next;
      currentClearance=c.distance;
+     currentClearanceDetail=Number.isFinite(c.distance)?
+      {...c,state:snapshot(next,gear,steer)}:null;
      travelled+=travel;
      samples.push({x:q.x,y:q.y,psi:q.psi,psiT:q.psiT,gear,steer});
     }
@@ -291,7 +341,12 @@
     const ng=cur.g+primitive+gearPenalty+steerPenalty;
     if(ng>=(best.get(nk)??Infinity))continue;
     best.set(nk,ng);
-    push(open,{q,g:ng,f:ng+h(q),parent:cur,gear,steer,minClearance:minD,samples,clearance:currentClearance,sweptLowerBound});
+    push(open,{
+     q,g:ng,f:ng+h(q),parent:cur,gear,steer,minClearance:minD,
+     minClearanceDetail,samples,clearance:currentClearance,
+     clearanceDetail:currentClearanceDetail,
+     sweptLowerBound,sweptLowerBoundDetail
+    });
    }
   }
   if(!finish){
@@ -304,8 +359,23 @@
   chain.reverse();
   const states=[{x:start.x,y:start.y,psi:start.psi,psiT:start.psiT,gear:1,steer:0}];
   for(const n of chain)states.push(...n.samples);
-  const pathMinimum=Math.min(startClearance,...chain.map(n=>n.minClearance));
-  return {ok:true,states,expanded,length:finish.g,minimumClearance:pathMinimum,minimumClearanceLowerBound:finish.sweptLowerBound,requiredClearance,terminalErrors:goalErrors(finish.q,goal)};
+  let pathMinimum=startClearance;
+  let minimumClearanceDetail=startDetail;
+  for(const node of chain){
+   if(node.minClearance<pathMinimum){
+    pathMinimum=node.minClearance;
+    minimumClearanceDetail=node.minClearanceDetail;
+   }
+  }
+  return {
+   ok:true,states,expanded,length:finish.g,
+   minimumClearance:pathMinimum,
+   minimumClearanceDetail,
+   minimumClearanceLowerBound:finish.sweptLowerBound,
+   sweptClearanceDetail:finish.sweptLowerBoundDetail,
+   requiredClearance,
+   terminalErrors:goalErrors(finish.q,goal)
+  };
  }
  function recommendStart(states,options={}){
   if(!Array.isArray(states)||states.length<2)return {ok:false,reason:'route-too-short'};
