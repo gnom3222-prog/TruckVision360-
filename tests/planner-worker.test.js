@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 
-test('planner worker returns progress and a reverse-capable articulated route',()=>{
+test('planner worker reports ambiguous reverse starts instead of choosing one arbitrarily',()=>{
  const messages=[];
  let onMessage=null;
  const sandbox={};
@@ -37,6 +37,12 @@ test('planner worker returns progress and a reverse-capable articulated route',(
  assert.ok(messages.some(m=>m.id===17&&m.type==='progress'),'worker should send progress');
  const resultMessage=messages.find(m=>m.id===17&&m.type==='result');
  assert.ok(resultMessage,'worker should return a result');
- assert.equal(resultMessage.result.ok,true,JSON.stringify(resultMessage.result));
- assert.ok(resultMessage.result.states.some((q,i)=>i>0&&q.gear===-1),'route should contain reverse movement');
+ assert.equal(resultMessage.result.ok,false,JSON.stringify(resultMessage.result));
+ assert.equal(resultMessage.result.reason,'ambiguous-start');
+ assert.equal(resultMessage.result.status,'ambiguous');
+ assert.equal(resultMessage.result.candidatesAttempted,5);
+ assert.ok(resultMessage.result.candidatesFound>=2);
+ assert.equal(resultMessage.result.comparison.recommendation,null,'ambiguous candidates must not produce a single start recommendation');
+ assert.ok(resultMessage.result.candidateSummaries.some(candidate=>candidate.initialGear===-1&&candidate.firstTurn==='left'));
+ assert.ok(resultMessage.result.candidateSummaries.some(candidate=>candidate.initialGear===-1&&candidate.firstTurn==='right'));
 });
