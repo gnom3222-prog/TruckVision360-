@@ -430,14 +430,12 @@ function planAStar(start,goal){
 
 function routeMetrics(path,minimumClearanceLowerBound=Infinity){
  let length=0,gearChanges=0,steeringChanges=0,reverseDistance=0,reverseSegments=0;
- let minClearance=Infinity,maxBeta=0,collision=false,maxAxleScrubSpeed=0;
+ let minClearance=Infinity,maxBeta=0,collision=false;
  const checkClearance=showObstacles?planner.createClearanceChecker(obstacles,cfg):null;
  let previousGear=path[0]?.gear||1,previousSteer=path[0]?.steer||0,wasReverse=false;
  for(let i=0;i<path.length;i++){
   const q=path[i];
   maxBeta=Math.max(maxBeta,Math.abs(norm(q.psi-q.psiT))*180/Math.PI);
-  const scrub=physics.trailerAxleDiagnostics(q,(q.gear||1)*0.7,q.steer||0,cfg);
-  maxAxleScrubSpeed=Math.max(maxAxleScrubSpeed,scrub.maxAbsLateralVelocity);
   if(i>0){
    const prev=path[i-1];
    const segmentLength=Math.hypot(q.x-prev.x,q.y-prev.y);
@@ -459,6 +457,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity){
    if(c.distance<=1e-9)collision=true;
   }
  }
+ const scrubExposure=physics.trailerAxleScrubExposure(path,cfg,0.7);
  const turns=gearChanges+steeringChanges;
  const clearanceForAssessment=Math.min(minClearance,minimumClearanceLowerBound);
  const effectiveClearance=clearanceForAssessment-2*Math.max(0,cfg.measurementUncertainty);
@@ -483,8 +482,17 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity){
  if(terminalArticulationMismatch)reasons.push('полуприцеп не выровнен в заданном допуске');
  if(articulationBlocked)reasons.push('угол сочленения достиг 55°');
  if(clearanceInsufficient)reasons.push('недостаточный зазор после резерва погрешности');
+ if(scrubExposure.maxAbsLateralVelocity>1e-3){
+  reasons.push('геометрический индикатор бокового перемещения крайних осей: до '+scrubExposure.maxAbsLateralVelocity.toFixed(3)+' м/с; интегральный proxy '+scrubExposure.totalAbsoluteLateralTravel.toFixed(2)+' м, не модель шин');
+ }
  if(!reasons.length)reasons.push('в проверенной модели препятствия не пересечены');
- return {length,turns,gearChanges,steeringChanges,reverseDistance,reverseSegments,maxAxleScrubSpeed,level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',maxBeta,clearance:minClearance,clearanceLowerBound:clearanceForAssessment,effectiveClearance,collision,reached,finalHeadingErrorDeg,finalArticulationDeg,clearanceInsufficient,articulationBlocked,reasons};
+ return {length,turns,gearChanges,steeringChanges,reverseDistance,reverseSegments,
+  maxAxleScrubSpeed:scrubExposure.maxAbsLateralVelocity,
+  axleScrubTravelProxy:scrubExposure.totalAbsoluteLateralTravel,
+  axleScrubTravelByAxle:scrubExposure.cumulativeAbsoluteLateralTravelByAxle,
+  level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',
+  maxBeta,clearance:minClearance,clearanceLowerBound:clearanceForAssessment,effectiveClearance,
+  collision,reached,finalHeadingErrorDeg,finalArticulationDeg,clearanceInsufficient,articulationBlocked,reasons};
 }
 
 function cancelPlannerWorker(reason='Расчёт маршрута отменён.'){
@@ -655,7 +663,7 @@ async function buildRoute(){
   $('difficultyAdvice').textContent=
    'Сложность: '+m.level+'. Причины: '+m.reasons.join('; ')+
    '. Максимальный угол сочленения '+m.maxBeta.toFixed(1)+'°; конечная ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+
-   '°; конечный угол тягач–полуприцеп '+m.finalArticulationDeg.toFixed(1)+'°; оценка боковой скорости крайних осей при расчётной скорости 0,7 м/с '+m.maxAxleScrubSpeed.toFixed(3)+' м/с; минимальный зазор до тестовых препятствий '+
+   '°; конечный угол тягач–полуприцеп '+m.finalArticulationDeg.toFixed(1)+'°; геометрический индикатор боковой скорости крайних осей при расчётной скорости 0,7 м/с '+m.maxAxleScrubSpeed.toFixed(3)+' м/с; интегральный proxy бокового перемещения осей '+m.axleScrubTravelProxy.toFixed(2)+' м (не модель шин); минимальный зазор до тестовых препятствий '+
    (Number.isFinite(m.clearance)?m.clearance.toFixed(2)+' м':'не определён')+
    '; консервативная нижняя оценка между узлами '+(Number.isFinite(m.clearanceLowerBound)?m.clearanceLowerBound.toFixed(2)+' м':'не ограничена')+
    '; после резерва погрешности: '+(Number.isFinite(m.effectiveClearance)?m.effectiveClearance.toFixed(2)+' м':'не определено')+
