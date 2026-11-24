@@ -377,6 +377,40 @@
    terminalErrors:goalErrors(finish.q,goal)
   };
  }
+ function articulationExposure(states){
+  if(!Array.isArray(states)||states.length===0)throw new Error('Route states are required for articulation exposure.');
+  let distance=0,peak=null;
+  for(let i=0;i<states.length;i++){
+   const current=states[i];
+   if(!current||![current.x,current.y,current.psi,current.psiT].every(Number.isFinite)){
+    throw new Error('Route state '+i+' has invalid coordinates or headings for articulation exposure.');
+   }
+   if(i>0){
+    const previous=states[i-1];
+    distance+=Math.hypot(current.x-previous.x,current.y-previous.y);
+   }
+   const signedAngle=norm(current.psi-current.psiT);
+   const magnitude=Math.abs(signedAngle);
+   if(!peak||magnitude>peak.maxAngleRadians){
+    const gear=(current.gear??1)<0?-1:1;
+    peak={
+     maxAngleRadians:magnitude,
+     maxAngleDegrees:magnitude*180/Math.PI,
+     signedAngleRadians:signedAngle,
+     signedAngleDegrees:signedAngle*180/Math.PI,
+     stateIndex:i,
+     segmentIndex:Math.max(0,i-1),
+     distanceAlongRoute:distance,
+     gear,
+     state:{
+      x:current.x,y:current.y,psi:current.psi,psiT:current.psiT,
+      gear,steer:Number.isFinite(current.steer)?current.steer:0
+     }
+    };
+   }
+  }
+  return peak;
+ }
  function recommendStart(states,options={}){
   if(!Array.isArray(states)||states.length<2)return {ok:false,reason:'route-too-short'};
   const steeringThreshold=Number.isFinite(options.steeringThreshold)&&options.steeringThreshold>0?options.steeringThreshold:0.08;
@@ -408,5 +442,5 @@
   };
  }
 
- return Object.freeze({plan,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,recommendStart,validatePlanOptions});
+ return Object.freeze({plan,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,articulationExposure,recommendStart,validatePlanOptions});
 });
