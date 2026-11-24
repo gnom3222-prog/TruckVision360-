@@ -298,15 +298,13 @@ canvas{max-width:100%}
 </div>
 <p class="small">Например, лист A4 в альбомной ориентации: 0,297 × 0,210 м. Значения неопределённости — вводимые предположения для оценки чувствительности, а не измеренные характеристики камеры.</p>
 <div class="camera-actions"><button id="cameraCalibrate">1 · Калибровать по 4 углам эталона</button><button id="cameraMeasureGate" class="primary">2 · Измерить 4 угла ворот</button><button id="cameraReset">Сбросить калибровку</button></div>
-<div class="section">Добавление препятствия на карту</div>
-<div class="grid">
- <div><label for="cameraObstacleX">Центр препятствия X, м</label><input id="cameraObstacleX" type="number" value="10" step="0.1"></div>
- <div><label for="cameraObstacleY">Центр препятствия Y, м</label><input id="cameraObstacleY" type="number" value="2" step="0.1"></div>
- <div><label for="cameraObstacleHeading">Ориентация длинной стороны, °</label><input id="cameraObstacleHeading" type="number" min="-180" max="180" value="0" step="1"></div>
- <div><label for="cameraObstacleName">Название объекта</label><input id="cameraObstacleName" type="text" value="Препятствие камеры"></div>
+<div class="section">Автоматическое окружение · LiDAR + камеры</div>
+<div class="assistant-box">
+ <strong>Вход данных внешней системы восприятия</strong>
+ <p class="small">В обычной работе водитель не отмечает препятствия и не вводит их размеры. Внешний вычислительный блок объединяет LiDAR и камеры и передаёт сюда уже распознанные объекты.</p>
+ <p id="perceptionStatus" class="camera-status" aria-live="polite">Нет активного кадра датчиков. Ожидание данных LiDAR/камер.</p>
+ <p class="small">Сейчас подготовлен программный интерфейс приёма готовых объектов. Физическое подключение датчиков и распознавание до 50 м ещё не реализованы: они зависят от выбранного оборудования и внешнего вычислительного блока. Ручная регистрация препятствий больше не является основным сценарием.</p>
 </div>
-<div class="camera-actions"><button id="cameraMeasureObstacle" class="primary">3 · Отметить 4 угла препятствия</button><button id="cameraClearObstacles">Очистить добавленные объекты</button></div>
-<p class="small">Для этого режима нужна отдельная калибровка в плоскости пола. Отметьте четыре угла основания объекта по часовой стрелке. Размеры будут измерены по перспективно исправленному изображению; центр и ориентацию на карте нужно ввести вручную. Это камера-ассистированная регистрация, а не автоматическое распознавание.</p>
 
 <div id="cameraStatus" class="camera-status" aria-live="polite">Камера выключена. Положите прямоугольный эталон в плоскость ворот, откройте камеру и отметьте четыре его угла.</div>
 <p class="small">Перед измерением задайте в разделе «Ворота» центр проёма X/Y и направление линии косяков относительно оси +X. После успешной калибровки и измерения приложение перенесёт ширину и эту вручную заданную опорную позу в карту и включит два косяка как препятствия. Камера измеряет ширину в плоскости эталона, но не определяет мировые координаты или курс площадки.</p>
@@ -322,8 +320,8 @@ canvas{max-width:100%}
 </main>
 
 <script src="vehicle-physics.js?v=20261124-6"></script>
-<script src="articulated-planner.js?v=20261124-18"></script>
-<script src="truckvision.js?v=20261124-31"></script>
+<script src="articulated-planner.js?v=20261124-18"></script>\n<script src="sensor-perception.js?v=20261124-1"></script>
+<script src="truckvision.js?v=20261124-32"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261124-13"></script>
 <script src="camera-measure.js?v=20261124-16"></script>
