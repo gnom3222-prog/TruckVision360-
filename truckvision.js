@@ -111,7 +111,7 @@ window.TruckVisionSetPerceptionFrame=frame=>{
  const errors=perception.validateFrame(frame);
  if(errors.length){updatePerceptionStatus('Кадр отклонён: '+errors.join(' '));return {ok:false,errors};}
  let converted;
- try{converted=perception.toObstacles(frame,state);}
+ try{converted=perception.toObstacles(frame);}
  catch(error){const list=[error.message||'Не удалось преобразовать координаты.'];updatePerceptionStatus('Кадр отклонён: '+list.join(' '));return {ok:false,errors:list};}
  perceptionObstacles=converted;
  perceptionFrameId=frame.frameId;
