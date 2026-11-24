@@ -25,7 +25,7 @@ jobs:
 
       - name: Syntax-check application modules
         run: |
-          for file in vehicle-physics.js articulated-planner.js truckvision.js planner-worker.js camera-geometry.js camera-measure.js sw.js; do
+          for file in vehicle-physics.js articulated-planner.js sensor-perception.js truckvision.js planner-worker.js camera-geometry.js camera-measure.js sw.js; do
             node --check "$file"
           done
 
