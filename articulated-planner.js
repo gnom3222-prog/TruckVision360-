@@ -297,7 +297,10 @@
    const firstActionConstraint=options.firstActionConstraint;
    if(firstActionConstraint&&!cur.firstTurnChosen){
     activeControls=controls.filter(([gear,steer])=>{
-     if(!cur.parent&&gear!==firstActionConstraint.initialGear)return false;
+     if(!cur.parent){
+      if(gear!==firstActionConstraint.initialGear)return false;
+      return firstActionConstraint.firstTurn==='left'?steer>=0.08:steer<=-0.08;
+     }
      if(Math.abs(steer)<0.08)return true;
      return firstActionConstraint.firstTurn==='left'?steer>0:steer<0;
     }).sort((a,b)=>Math.abs(a[1])-Math.abs(b[1]));
