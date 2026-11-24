@@ -158,7 +158,12 @@
   const tractorYawPerMeter=Math.abs(Math.tan(steer)/wheelbase);
   const tractorRadius=Math.hypot(5,2.55/2);
   const cabRadiusFromRearAxle=2.1+Math.hypot(1.35,2.25/2);
-  const trailerRadius=Math.hypot(Math.max(1.5,Math.abs(trailerLength-1.5)),trailerWidth/2);
+  // vehiclePolygons() places the trailer body relative to the kingpin, while
+  // the articulated yaw reference is the equivalent axle-group center.
+  // Bound the farthest body corner from that center, not from the kingpin.
+  const trailerFrontFromAxle=kingpinAxles+1.5;
+  const trailerRearFromAxle=kingpinAxles-(trailerLength-1.5);
+  const trailerRadius=Math.hypot(Math.max(Math.abs(trailerFrontFromAxle),Math.abs(trailerRearFromAxle)),trailerWidth/2);
   const globalTrailerYawPerMeter=(1+hitchOffset*tractorYawPerMeter)/kingpinAxles;
   let maxSin=1,maxCos=1;
   if(q){
