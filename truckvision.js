@@ -406,6 +406,7 @@ function sweptClearanceColor(pathIndex,polygons,obstaclePolygons){
   }
  }
  const reserve=2*Math.max(0,cfg.measurementUncertainty);
+ if(!showObstacles)return 'rgba(125,165,205,0.15)';
  const effective=nearest-reserve;
  if(effective<0.45)return 'rgba(255,92,92,0.22)';
  if(effective<1.0)return 'rgba(255,190,82,0.20)';
@@ -423,7 +424,13 @@ function drawSweptCorridor(path,kind){
  const last=path[path.length-1];
  if(last&&samples[samples.length-1]!==last&&[last.x,last.y,last.psi,last.psiT].every(Number.isFinite))samples.push(last);
  if(samples.length<2)return;
- const obstaclePolygons=showObstacles?sceneObstacles().map(obstaclePolygon):[];
+ const obstaclePolygons=showObstacles?sceneObstacles().map(obstacle=>{
+  const nominal=obstaclePolygon(obstacle);
+  const expansion=cfg.obstaclePositionUncertainty+cfg.obstacleSizeUncertainty/2;
+  return Array.isArray(obstacle.polygon)?
+   planner.inflateConvexPolygon(nominal,Math.SQRT2*expansion):
+   obstaclePolygon({...obstacle,w:obstacle.w+2*expansion,h:obstacle.h+2*expansion});
+ }):[];
  let previous=null;
  for(const q of samples){
   const polygons=physics.vehiclePolygons(q,{...cfg,footprintUncertainty:cfg.vehicleFootprintUncertainty});
