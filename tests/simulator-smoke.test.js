@@ -43,7 +43,7 @@ function bootSimulator(){
   console
  };
  vm.runInNewContext(source,sandbox,{filename:'truckvision.js'});
- return {elements,frames,get drawCalls(){return drawCalls;}};
+ return {elements,frames,windowObject,get drawCalls(){return drawCalls;}};
 }
 
 test('planner goal pose checks wrapped heading and trailer articulation',()=>{
@@ -172,4 +172,33 @@ test('simulator explains joint endpoint and one-factor midpoint parameter covera
  assert.match(source,/stable-across-pairwise-endpoint-scenarios/);
  assert.match(source,/середины отдельных диапазонов по одному параметру/);
  assert.match(source,/не полный перебор всех комбинаций/);
+});
+
+
+test('camera registration atomically applies measured gate pose and enables jamb obstacles',()=>{
+ const {elements,windowObject}=bootSimulator();
+ const applied=windowObject.TruckVisionApplyGateRegistration({
+  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37
+ });
+ assert.equal(applied,true);
+ assert.equal(elements.gateWidth.value,'3.80');
+ assert.equal(elements.gateCenterX.value,'14.50');
+ assert.equal(elements.gateCenterY.value,'-2.25');
+ assert.equal(elements.gateHeadingDeg.value,'37.00');
+ assert.equal(elements.gateEnabled.checked,true);
+ assert.match(elements.routeAdvice.textContent,/Параметры модели изменены/);
+});
+
+test('camera registration rejects invalid gate width without changing current map settings',()=>{
+ const {elements,windowObject}=bootSimulator();
+ const before=[elements.gateWidth.value,elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value];
+ const applied=windowObject.TruckVisionApplyGateRegistration({
+  centerX:14.5,centerY:-2.25,clearWidth:0.4,headingDeg:37
+ });
+ assert.equal(applied,false);
+ assert.deepEqual(
+  [elements.gateWidth.value,elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value],
+  before
+ );
+ assert.notEqual(elements.gateEnabled.checked,true);
 });
