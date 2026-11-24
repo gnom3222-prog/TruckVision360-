@@ -33,6 +33,27 @@
     errors.push(key+': значение вне допустимого диапазона '+limits.min+'–'+limits.max+'.');
    }
   }
+  // The three axle centers must remain inside the trailer body's longitudinal envelope.
+  // The body extends 1.5 m ahead of the kingpin and trailerLength - 1.5 m behind it.
+  const spacing=params.trailerAxleSpacing===undefined||params.trailerAxleSpacing===null?
+   1.3:params.trailerAxleSpacing;
+  const validAxleEnvelope=Number.isFinite(params.kingpinAxles)&&
+   params.kingpinAxles>=VEHICLE_PARAMETER_LIMITS.kingpinAxles.min&&
+   params.kingpinAxles<=VEHICLE_PARAMETER_LIMITS.kingpinAxles.max&&
+   Number.isFinite(params.trailerLength)&&
+   params.trailerLength>=VEHICLE_PARAMETER_LIMITS.trailerLength.min&&
+   params.trailerLength<=VEHICLE_PARAMETER_LIMITS.trailerLength.max&&
+   Number.isFinite(spacing)&&spacing>=0.3&&spacing<=5;
+  if(validAxleEnvelope){
+   const bodyFront=1.5;
+   const bodyRear=-(params.trailerLength-1.5);
+   [spacing,0,-spacing].forEach((offset,index)=>{
+    const position=-params.kingpinAxles+offset;
+    if(position>bodyFront+1e-9||position<bodyRear-1e-9){
+     errors.push('trailerAxleSpacing: продольное положение оси '+(index+1)+' выходит за границы кузова полуприцепа.');
+    }
+   });
+  }
   return errors;
  }
 
@@ -141,5 +162,64 @@
   };
  }
 
- return Object.freeze({norm,validateVehicleParams,derivative,rk4,hitchPoint,axlePoint,trailerAxlePoints,trailerAxleDiagnostics,vehiclePolygons});
+ // Integrates a rigid-axle-group geometric incompatibility proxy along a sampled path.
+ // It is not a tire-slip, tire-force, wear, or thermal model.
+ function trailerAxleScrubExposure(path,params,nominalSpeed=0.7){
+  const errors=validateVehicleParams(params);
+  if(errors.length)throw new Error('Некорректная геометрия осевой группы: '+errors.join(' '));
+  if(!Array.isArray(path))throw new Error('Траектория должна быть массивом состояний.');
+  if(!Number.isFinite(nominalSpeed)||nominalSpeed<=0||nominalSpeed>20){
+   throw new Error('Расчётная скорость должна быть больше нуля и не превышать 20 м/с.');
+  }
+  const readState=(q,index)=>{
+   if(!q||![q.x,q.y,q.psi,q.psiT].every(Number.isFinite)){
+    throw new Error('Состояние траектории '+(index+1)+' содержит некорректные координаты или углы.');
+   }
+   const gear=q.gear===undefined?1:q.gear;
+   const steer=q.steer===undefined?0:q.steer;
+   if(gear!==1&&gear!==-1)throw new Error('Передача в состоянии '+(index+1)+' должна быть +1 или -1.');
+   if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2){
+    throw new Error('Угол руля в состоянии '+(index+1)+' некорректен.');
+   }
+   return {gear,steer};
+  };
+  const axleTravel=trailerAxleOffsets(params).map(()=>0);
+  let maxAbsLateralVelocity=0;
+  const states=path.map((q,index)=>{
+   const control=readState(q,index);
+   const diagnostic=trailerAxleDiagnostics(q,control.gear*nominalSpeed,control.steer,params);
+   maxAbsLateralVelocity=Math.max(maxAbsLateralVelocity,diagnostic.maxAbsLateralVelocity);
+   return {q,control};
+  });
+  for(let i=1;i<states.length;i++){
+   const previous=states[i-1],current=states[i];
+   const distance=Math.hypot(current.q.x-previous.q.x,current.q.y-previous.q.y);
+   if(distance<=0)continue;
+   const midpoint={
+    x:(previous.q.x+current.q.x)/2,
+    y:(previous.q.y+current.q.y)/2,
+    psi:norm(previous.q.psi+norm(current.q.psi-previous.q.psi)/2),
+    psiT:norm(previous.q.psiT+norm(current.q.psiT-previous.q.psiT)/2)
+   };
+   const diagnostic=trailerAxleDiagnostics(
+    midpoint,current.control.gear*nominalSpeed,current.control.steer,params
+   );
+   maxAbsLateralVelocity=Math.max(maxAbsLateralVelocity,diagnostic.maxAbsLateralVelocity);
+   const elapsed=distance/nominalSpeed;
+   diagnostic.axles.forEach((axle,index)=>{
+    axleTravel[index]+=Math.abs(axle.lateralVelocity)*elapsed;
+   });
+  }
+  const totalAbsoluteLateralTravel=axleTravel.reduce((sum,value)=>sum+value,0);
+  return {
+   nominalSpeed,
+   maxAbsLateralVelocity,
+   cumulativeAbsoluteLateralTravelByAxle:axleTravel,
+   maxAbsoluteLateralTravelByAxle:axleTravel.length?Math.max(...axleTravel):0,
+   totalAbsoluteLateralTravel,
+   model:'rigid-axle-group-kinematic-proxy'
+  };
+ }
+
+ return Object.freeze({norm,validateVehicleParams,derivative,rk4,hitchPoint,axlePoint,trailerAxlePoints,trailerAxleDiagnostics,trailerAxleScrubExposure,vehiclePolygons});
 });
