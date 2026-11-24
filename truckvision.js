@@ -45,11 +45,14 @@ let plannedRoute=[],routeGoal=null,routeAssessment=null;
 let routePlayback={active:false,paused:false,index:1,stopReason:'',currentGear:1};
 let plannerWorker=null,plannerRequestId=0,plannerReject=null,routeBuildToken=0;
 
+// Учебный коридор: стены параллельны направлению движения (+X).
+// Между внутренними гранями стен остаётся 9.3 м; паллеты стоят
+// снаружи коридора и не перекрывают прямой тестовый маршрут к цели (22, 0).
 const obstacles=[
- {x:8.0,y:2.9,w:1.2,h:1.2,name:'Паллет A'},
- {x:11.5,y:-2.9,w:1.0,h:1.0,name:'Паллет B'},
- {x:15.0,y:0.0,w:0.7,h:6.0,name:'Стена справа'},
- {x:6.5,y:-5.0,w:0.7,h:5.0,name:'Стена слева'}
+ {x:8.0,y:3.3,w:1.2,h:1.2,name:'Паллет A'},
+ {x:16.0,y:-3.3,w:1.0,h:1.0,name:'Паллет B'},
+ {x:13.0,y:5.0,w:16.0,h:0.7,name:'Стена слева'},
+ {x:13.0,y:-5.0,w:16.0,h:0.7,name:'Стена справа'}
 ];
 
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -619,7 +622,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261124-9');
+   worker=new Worker('./planner-worker.js?v=20261124-10');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
