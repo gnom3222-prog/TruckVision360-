@@ -161,3 +161,33 @@ test('camera measurement exposes a conditioning warning for a very thin calibrat
  assert.ok(result.conditionEstimate>camera.CONDITION_WARNING_ESTIMATE);
  assert.equal(result.conditioningWarning,true);
 });
+
+
+test('camera-measured gate registers its clear opening on a manually anchored map axis',()=>{
+ const points=[
+  {x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2}
+ ];
+ const result=camera.registerGateOnMap(
+  {width:4,points},
+  {x:12,y:-3},
+  Math.PI/2
+ );
+ near(result.centerX,12);
+ near(result.centerY,-3);
+ near(result.headingDeg,90);
+ near(result.openingStart.x,12);
+ near(result.openingStart.y,-5);
+ near(result.openingEnd.x,12);
+ near(result.openingEnd.y,-1);
+ near(result.sourceAxisLength,4);
+ assert.equal(result.mapRegistration,'manual-center-and-heading');
+});
+
+test('camera gate map registration rejects missing or invalid manual map pose',()=>{
+ const measurement={width:4,points:[
+  {x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2}
+ ]};
+ assert.throws(()=>camera.registerGateOnMap(measurement,{x:NaN,y:0},0));
+ assert.throws(()=>camera.registerGateOnMap(measurement,{x:0,y:0},Infinity));
+ assert.throws(()=>camera.registerGateOnMap({...measurement,points:[]},{x:0,y:0},0));
+});
