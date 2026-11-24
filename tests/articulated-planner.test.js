@@ -623,7 +623,7 @@ test('uncertainty-aware alternatives add twice the per-side reserve to required 
 });
  
 test('uncertainty-aware alternatives reject a route that only meets the nominal clearance',()=>{
- const obstacle={x:2,y:2.25,w:1,h:0.5,name:'near-side wall'};
+ const obstacle={x:2,y:2,w:1,h:0.5,name:'near-side wall'};
  const start={x:0,y:0,psi:0,psiT:0};
  const initialClearance=planner.clearance(start,[obstacle],params).distance;
  assert.ok(initialClearance>0.30&&initialClearance<0.50,
