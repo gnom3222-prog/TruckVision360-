@@ -679,7 +679,7 @@ test('geometry uncertainty envelope rejects a nominal route with insufficient ex
  const result=planner.planAlternativesWithGeometryUncertainty({
   start,goal:{x:2,y:0},params,obstacles:[obstacle],integrate,
   maxExpansions:1200,alternativeMaxExpansions:1200,
-  minClearance:0.30,measurementUncertainty:0,
+  minClearance:0.30,measurementUncertainty:0,costTolerance:0,
   obstaclePositionUncertainty:0.05,
   obstacleSizeUncertainty:0.02,
   vehicleFootprintUncertainty:0.03,
