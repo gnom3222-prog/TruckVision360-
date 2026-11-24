@@ -727,6 +727,21 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   collision,reached,finalHeadingErrorDeg,finalArticulationDeg,clearanceInsufficient,articulationBlocked,reasons};
 }
 
+function updateRecommendationCard(data={}){
+ const fields={
+  recommendationStatus:data.status||'Ожидает расчёта',
+  recommendationLevel:data.level||'Не рассчитана',
+  recommendationStart:data.start||'Сначала постройте маршрут',
+  recommendationTurn:data.turn||'Пока не определено',
+  recommendationReasons:data.reasons||'Нужен расчёт полной траектории и зазоров',
+  recommendationCheck:data.check||'Рекомендация относится только к виртуальной модели'
+ };
+ for(const [id,value] of Object.entries(fields)){
+  const element=$(id);
+  if(element)element.textContent=value;
+ }
+}
+
 function cancelPlannerWorker(reason='Расчёт маршрута отменён.'){
  const reject=plannerReject;
  plannerReject=null;
@@ -821,6 +836,7 @@ async function buildRoute(){
  $('planRoute').disabled=true;
  $('routeAdvice').textContent='Запускаю фоновый расчёт траектории…';
  $('difficultyAdvice').textContent='Проверяю полный контур тягача и полуприцепа, включая задний ход…';
+ updateRecommendationCard({status:'Идёт расчёт',start:'Сравниваю варианты движения вперёд и назад',turn:'Определяется планировщиком',reasons:'Проверяются контуры тягача, кабины и полуприцепа',check:'Окончательная рекомендация появится после проверки зазоров и погрешностей'});
  draw();
 
  const mobile=window.matchMedia&&window.matchMedia('(max-width: 600px)').matches;
@@ -995,6 +1011,7 @@ if(result.reason==='uncertainty-sensitive-start'){
    $('routeAdvice').textContent='Найдено несколько близких по эвристической стоимости вариантов с разными начальными действиями. Однозначная сторона и передача не выбраны. '+alternatives+'. Балл объединяет длину пути, переключения, пиковый угол и запас зазора; это не вероятность безопасности и не доказательство глобального оптимума.'+gateEnvelopeNote;
    const reserveNote=result.sensitivity?.status==='reserve-ambiguous'?' Повторный поиск с резервом неопределённости также дал неоднозначные варианты.':'';
    $('difficultyAdvice').textContent='Показаны '+alternativeRoutes.length+' найденных траекторий разными линиями. Выбор и автопроезд пока заблокированы: сначала нужно сравнить варианты и подтвердить один маршрут. '+reserveNote+gateEnvelopeNote;
+   updateRecommendationCard({status:'Несколько вариантов',level:'Не определена',start:'Сторона начала не выбрана: варианты близки по оценке',turn:alternatives||'Сравните варианты в списке',reasons:'Разные варианты требуют разных первых действий; автоматически выбирать сторону нельзя',check:'Выберите вариант вручную; после выбора программа повторно оценит маршрут'});
    draw();
    return;
   }
@@ -1099,6 +1116,26 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
    'сегмент X '+m.sweptClearanceDetail.from.x.toFixed(1)+', Y '+m.sweptClearanceDetail.from.y.toFixed(1)+
    ' → X '+m.sweptClearanceDetail.to.x.toFixed(1)+', Y '+m.sweptClearanceDetail.to.y.toFixed(1):
    'отдельный ограничивающий сегмент не выделен';
+  const startActionText=ambiguousFields.includes('initialGear')?
+   'Передача начала не выбрана: близкие варианты расходятся':
+   firstGear<0?'Начать задним ходом':'Начать движением вперёд';
+  const confidenceText=recommendationComparison.status==='single-candidate'?
+   'Найден только один подтверждённый вариант; преимущество стороны не доказано.':
+   recommendationComparison.status==='preferred'?
+   'Сторона выбрана сравнением '+recommendationComparison.candidatesCompared+' найденных вариантов; сравнение ограничено эвристической оценкой.':
+   'Сторона показана по найденному маршруту без полного сравнения альтернатив.';
+  const clearanceText=Number.isFinite(m.effectiveClearance)?
+   'Минимальный эффективный зазор '+m.effectiveClearance.toFixed(2)+' м.':
+   'Минимальный эффективный зазор не определён.';
+  updateRecommendationCard({
+   status:recommendationComparison.status==='single-candidate'?'Предварительная рекомендация':
+    recommendationComparison.status==='preferred'?'Сравнение вариантов выполнено':'Оценка маршрута',
+   level:m.level,
+   start:startActionText,
+   turn:firstTurnText,
+   reasons:m.reasons.slice(0,4).join('; ')+'. Пиковый угол сочленения '+m.maxBeta.toFixed(1)+'°. '+clearanceText,
+   check:confidenceText+' Это учебный расчёт виртуальной модели, не гарантия безопасности.'
+  });
   $('difficultyAdvice').textContent=
    'Сложность: '+m.level+'. Причины: '+m.reasons.join('; ')+
    '. Максимальный угол сочленения '+m.maxBeta.toFixed(1)+'°; '+articulationPeakText+'; конечная ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+
@@ -1759,6 +1796,18 @@ $('alternativeRouteSelect').onchange=()=>{
   Number.isFinite(routeAssessment.effectiveClearance);
  $('routeAdvice').textContent='Выбран вариант '+(index+1)+'. '+(passed?'Повторная проверка пройдена по текущей модели.':'Проверка не пройдена: '+routeAssessment.reasons.join('; '));
  $('difficultyAdvice').textContent='Сложность: '+routeAssessment.level+'. Длина '+routeAssessment.length.toFixed(1)+' м; пиковый угол сочленения '+routeAssessment.maxBeta.toFixed(1)+'°; минимальный эффективный зазор '+(Number.isFinite(routeAssessment.effectiveClearance)?routeAssessment.effectiveClearance.toFixed(2)+' м':'не определён')+'. '+(passed?'Автопроезд разрешён только в виртуальной модели.':'Автопроезд остаётся заблокирован.');
+ const selectedRecommendation=planner.recommendStart(plannedRoute);
+ updateRecommendationCard({
+  status:'Вариант '+(index+1)+' выбран',
+  level:routeAssessment.level,
+  start:selectedRecommendation.initialGear<0?'Начать задним ходом':'Начать движением вперёд',
+  turn:selectedRecommendation.firstTurn?
+   (selectedRecommendation.firstTurn==='left'?'Руль влево':'Руль вправо')+' примерно через '+selectedRecommendation.firstTurnDistance.toFixed(1)+' м'+(selectedRecommendation.firstTurnGear<0?' задним ходом':' вперёд'):
+   'Значимого первого поворота руля не найдено',
+  reasons:routeAssessment.reasons.slice(0,4).join('; ')+'. Пиковый угол '+routeAssessment.maxBeta.toFixed(1)+'°; эффективный зазор '+(Number.isFinite(routeAssessment.effectiveClearance)?routeAssessment.effectiveClearance.toFixed(2)+' м':'не определён')+'.',
+  check:passed?'Выбранный вариант повторно проверен; автопроезд возможен только в виртуальной модели.':'Проверка не пройдена; виртуальный автопроезд остаётся заблокирован.'
+ });
+
  draw();
 };
 
@@ -1822,6 +1871,7 @@ $('clearRoute').onclick=()=>{
  routeAssessment=null;
  $('routeAdvice').textContent='Маршрут удалён.';
  $('difficultyAdvice').textContent='Сложность: пока не рассчитана.';
+ updateRecommendationCard({status:'Маршрут удалён'});
  draw();
 };
 
