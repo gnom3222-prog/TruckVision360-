@@ -44,6 +44,17 @@ test('angle normalization remains bounded across a full turn',()=>{
  near(Math.abs(a),Math.PI);
 });
 
+test('tractor steering axle is one wheelbase ahead of rear-axle state reference',()=>{
+ const q={x:4,y:-2,psi:Math.PI/2};
+ const [front,rear]=physics.tractorAxlePoints(q,{wheelbase:3.8});
+ near(front.x,4);
+ near(front.y,1.8);
+ near(rear.x,4);
+ near(rear.y,-2);
+ near(Math.hypot(front.x-rear.x,front.y-rear.y),3.8);
+ assert.throws(()=>physics.tractorAxlePoints(q,{wheelbase:0}),/Параметры осей тягача/);
+});
+
  
 test('three trailer axle centers use the configured spacing around the equivalent group center',()=>{
  const p={...params,trailerAxleSpacing:1.3,trailerLength:13.6,trailerWidth:2.55};
