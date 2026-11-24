@@ -7,13 +7,15 @@
  'use strict';
 
  const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+ const MAX_CONDITION_ESTIMATE=1e8;
+ const CONDITION_WARNING_ESTIMATE=1e5;
 
  function validQuad(q,minArea=1000,minEdge=20){
   if(!Array.isArray(q)||q.length!==4||q.some(p=>!p||!Number.isFinite(p.x)||!Number.isFinite(p.y)))return false;
   let sign=0,area=0;
   for(let i=0;i<4;i++){
    const a=q[i],b=q[(i+1)%4],c=q[(i+2)%4];
-   const cross=(b.x-a.x)*(c.y-b.y)-(b.y-a.y)*(c.x-b.x);
+   const cross=(b.x-a.x)*(c.x-b.x)-(b.y-a.y)*(c.y-b.y);
    if(Math.abs(cross)<1e-4)return false;
    const current=Math.sign(cross);
    if(sign&&current!==sign)return false;
@@ -24,34 +26,114 @@
   return Math.abs(area)/2>minArea;
  }
 
- function solve(A,b){
-  if(!Array.isArray(A)||A.length!==8||!Array.isArray(b)||b.length!==8||A.some(r=>!Array.isArray(r)||r.length!==8||r.some(v=>!Number.isFinite(v)))||b.some(v=>!Number.isFinite(v)))throw new Error('Недостаточно корректных данных для калибровки.');
-  const m=A.map((r,i)=>r.concat(b[i]));
-  const scale=Math.max(1,...m.flatMap(r=>r.slice(0,8).map(Math.abs)));
-  for(let j=0;j<8;j++){
+ function solveLinear(A,b){
+  if(!Array.isArray(A)||!Array.isArray(b)||A.length!==b.length||A.length===0||
+     A.some(r=>!Array.isArray(r)||r.length!==A.length||r.some(v=>!Number.isFinite(v)))||
+     b.some(v=>!Number.isFinite(v)))throw new Error('Недостаточно корректных данных для калибровки.');
+  const n=A.length,m=A.map((r,i)=>r.concat(b[i]));
+  const scale=Math.max(1,...A.flatMap(r=>r.map(Math.abs)));
+  for(let j=0;j<n;j++){
    let p=j;
-   for(let r=j+1;r<8;r++)if(Math.abs(m[r][j])>Math.abs(m[p][j]))p=r;
+   for(let r=j+1;r<n;r++)if(Math.abs(m[r][j])>Math.abs(m[p][j]))p=r;
    if(Math.abs(m[p][j])<scale*1e-12)throw new Error('Калибровочные точки расположены неправильно или почти на одной линии.');
    [m[j],m[p]]=[m[p],m[j]];
    const z=m[j][j];
-   for(let k=j;k<9;k++)m[j][k]/=z;
-   for(let r=0;r<8;r++)if(r!==j){
+   for(let k=j;k<=n;k++)m[j][k]/=z;
+   for(let r=0;r<n;r++)if(r!==j){
     const factor=m[r][j];
-    for(let k=j;k<9;k++)m[r][k]-=factor*m[j][k];
+    for(let k=j;k<=n;k++)m[r][k]-=factor*m[j][k];
    }
   }
-  return m.map(r=>r[8]);
+  return m.map(r=>r[n]);
+ }
+
+ function matrixNormInf(A){
+  return Math.max(...A.map(row=>row.reduce((sum,value)=>sum+Math.abs(value),0)));
+ }
+
+ function conditionEstimateInf(A){
+  const n=A.length,inverse=Array.from({length:n},()=>Array(n).fill(0));
+  for(let column=0;column<n;column++){
+   const unit=Array(n).fill(0);
+   unit[column]=1;
+   const solution=solveLinear(A,unit);
+   for(let row=0;row<n;row++)inverse[row][column]=solution[row];
+  }
+  return matrixNormInf(A)*matrixNormInf(inverse);
+ }
+
+ function normalizePoints(points){
+  const center={
+   x:points.reduce((sum,p)=>sum+p.x,0)/points.length,
+   y:points.reduce((sum,p)=>sum+p.y,0)/points.length
+  };
+  const meanDistance=points.reduce((sum,p)=>sum+dist(p,center),0)/points.length;
+  if(!Number.isFinite(meanDistance)||meanDistance<1e-12)throw new Error('Калибровочные точки расположены слишком близко друг к другу.');
+  const scale=Math.SQRT2/meanDistance;
+  const transform=[
+   [scale,0,-scale*center.x],
+   [0,scale,-scale*center.y],
+   [0,0,1]
+  ];
+  const inverse=[
+   [1/scale,0,center.x],
+   [0,1/scale,center.y],
+   [0,0,1]
+  ];
+  return {
+   points:points.map(p=>({x:scale*(p.x-center.x),y:scale*(p.y-center.y)})),
+   transform,
+   inverse
+  };
+ }
+
+ function multiply3(a,b){
+  return Array.from({length:3},(_,row)=>
+   Array.from({length:3},(_,column)=>
+    a[row][0]*b[0][column]+a[row][1]*b[1][column]+a[row][2]*b[2][column]
+   )
+  );
+ }
+
+ function solve(A,b){
+  return solveLinear(A,b);
  }
 
  function homography(src,width,height){
   if(!Array.isArray(src)||src.length!==4||!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)throw new Error('Размеры эталона или калибровочные точки некорректны.');
-  const A=[],b=[],dst=[{x:0,y:0},{x:width,y:0},{x:width,y:height},{x:0,y:height}];
+  if(!validQuad(src,0,0))throw new Error('Калибровочные точки должны образовывать выпуклый четырёхугольник.');
+  const dst=[{x:0,y:0},{x:width,y:0},{x:width,y:height},{x:0,y:height}];
+  const normalizedSource=normalizePoints(src);
+  const normalizedDestination=normalizePoints(dst);
+  const A=[],b=[];
   for(let i=0;i<4;i++){
-   const {x,y}=src[i],{x:X,y:Y}=dst[i];
+   const {x,y}=normalizedSource.points[i],{x:X,y:Y}=normalizedDestination.points[i];
    A.push([x,y,1,0,0,0,-X*x,-X*y]);b.push(X);
    A.push([0,0,0,x,y,1,-Y*x,-Y*y]);b.push(Y);
   }
-  return solve(A,b);
+  const conditionEstimate=conditionEstimateInf(A);
+  if(!Number.isFinite(conditionEstimate)||conditionEstimate>MAX_CONDITION_ESTIMATE){
+   throw new Error('Калибровочная геометрия плохо обусловлена. Увеличьте площадь эталона в кадре, избегайте почти прямого ракурса и повторите калибровку.');
+  }
+  const values=solveLinear(A,b);
+  const normalizedTransform=[
+   [values[0],values[1],values[2]],
+   [values[3],values[4],values[5]],
+   [values[6],values[7],1]
+  ];
+  const denormalized=multiply3(
+   normalizedDestination.inverse,
+   multiply3(normalizedTransform,normalizedSource.transform)
+  );
+  const divisor=denormalized[2][2];
+  const matrixScale=Math.max(...denormalized.flat().map(Math.abs));
+  if(!Number.isFinite(divisor)||Math.abs(divisor)<=matrixScale*1e-12){
+   throw new Error('Перспективное преобразование нельзя устойчиво нормализовать. Измените положение эталона и повторите калибровку.');
+  }
+  const h=denormalized.flat().map(value=>value/divisor);
+  const result=[h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7]];
+  Object.defineProperty(result,'conditionEstimate',{value:conditionEstimate,enumerable:false});
+  return result;
  }
 
  function map(point,h){
@@ -81,7 +163,13 @@
   const width=(dist(points[0],points[1])+dist(points[3],points[2]))/2;
   const height=(dist(points[0],points[3])+dist(points[1],points[2]))/2;
   if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)throw new Error('Не удалось рассчитать размеры проёма.');
-  return {width,height,points};
+  return {
+   width,
+   height,
+   points,
+   conditionEstimate:transform.conditionEstimate,
+   conditioningWarning:transform.conditionEstimate>CONDITION_WARNING_ESTIMATE
+  };
  }
 
  // First-order uncertainty propagation. sigmaPixels is the assumed independent
@@ -154,5 +242,8 @@
   };
  }
 
- return Object.freeze({validQuad,solve,homography,map,measureQuad,estimateUncertainty});
+ return Object.freeze({
+  validQuad,solve,homography,map,measureQuad,estimateUncertainty,
+  MAX_CONDITION_ESTIMATE,CONDITION_WARNING_ESTIMATE
+ });
 });
