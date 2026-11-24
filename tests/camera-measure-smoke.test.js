@@ -9,12 +9,12 @@ const geometry=require('../camera-geometry.js');
 function bootCamera(options={}){
  const elements={},windowListeners={};
  const context={clearRect(){},beginPath(){},moveTo(){},lineTo(){},closePath(){},stroke(){},arc(){},fill(){},fillText(){}};
- const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateCenterX','gateCenterY','gateHeadingDeg','gateResult'];
+ const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateWidthUncertainty','gateCenterX','gateCenterY','gateHeadingDeg','gateResult'];
  for(const id of ids){
   elements[id]={
    id,value:({
     cameraReferenceWidth:'2.970',cameraReferenceHeight:'2.100',
-    cameraPointSigma:'2',cameraReferenceSigma:'2',gateWidth:'3.50',gateCenterX:'12',gateCenterY:'0',gateHeadingDeg:'90'
+    cameraPointSigma:'2',cameraReferenceSigma:'2',gateWidth:'3.50',gateWidthUncertainty:'0',gateCenterX:'12',gateCenterY:'0',gateHeadingDeg:'90'
    })[id]||'',
    textContent:'',style:{},listeners:{},width:0,height:0,
    videoWidth:id==='measureVideo'?640:0,
@@ -30,7 +30,7 @@ function bootCamera(options={}){
  const appliedRegistrations=[];
  const win={
   TruckVisionCameraGeometry:options.geometry||geometry,
-  TruckVisionApplyGateRegistration:options.applyGateRegistration||((registration)=>{appliedRegistrations.push(registration);elements.gateWidth.value=registration.clearWidth.toFixed(2);elements.gateCenterX.value=registration.centerX.toFixed(2);elements.gateCenterY.value=registration.centerY.toFixed(2);elements.gateHeadingDeg.value=registration.headingDeg.toFixed(2);return true;}),
+  TruckVisionApplyGateRegistration:options.applyGateRegistration||((registration)=>{appliedRegistrations.push(registration);elements.gateWidth.value=registration.clearWidth.toFixed(2);elements.gateWidthUncertainty.value=registration.widthUncertaintyBound.toFixed(3);elements.gateCenterX.value=registration.centerX.toFixed(2);elements.gateCenterY.value=registration.centerY.toFixed(2);elements.gateHeadingDeg.value=registration.headingDeg.toFixed(2);return true;}),
   addEventListener(type,fn){(windowListeners[type]??=[]).push(fn);}
  };
  const sandbox={
@@ -78,6 +78,12 @@ test('camera permission is requested only on tap; measurement reports uncertaint
  assert.equal(camera.appliedRegistrations[0].centerX,12);
  assert.equal(camera.appliedRegistrations[0].centerY,0);
  assert.equal(camera.appliedRegistrations[0].headingDeg,90);
+ assert.ok(camera.appliedRegistrations[0].widthSigma>0);
+ assert.ok(camera.appliedRegistrations[0].widthUncertaintyBound>0);
+ assert.ok(Math.abs(camera.appliedRegistrations[0].widthUncertaintyBound-2*camera.appliedRegistrations[0].widthSigma)<1e-10);
+ assert.equal(camera.appliedRegistrations[0].widthUncertaintyModel,'2-sigma-normal-approximation');
+ assert.equal(camera.elements.gateWidthUncertainty.value,camera.appliedRegistrations[0].widthUncertaintyBound.toFixed(3));
+ assert.match(camera.elements.gateResult.textContent,/оболочка ширины/);
  camera.fire('cameraStop','click');
  assert.equal(camera.trackStops,1,'stopping the camera must stop its media track');
 });
