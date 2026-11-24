@@ -46,7 +46,7 @@ let state,steer=0,targetSpeed=2,speed=0,drive=0;
 let braking=false,distance=0,trace=[],showTrace=true;
 let camera={x:0,y:0},lastTime=0;
 let showObstacles=true,helperEnabled=true;
-let plannedRoute=[],routeGoal=null,routeAssessment=null;
+let plannedRoute=[],alternativeRoutes=[],routeGoal=null,routeAssessment=null;
 let routePlayback={active:false,paused:false,index:1,stopReason:'',currentGear:1};
 let plannerWorker=null,plannerRequestId=0,plannerReject=null,routeBuildToken=0;
 
@@ -715,6 +715,7 @@ async function buildRoute(){
   return;
  }
 
+ alternativeRoutes=[];
  const startState={...state};
  const heading=headingDegrees*Math.PI/180;
  const headingTolerance=headingToleranceDegrees*Math.PI/180;
@@ -859,6 +860,7 @@ if(result.reason==='uncertainty-sensitive-start'){
   if(result.reason==='ambiguous-start'){
    if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: начальные варианты манёвра неоднозначны.');
    plannedRoute=[];
+   alternativeRoutes=Array.isArray(result.candidateRoutes)?result.candidateRoutes.filter(candidate=>Array.isArray(candidate.states)&&candidate.states.length>=2):[];
    routeAssessment=null;
    const alternatives=(result.candidateSummaries||[]).map(candidate=>{
     const gear=candidate.initialGear<0?'задний ход':'вперёд';
@@ -868,7 +870,7 @@ if(result.reason==='uncertainty-sensitive-start'){
    }).join('; ');
    $('routeAdvice').textContent='Найдено несколько близких по эвристической стоимости вариантов с разными начальными действиями. Однозначная сторона и передача не выбраны. '+alternatives+'. Балл объединяет длину пути, переключения, пиковый угол и запас зазора; это не вероятность безопасности и не доказательство глобального оптимума.';
    const reserveNote=result.sensitivity?.status==='reserve-ambiguous'?' Повторный поиск с резервом неопределённости также дал неоднозначные варианты.':'';
-   $('difficultyAdvice').textContent='Сложность не присвоена одному маршруту: варианты требуют разных начальных действий. Сравните геометрию площадки и повторите расчёт с уточнёнными измерениями. Виртуальный автопроезд не запускается.'+reserveNote;
+   $('difficultyAdvice').textContent='Показаны '+alternativeRoutes.length+' найденных траекторий разными линиями. Выбор и автопроезд пока заблокированы: сначала нужно сравнить варианты и подтвердить один маршрут. '+reserveNote;
    draw();
    return;
   }
@@ -995,6 +997,17 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
  }
 }
 function drawRoute(){
+ if(alternativeRoutes.length){
+  const colors=['#35c8ef','#ffb74d','#ce93d8','#80cbc4','#ef9a9a'];
+  alternativeRoutes.forEach((candidate,index)=>{
+   drawLine(candidate.states,colors[index%colors.length],4,[9,6]);
+   const point=toScreen(candidate.states[0]);
+   ctx.fillStyle=colors[index%colors.length];
+   ctx.font='bold 14px system-ui';
+   ctx.fillText('Вариант '+(index+1),point.x+10,point.y-10);
+  });
+  return;
+ }
  if(plannedRoute.length<2)return;
 
  drawLine(plannedRoute,'#ffe082',4,[9,6]);
