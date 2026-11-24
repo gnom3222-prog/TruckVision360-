@@ -156,6 +156,25 @@ test('convex polygon inflation is finite, outward and rejects concave geometry',
  assert.ok(planner.validateObstacles([{polygon:star}]).length>0,'self-intersecting star polygons must not be accepted as collision obstacles');
 });
 
+test('planner routes the full articulated vehicle through an oriented polygon gate',()=>{
+ const gate=planner.createGateObstacles({
+  centerX:12,centerY:0,clearWidth:6,postWidth:0.25,depth:0.6,heading:Math.PI/2
+ });
+ const result=planner.plan({
+  start:{x:0,y:0,psi:0,psiT:0},
+  goal:{x:25,y:0},
+  params,obstacles:gate,integrate,
+  maxExpansions:5000,minClearance:0.30,
+  bounds:{minX:-18,maxX:32,minY:-12,maxY:12}
+ });
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.ok(result.minimumClearanceLowerBound>=0.30-1e-6);
+ for(const q of result.states.slice(1)){
+  assert.ok(planner.clearance(q,gate,params).distance>=0.30-1e-6,
+   'tractor, cab and trailer contours must clear both oriented gate jambs');
+ }
+});
+
 test('articulated planner passes through a two-pallet clearance gate',()=>{
  const obstacles=[
   {x:12,y:3,w:1.2,h:2,name:'upper pallet'},
