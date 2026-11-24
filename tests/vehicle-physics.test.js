@@ -136,6 +136,19 @@ test('three-axle scrub exposure accumulates symmetric outer-axle geometric trave
  near(result.cumulativeAbsoluteLateralTravelByAxle[0],result.cumulativeAbsoluteLateralTravelByAxle[2],1e-9);
  near(result.cumulativeAbsoluteLateralTravelByAxle[1],0,1e-9);
  near(result.totalAbsoluteLateralTravel,result.cumulativeAbsoluteLateralTravelByAxle[0]*2,1e-9);
+ const scaled=physics.trailerAxleScrubExposure(path,p,1.4);
+ near(scaled.maxAbsLateralVelocity,result.maxAbsLateralVelocity*2,1e-9);
+ near(scaled.totalAbsoluteLateralTravel,result.totalAbsoluteLateralTravel,1e-9);
+ let reverseState={x:0,y:0,psi:0,psiT:0};
+ const reversePath=[{...reverseState,gear:-1,steer:0.18}];
+ for(let i=0;i<30;i++){
+  reverseState=physics.rk4(reverseState,-0.7,0.18,0.1,p);
+  reversePath.push({...reverseState,gear:-1,steer:0.18});
+ }
+ const reverse=physics.trailerAxleScrubExposure(reversePath,p,0.7);
+ assert.ok(reverse.maxAbsLateralVelocity>0);
+ assert.ok(reverse.totalAbsoluteLateralTravel>0);
+ near(reverse.cumulativeAbsoluteLateralTravelByAxle[0],reverse.cumulativeAbsoluteLateralTravelByAxle[2],1e-9);
  assert.equal(result.model,'rigid-axle-group-kinematic-proxy');
 });
 
