@@ -1523,11 +1523,13 @@ function updateReadouts(){
  const cockpitClearance=$('cockpitClearance');
  if(cockpitClearance){
   const assessment=assessScene();
-  const effectiveClearance=assessment.nearest.effectiveDistance;
+  const partClearances=clearanceForVehicleParts(state);
+  const nearestPart=partClearances.reduce((best,item)=>item.effective<best.effective?item:best,partClearances[0]||{effective:Infinity});
+  const effectiveClearance=nearestPart.effective;
   cockpitClearance.textContent=Number.isFinite(effectiveClearance)?effectiveClearance.toFixed(2)+' м':'—';
   cockpitClearance.style.color=!showObstacles?'#9bb2c3':assessment.collision||effectiveClearance<=0||effectiveClearance<0.45?'#ff6262':effectiveClearance<1?'#ffc45f':'#42d6a0';
   const nearestLabel=$('cockpitNearest');
-  if(nearestLabel)nearestLabel.textContent=showObstacles&&Number.isFinite(effectiveClearance)?assessment.nearest.name+' · '+(assessment.nearest.vehiclePart||'автопоезд')+' · после допусков':'Проверка препятствий отключена';
+  if(nearestLabel)nearestLabel.textContent=showObstacles&&Number.isFinite(effectiveClearance)?nearestPart.name+' · '+nearestPart.vehiclePart+' · после допусков':'Проверка препятствий отключена';
  }
  const cockpitStatus=$('cockpitStatus');
  if(cockpitStatus)cockpitStatus.textContent=perceptionFrameTimestamp?'Датчики передали '+perceptionObstacles.length+' объектов':'Система готова · демонстрационный режим';
