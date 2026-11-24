@@ -9,6 +9,9 @@
  const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
  const MAX_CONDITION_ESTIMATE=1e7;
  const CONDITION_WARNING_ESTIMATE=1e5;
+ const MAX_QUAD_EDGE_SPREAD_RATIO=0.05;
+ const MAX_QUAD_ANGLE_ERROR_DEG=5;
+ const MAX_QUAD_DIAGONAL_SPREAD_RATIO=0.05;
 
  function validQuad(q,minArea=1000,minEdge=20){
   if(!Array.isArray(q)||q.length!==4||q.some(p=>!p||!Number.isFinite(p.x)||!Number.isFinite(p.y)))return false;
@@ -24,6 +27,55 @@
    if(dist(a,b)<=minEdge)return false;
   }
   return Math.abs(area)/2>minArea;
+ }
+
+ function angleBetweenDeg(a,b){
+  const denominator=Math.hypot(a.x,a.y)*Math.hypot(b.x,b.y);
+  if(denominator<1e-12)return Infinity;
+  const cosine=Math.max(-1,Math.min(1,(a.x*b.x+a.y*b.y)/denominator));
+  return Math.acos(cosine)*180/Math.PI;
+ }
+ function parallelDeviationDeg(a,b){
+  const angle=angleBetweenDeg(a,b);
+  return Number.isFinite(angle)?Math.min(angle,180-angle):Infinity;
+ }
+ function quadShapeDiagnostics(points){
+  if(!validQuad(points,0,0))throw new Error('Для проверки формы нужны четыре конечные точки выпуклого четырёхугольника.');
+  const top={x:points[1].x-points[0].x,y:points[1].y-points[0].y};
+  const right={x:points[2].x-points[1].x,y:points[2].y-points[1].y};
+  const bottom={x:points[2].x-points[3].x,y:points[2].y-points[3].y};
+  const left={x:points[3].x-points[0].x,y:points[3].y-points[0].y};
+  const widthTop=dist(points[0],points[1]);
+  const widthBottom=dist(points[3],points[2]);
+  const heightLeft=dist(points[0],points[3]);
+  const heightRight=dist(points[1],points[2]);
+  const width=(widthTop+widthBottom)/2;
+  const height=(heightLeft+heightRight)/2;
+  const diagonalA=dist(points[0],points[2]);
+  const diagonalB=dist(points[1],points[3]);
+  const widthSpreadRatio=Math.abs(widthTop-widthBottom)/Math.max(width,1e-9);
+  const heightSpreadRatio=Math.abs(heightLeft-heightRight)/Math.max(height,1e-9);
+  const diagonalSpreadRatio=Math.abs(diagonalA-diagonalB)/Math.max((diagonalA+diagonalB)/2,1e-9);
+  const maxOrthogonalityErrorDeg=Math.abs(90-angleBetweenDeg(top,right));
+  const widthParallelismErrorDeg=parallelDeviationDeg(top,bottom);
+  const heightParallelismErrorDeg=parallelDeviationDeg(left,right);
+  const maxParallelismErrorDeg=Math.max(widthParallelismErrorDeg,heightParallelismErrorDeg);
+  const warning=widthSpreadRatio>MAX_QUAD_EDGE_SPREAD_RATIO||
+   heightSpreadRatio>MAX_QUAD_EDGE_SPREAD_RATIO||
+   diagonalSpreadRatio>MAX_QUAD_DIAGONAL_SPREAD_RATIO||
+   maxOrthogonalityErrorDeg>MAX_QUAD_ANGLE_ERROR_DEG||
+   maxParallelismErrorDeg>MAX_QUAD_ANGLE_ERROR_DEG;
+  return {
+   widthTop,widthBottom,heightLeft,heightRight,width,height,
+   diagonalA,diagonalB,widthSpreadRatio,heightSpreadRatio,diagonalSpreadRatio,
+   maxOrthogonalityErrorDeg,widthParallelismErrorDeg,heightParallelismErrorDeg,
+   maxParallelismErrorDeg,warning,
+   limits:{
+    maxEdgeSpreadRatio:MAX_QUAD_EDGE_SPREAD_RATIO,
+    maxDiagonalSpreadRatio:MAX_QUAD_DIAGONAL_SPREAD_RATIO,
+    maxAngleErrorDeg:MAX_QUAD_ANGLE_ERROR_DEG
+   }
+  };
  }
 
  function solveLinear(A,b){
@@ -160,13 +212,16 @@
    throw new Error('Контур измерения пересекает линию вырождения перспективного преобразования. Проверьте порядок углов и повторите калибровку с эталоном рядом с проёмом и в той же плоскости.');
   }
   const points=measuredPoints.map(point=>map(point,transform));
-  const width=(dist(points[0],points[1])+dist(points[3],points[2]))/2;
-  const height=(dist(points[0],points[3])+dist(points[1],points[2]))/2;
+  const shapeDiagnostics=quadShapeDiagnostics(points);
+  const width=shapeDiagnostics.width;
+  const height=shapeDiagnostics.height;
   if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)throw new Error('Не удалось рассчитать размеры проёма.');
   return {
    width,
    height,
    points,
+   shapeDiagnostics,
+   shapeWarning:shapeDiagnostics.warning,
    conditionEstimate:transform.conditionEstimate,
    conditioningWarning:transform.conditionEstimate>CONDITION_WARNING_ESTIMATE
   };
@@ -255,6 +310,14 @@
    throw new Error('Измеренные углы ворот должны образовывать выпуклый четырёхугольник.');
   }
   const points=measurement.points;
+  const shapeDiagnostics=quadShapeDiagnostics(points);
+  const derivedWidth=shapeDiagnostics.width;
+  if(shapeDiagnostics.warning){
+   throw new Error('Форма измеренного проёма заметно отличается от прямоугольника. Проверьте четыре угла и положение эталона в той же плоскости.');
+  }
+  if(Math.abs(measurement.width-derivedWidth)>Math.max(0.01,derivedWidth*0.01)){
+   throw new Error('Ширина измерения не совпадает с шириной, рассчитанной по четырём углам. Повторите измерение.');
+  }
   const leftMid={
    x:(points[0].x+points[3].x)/2,
    y:(points[0].y+points[3].y)/2
@@ -278,12 +341,14 @@
    openingStart:{x:anchor.x-half*ux,y:anchor.y-half*uy},
    openingEnd:{x:anchor.x+half*ux,y:anchor.y+half*uy},
    sourceAxisLength,
+   shapeDiagnostics,
    mapRegistration:'manual-center-and-heading'
   };
  }
 
  return Object.freeze({
-  validQuad,solve,homography,map,measureQuad,estimateUncertainty,registerGateOnMap,
-  MAX_CONDITION_ESTIMATE,CONDITION_WARNING_ESTIMATE
+  validQuad,solve,homography,map,measureQuad,estimateUncertainty,registerGateOnMap,quadShapeDiagnostics,
+  MAX_CONDITION_ESTIMATE,CONDITION_WARNING_ESTIMATE,
+  MAX_QUAD_EDGE_SPREAD_RATIO,MAX_QUAD_ANGLE_ERROR_DEG,MAX_QUAD_DIAGONAL_SPREAD_RATIO
  });
 });
