@@ -253,3 +253,31 @@ test('longer kingpin-to-axle distance increases articulation for the same forwar
  assert.ok(short<baseline);
  assert.ok(baseline<long);
 });
+ 
+test('integrated equivalent axle center remains tangent to trailer heading across forward and reverse steering changes',()=>{
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8};
+ const cases=[
+  {q:{x:1,y:-2,psi:0.31,psiT:-0.22},firstSteer:0.14,secondSteer:-0.22},
+  {q:{x:-4,y:3,psi:2.8,psiT:-2.7},firstSteer:-0.3,secondSteer:0.35},
+  {q:{x:0,y:0,psi:-1.1,psiT:0.7},firstSteer:0.28,secondSteer:-0.18}
+ ];
+ for(const speed of [0.7,-0.7]){
+  for(const scenario of cases){
+   const dt=0.01;
+   const start=physics.axlePoint(scenario.q,p);
+   const middle=physics.rk4(scenario.q,speed,scenario.firstSteer,dt/2,p);
+   const end=physics.rk4(middle,speed,scenario.secondSteer,dt/2,p);
+   const finish=physics.axlePoint(end,p);
+   const dx=finish.x-start.x;
+   const dy=finish.y-start.y;
+   const midTrailerHeading=physics.norm(
+    scenario.q.psiT+0.5*physics.norm(end.psiT-scenario.q.psiT)
+   );
+   const lateralDisplacement=-Math.sin(midTrailerHeading)*dx+
+    Math.cos(midTrailerHeading)*dy;
+   assert.ok(Math.hypot(dx,dy)>0);
+   assert.ok(Math.abs(lateralDisplacement)<2e-7,
+    'equivalent axle-center displacement should remain tangent to the trailer heading');
+  }
+ }
+});
