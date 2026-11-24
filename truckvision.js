@@ -26,7 +26,10 @@ const cfg={
  maxAccel:0.8,
  gateWidth:3.5,
  margin:0.2,
- measurementUncertainty:0.15
+ measurementUncertainty:0.15,
+ obstaclePositionUncertainty:0.05,
+ obstacleSizeUncertainty:0.02,
+ vehicleFootprintUncertainty:0.03
 };
 
 let state,steer=0,targetSpeed=2,speed=0,drive=0;
@@ -71,7 +74,10 @@ function readSettings(){
   maxAccel:[0.1,3],
   gateWidth:[1,20],
   margin:[0,5],
-  measurementUncertainty:[0,5]
+  measurementUncertainty:[0,5],
+  obstaclePositionUncertainty:[0,1],
+  obstacleSizeUncertainty:[0,1],
+  vehicleFootprintUncertainty:[0,0.5]
  };
  for(const [key,range] of Object.entries(limits)){
   const value=candidate[key];
@@ -553,7 +559,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261124-6');
+   worker=new Worker('./planner-worker.js?v=20261124-7');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
@@ -634,10 +640,14 @@ async function buildRoute(){
    costTolerance:0.25,
    minClearance:0.65,
    measurementUncertainty:cfg.measurementUncertainty,
+   obstaclePositionUncertainty:cfg.obstaclePositionUncertainty,
+   obstacleSizeUncertainty:cfg.obstacleSizeUncertainty,
+   vehicleFootprintUncertainty:cfg.vehicleFootprintUncertainty,
    bounds:{minX:-20,maxX:42,minY:-20,maxY:20}
   },progress=>{
    if(token!==routeBuildToken)return;
-   const scenarioText=progress.scenario==='reserve'?'Повторный поиск с резервом неопределённости: ':'Базовый поиск: ';
+   const geometryText=progress.geometryScenario==='expanded-geometry-envelope'?'расширенная геометрия; ':progress.geometryScenario==='nominal-geometry'?'номинальная геометрия; ':'';
+   const scenarioText=geometryText+(progress.scenario==='reserve'?'поиск с резервом неопределённости: ':'базовый поиск: ');
    const candidateText=progress.candidateIndex?'кандидат '+progress.candidateIndex+'/'+progress.candidateCount+'; суммарно проверено ':'проверено ';
    $('routeAdvice').textContent='Рассчитываю варианты траектории… '+scenarioText+candidateText+progress.expanded+
     ' из '+progress.maxExpansions+' состояний; до цели '+
@@ -656,7 +666,25 @@ async function buildRoute(){
   }
 
 
-  if(result.reason==='uncertainty-sensitive-start'){
+  
+if(result.reason==='geometry-sensitive-start'||result.reason==='geometry-envelope-no-route'){
+ if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: геометрическая неопределённость не подтверждает выбранный старт.');
+ plannedRoute=[];
+ routeAssessment=null;
+ const geometry=result.geometrySensitivity||{};
+ if(result.reason==='geometry-sensitive-start'){
+  $('routeAdvice').textContent='Начальное действие меняется при независимом расширении геометрии в заданных пределах. Сторона и передача не выбраны; номинальный и консервативный маршруты требуют разных действий.';
+  $('difficultyAdvice').textContent='Рекомендация неустойчива к заданным границам погрешности положения/размера препятствий и внешних габаритов автопоезда. Уточните геометрию рулеткой и документами; повторите расчёт. Это ограниченный набор проверок, не полный анализ всех комбинаций.';
+ }else{
+  $('routeAdvice').textContent='Поиск в расширенной геометрической оболочке не подтвердил маршрут в заданном лимите вычислений. Это не доказывает невозможность других маршрутов; рекомендация не выдаётся.';
+  $('difficultyAdvice').textContent='Автопроезд заблокирован: выбранный маршрут не подтверждён при расширении прямоугольных контуров препятствий и автопоезда. Не уменьшайте резерв только ради получения маршрута.';
+ }
+ $('difficultyAdvice').textContent+=' Границы проверки: положение препятствия ±'+Number(geometry.obstaclePositionUncertainty||0).toFixed(2)+' м по каждой оси; ошибка полного размера препятствия ±'+Number(geometry.obstacleSizeUncertainty||0).toFixed(2)+' м; расширение каждой внешней грани автопоезда '+Number(geometry.vehicleFootprintUncertainty||0).toFixed(2)+' м. Погрешности wheelbase, hitchOffset и kingpinAxles пока не варьируются.';
+ draw();
+ return;
+}
+
+if(result.reason==='uncertainty-sensitive-start'){
    if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: рекомендация меняется при учёте погрешности измерений.');
    plannedRoute=[];
    routeAssessment=null;
@@ -763,6 +791,10 @@ async function buildRoute(){
    sensitivity.reserveRequiredClearance.toFixed(2)+' м) начальное действие совпало среди найденных кандидатов.'+
    (sensitivity.candidateCoverageChanged?' Число найденных кандидатов при этом изменилось; сравнение остаётся ограниченным.':''):
    sensitivity.status==='zero-reserve'?' Дополнительный резерв неопределённости равен нулю; повторный поиск не выполнялся.':'';
+const geometrySensitivity=result.geometrySensitivity||{};
+const geometryNote=geometrySensitivity.status==='stable-within-bounded-envelope'?
+ ' Дополнительно проверена расширенная геометрия: положение препятствий ±'+geometrySensitivity.obstaclePositionUncertainty.toFixed(2)+' м по каждой оси, ошибка полного размера ±'+geometrySensitivity.obstacleSizeUncertainty.toFixed(2)+' м, внешний контур автопоезда расширен на '+geometrySensitivity.vehicleFootprintUncertainty.toFixed(2)+' м с каждой грани. Параметры wheelbase, hitchOffset и kingpinAxles не варьировались; это ограниченная проверка оболочки, не полный анализ неопределённости.':
+ geometrySensitivity.status==='zero-geometry-bounds'?' Геометрические границы неопределённости заданы нулевыми; расширенная проверка не выполнялась.':'';
 
   const peakGearText=m.articulationPeak.gear<0?'задним ходом':'вперёд';
   const articulationPeakText='пик угла сочленения '+m.articulationPeak.maxAngleDegrees.toFixed(1)+
@@ -775,7 +807,7 @@ async function buildRoute(){
    ' м; переключений передачи: '+m.gearChanges+'; изменений руля: '+m.steeringChanges+
    '; задний ход: '+m.reverseDistance.toFixed(1)+' м. Заданный конечный курс '+headingDegrees.toFixed(0)+
    '°; ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+'°; угол сочленения у цели '+
-   m.finalArticulationDeg.toFixed(1)+'° (допуск '+articulationLimitDegrees.toFixed(0)+'°); '+articulationPeakText+'.';
+   m.finalArticulationDeg.toFixed(1)+'° (допуск '+articulationLimitDegrees.toFixed(0)+'°); '+articulationPeakText+'.'+geometryNote;
 
   const closestLocationText=m.clearanceDetail?
    m.clearanceDetail.vehiclePart+' рядом с препятствием «'+m.clearanceDetail.obstacle+
@@ -797,7 +829,7 @@ async function buildRoute(){
    '; после резерва погрешности: '+(Number.isFinite(m.effectiveClearance)?m.effectiveClearance.toFixed(2)+' м':'не определено')+
    '; устойчивость стартового действия: '+(sensitivity.status==='stable-start-action'?'сохранилось при повторном поиске с увеличенным требуемым зазором':sensitivity.status==='zero-reserve'?'не проверялась из-за нулевого резерва':'не подтверждена')+
    '; столкновение: '+(m.collision?'да':'не выявлено')+
-   '. Курс у цели проверен относительно заданного угла и допуска; учебный расчёт, не гарантия безопасности.';
+   '. Курс у цели проверен относительно заданного угла и допуска; учебный расчёт, не гарантия безопасности.'+geometryNote;
   draw();
  }catch(error){
   if(token!==routeBuildToken)return;
