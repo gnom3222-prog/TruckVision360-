@@ -1679,7 +1679,7 @@ $('routePause').onclick=()=>{
 $('routeStop').onclick=()=>stopRoutePlayback('Виртуальный автопроезд остановлен пользователем.');
 $('planRoute').onclick=()=>{
  stopRoutePlayback('');
- buildRoute();
+ return buildRoute();
 };
 
 $('clearRoute').onclick=()=>{
