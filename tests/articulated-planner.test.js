@@ -148,6 +148,12 @@ test('convex polygon inflation is finite, outward and rejects concave geometry',
  assert.ok(after.minY<before.minY&&after.maxY>before.maxY);
  const concave=[{x:0,y:0},{x:2,y:0},{x:1,y:0.5},{x:2,y:2},{x:0,y:2}];
  assert.ok(planner.validateObstacles([{polygon:concave}]).length>0);
+ const star=Array.from({length:5},(_,index)=>{
+  const vertex=(index*2)%5;
+  const angle=-Math.PI/2+2*Math.PI*vertex/5;
+  return {x:Math.cos(angle),y:Math.sin(angle)};
+ });
+ assert.ok(planner.validateObstacles([{polygon:star}]).length>0,'self-intersecting star polygons must not be accepted as collision obstacles');
 });
 
 test('articulated planner passes through a two-pallet clearance gate',()=>{
