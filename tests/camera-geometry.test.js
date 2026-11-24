@@ -97,3 +97,29 @@ test('camera uncertainty rejects negative or non-finite assumptions',()=>{
   measuredPoints:measuredOpening,sigmaReferenceWidth:NaN
  }));
 });
+
+const horizonCrossingOpening=[
+ {x:100,y:2500},{x:500,y:2500},
+ {x:500,y:3500},{x:100,y:3500}
+];
+
+test('camera measurement rejects a convex opening that crosses the projective horizon',()=>{
+ assert.equal(camera.validQuad(horizonCrossingOpening,0,0),true);
+ assert.throws(
+  ()=>camera.measureQuad(perspectiveReference,0.297,0.210,horizonCrossingOpening),
+  /пересекает линию вырождения/
+ );
+});
+
+test('camera uncertainty estimation also fails closed for a projective-horizon crossing',()=>{
+ assert.throws(
+  ()=>camera.estimateUncertainty({
+   referencePoints:perspectiveReference,
+   referenceWidth:0.297,
+   referenceHeight:0.210,
+   measuredPoints:horizonCrossingOpening,
+   sigmaPixels:2
+  }),
+  /пересекает линию вырождения/
+ );
+});
