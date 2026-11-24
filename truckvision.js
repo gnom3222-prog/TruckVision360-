@@ -318,7 +318,8 @@ function bodyCorners(origin,angle,front,rear,width){
  ];
 }
 
-function vehiclePolygons(q){return physics.vehiclePolygons(q,cfg);}
+function vehiclePolygons(q){return physics.vehiclePolygons(q,{...cfg,footprintUncertainty:cfg.vehicleFootprintUncertainty});}
+function nominalVehiclePolygons(q){return physics.vehiclePolygons(q,{...cfg,footprintUncertainty:0});}
 
 function obstaclePolygon(o){
  if(Array.isArray(o.polygon))return o.polygon.map(point=>({x:point.x,y:point.y}));
@@ -371,27 +372,48 @@ function polygonDistance(a,b){
  return best;
 }
 
+function obstacleEnvelopePolygon(obstacle){
+ const nominal=obstaclePolygon(obstacle);
+ const expansion=Math.max(0,cfg.obstaclePositionUncertainty)+Math.max(0,cfg.obstacleSizeUncertainty)/2;
+ if(expansion<=0)return nominal;
+ return Array.isArray(obstacle.polygon)?
+  planner.inflateConvexPolygon(nominal,Math.SQRT2*expansion):
+  obstaclePolygon({...obstacle,w:obstacle.w+2*expansion,h:obstacle.h+2*expansion});
+}
+function clearanceMeasurementReserve(){return 2*Math.max(0,cfg.measurementUncertainty);}
+
 function assessScene(q=state){
- const vehicle=vehiclePolygons(q);
+ const nominalVehicle=nominalVehiclePolygons(q);
+ const boundedVehicle=vehiclePolygons(q);
  const bodyNames=['тягач','кабина','полуприцеп'];
- let nearest={distance:Infinity,name:'нет заданных препятствий',vehiclePart:null,bodyIndex:null};
- let collision=false;
+ let nearest={
+  distance:Infinity,geometryLowerBound:Infinity,effectiveDistance:Infinity,
+  name:'нет заданных препятствий',vehiclePart:null,bodyIndex:null
+ };
+ let collision=false,collisionDetail=null;
 
  if(showObstacles){
-  for(const o of sceneObstacles()){
-   const op=obstaclePolygon(o);
-   for(let i=0;i<vehicle.length;i++){
-    const d=polygonDistance(vehicle[i],op);
-    if(d<nearest.distance){
-     nearest={distance:d,name:o.name,vehiclePart:bodyNames[i]||('часть '+(i+1)),bodyIndex:i};
+  for(const obstacle of sceneObstacles()){
+   const nominalObstacle=obstaclePolygon(obstacle);
+   const boundedObstacle=obstacleEnvelopePolygon(obstacle);
+   for(let i=0;i<boundedVehicle.length;i++){
+    const nominalDistance=polygonDistance(nominalVehicle[i],nominalObstacle);
+    const geometryLowerBound=polygonDistance(boundedVehicle[i],boundedObstacle);
+    const effectiveDistance=geometryLowerBound-clearanceMeasurementReserve();
+    const detail={
+     distance:nominalDistance,geometryLowerBound,effectiveDistance,
+     name:obstacle.name,vehiclePart:bodyNames[i]||('часть '+(i+1)),bodyIndex:i
+    };
+    if(effectiveDistance<nearest.effectiveDistance)nearest=detail;
+    if(nominalDistance===0){
+     collision=true;
+     if(!collisionDetail)collisionDetail=detail;
     }
-    if(d===0)collision=true;
    }
   }
  }
  return{
-  nearest,
-  collision,
+  nearest,collision,collisionDetail,
   obstacleChecksEnabled:showObstacles,
   beta:Math.abs(norm(q.psi-q.psiT))*180/Math.PI
  };
@@ -410,12 +432,19 @@ function updateAssistant(){
   color='#ffd18b';
  }else{
   const a=assessScene();
-  const effectiveClearance=a.nearest.distance-2*Math.max(0,cfg.measurementUncertainty);
+  const effectiveClearance=a.nearest.effectiveDistance;
   const partText=a.nearest.vehiclePart?'Часть автопоезда: '+a.nearest.vehiclePart+'. ':'';
 
   if(a.collision){
-   message='Стоп! Расчётные контуры '+(a.nearest.vehiclePart||'автопоезда')+
-    ' пересекаются с препятствием '+a.nearest.name+'. Остановитесь и измените траекторию.';
+   const hit=a.collisionDetail||a.nearest;
+   message='Стоп! Расчётные контуры '+(hit.vehiclePart||'автопоезда')+
+    ' пересекаются с препятствием '+hit.name+'. Остановитесь и измените траекторию.';
+   color='#ff8585';
+  }else if(Number.isFinite(effectiveClearance)&&effectiveClearance<=0){
+   message='Заданная оболочка погрешности пересекается с контуром. '+partText+
+    'Объект: '+a.nearest.name+'. Номинальный зазор '+a.nearest.distance.toFixed(2)+
+    ' м; нижняя оценка после допусков '+effectiveClearance.toFixed(2)+
+    ' м. Свободный проход не подтверждён; проверьте фактическое пространство.';
    color='#ff8585';
   }else if(a.beta>=ARTICULATION_STOP_DEMO_DEG){
    message='Осторожно! Большой угол сочленения '+
@@ -468,19 +497,44 @@ function sweptClearanceColor(pathIndex,polygons,obstaclePolygons){
 }
 
 function clearanceForVehicleParts(q=state){
- const bodies=physics.vehiclePolygons(q,{...cfg,footprintUncertainty:cfg.vehicleFootprintUncertainty});
- const obstacles=showObstacles?sceneObstacles().map(o=>({name:o.name,polygon:obstaclePolygon(o)})):[];
- return bodies.map((body,index)=>{
-  let nearest={distance:Infinity,name:'нет препятствий'};
+ const nominalBodies=nominalVehiclePolygons(q);
+ const boundedBodies=vehiclePolygons(q);
+ const obstacles=showObstacles?sceneObstacles().map(obstacle=>({
+  name:obstacle.name,
+  nominalPolygon:obstaclePolygon(obstacle),
+  boundedPolygon:obstacleEnvelopePolygon(obstacle)
+ })):[];
+ const bodyNames=['тягач','кабина','полуприцеп'];
+ return boundedBodies.map((body,index)=>{
+  let nearest={
+   distance:Infinity,geometryLowerBound:Infinity,effective:Infinity,
+   name:'нет препятствий',vehiclePart:bodyNames[index]||('часть '+(index+1))
+  };
   for(const obstacle of obstacles){
-   const distance=polygonDistance(body,obstacle.polygon);
-   if(distance<nearest.distance)nearest={distance,name:obstacle.name};
+   const distance=polygonDistance(nominalBodies[index],obstacle.nominalPolygon);
+   const geometryLowerBound=polygonDistance(body,obstacle.boundedPolygon);
+   const effective=geometryLowerBound-clearanceMeasurementReserve();
+   if(effective<nearest.effective){
+    nearest={distance,geometryLowerBound,effective,name:obstacle.name,vehiclePart:bodyNames[index]||('часть '+(index+1))};
+   }
   }
-  const effective=nearest.distance-2*Math.max(0,cfg.measurementUncertainty);
-  const color=!showObstacles?'#8ba5b8':effective<0.45?'#ff6262':effective<1?'#ffc45f':'#42d6a0';
-  return{index,distance:nearest.distance,effective,name:nearest.name,color};
+  const color=!showObstacles?'#8ba5b8':nearest.effective<0.45?'#ff6262':nearest.effective<1?'#ffc45f':'#42d6a0';
+  return{index,...nearest,color};
  });
 }
+
+// Read-only diagnostics for regression tests and external inspection; it never changes simulator state.
+window.TruckVisionGetClearanceDiagnostics=()=>({
+ obstacleChecksEnabled:showObstacles,
+ parts:clearanceForVehicleParts(state),
+ scene:assessScene(state),
+ uncertainty:{
+  measurement:cfg.measurementUncertainty,
+  obstaclePosition:cfg.obstaclePositionUncertainty,
+  obstacleSize:cfg.obstacleSizeUncertainty,
+  vehicleFootprint:cfg.vehicleFootprintUncertainty
+ }
+});
 
 function drawSweptCorridor(path,kind){
  if(!Array.isArray(path)||path.length<2)return;
@@ -493,13 +547,7 @@ function drawSweptCorridor(path,kind){
  const last=path[path.length-1];
  if(last&&samples[samples.length-1]!==last&&[last.x,last.y,last.psi,last.psiT].every(Number.isFinite))samples.push(last);
  if(samples.length<2)return;
- const obstaclePolygons=showObstacles?sceneObstacles().map(obstacle=>{
-  const nominal=obstaclePolygon(obstacle);
-  const expansion=cfg.obstaclePositionUncertainty+cfg.obstacleSizeUncertainty/2;
-  return Array.isArray(obstacle.polygon)?
-   planner.inflateConvexPolygon(nominal,Math.SQRT2*expansion):
-   obstaclePolygon({...obstacle,w:obstacle.w+2*expansion,h:obstacle.h+2*expansion});
- }):[];
+ const obstaclePolygons=showObstacles?sceneObstacles().map(obstacleEnvelopePolygon):[];
  let previous=null;
  for(const q of samples){
   const polygons=physics.vehiclePolygons(q,{...cfg,footprintUncertainty:cfg.vehicleFootprintUncertainty});
@@ -554,12 +602,9 @@ function drawEnvelopePolygon(poly,color){
 
 function drawObstacles(){
  if(!showObstacles)return;
- const expansion=cfg.obstaclePositionUncertainty+cfg.obstacleSizeUncertainty/2;
  for(const o of sceneObstacles()){
   const nominal=obstaclePolygon(o);
-  const expanded=Array.isArray(o.polygon)?
-   planner.inflateConvexPolygon(nominal,Math.SQRT2*expansion):
-   obstaclePolygon({...o,w:o.w+2*expansion,h:o.h+2*expansion});
+  const expanded=obstacleEnvelopePolygon(o);
   drawEnvelopePolygon(expanded,'#ffd18b');
   const p=nominal.map(toScreen);
   ctx.beginPath();
@@ -1436,7 +1481,7 @@ function draw(){
  ctx.save();
  ctx.font='bold 15px system-ui';
  ctx.fillStyle=mapAlert.effective<0.45?'#ff7777':mapAlert.effective<1?'#ffd078':'#83e5bb';
- const clearanceLabel=Number.isFinite(mapAlert.distance)?mapAlert.distance.toFixed(2)+' м · '+mapAlert.name:'Зазор не рассчитан';
+ const clearanceLabel=Number.isFinite(mapAlert.effective)?mapAlert.effective.toFixed(2)+' м · '+mapAlert.vehiclePart+' / '+mapAlert.name:'Зазор не рассчитан';
  ctx.fillText(showObstacles?'МИН. ЗАЗОР: '+clearanceLabel:'ПРЕПЯТСТВИЯ НЕ ПРОВЕРЯЮТСЯ',18,28);
  ctx.restore();
 
@@ -1478,10 +1523,11 @@ function updateReadouts(){
  const cockpitClearance=$('cockpitClearance');
  if(cockpitClearance){
   const assessment=assessScene();
-  cockpitClearance.textContent=Number.isFinite(assessment.nearest.distance)?assessment.nearest.distance.toFixed(2)+' м':'—';
-  cockpitClearance.style.color=!showObstacles?'#9bb2c3':assessment.collision?'#ff6262':assessment.nearest.distance-2*Math.max(0,cfg.measurementUncertainty)<0.45?'#ff6262':assessment.nearest.distance-2*Math.max(0,cfg.measurementUncertainty)<1?'#ffc45f':'#42d6a0';
+  const effectiveClearance=assessment.nearest.effectiveDistance;
+  cockpitClearance.textContent=Number.isFinite(effectiveClearance)?effectiveClearance.toFixed(2)+' м':'—';
+  cockpitClearance.style.color=!showObstacles?'#9bb2c3':assessment.collision||effectiveClearance<=0||effectiveClearance<0.45?'#ff6262':effectiveClearance<1?'#ffc45f':'#42d6a0';
   const nearestLabel=$('cockpitNearest');
-  if(nearestLabel)nearestLabel.textContent=showObstacles&&Number.isFinite(assessment.nearest.distance)?assessment.nearest.name+' · '+(assessment.nearest.vehiclePart||'автопоезд'):'Проверка препятствий отключена';
+  if(nearestLabel)nearestLabel.textContent=showObstacles&&Number.isFinite(effectiveClearance)?assessment.nearest.name+' · '+(assessment.nearest.vehiclePart||'автопоезд')+' · после допусков':'Проверка препятствий отключена';
  }
  const cockpitStatus=$('cockpitStatus');
  if(cockpitStatus)cockpitStatus.textContent=perceptionFrameTimestamp?'Датчики передали '+perceptionObstacles.length+' объектов':'Система готова · демонстрационный режим';
