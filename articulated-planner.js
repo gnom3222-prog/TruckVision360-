@@ -958,5 +958,159 @@ function planAlternativesWithGeometryUncertainty(options={}){
  };
 }
 
-return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions});
+
+function planAlternativesWithVehicleParameterBounds(options={}){
+ const inputErrors=validatePlanOptions(options);
+ if(inputErrors.length)return {ok:false,reason:'invalid-input',errors:inputErrors,expanded:0};
+ const suppliedBounds=options.vehicleParameterBounds??{};
+ if(!suppliedBounds||typeof suppliedBounds!=='object'||Array.isArray(suppliedBounds)){
+  return {ok:false,reason:'invalid-input',errors:['vehicleParameterBounds должен быть объектом диапазонов параметров.'],expanded:0};
+ }
+ const allowedBounds={
+  wheelbase:[1,15],
+  hitchOffset:[0,5],
+  kingpinAxles:[0.5,30],
+  trailerLength:[4,30],
+  trailerWidth:[1.5,5]
+ };
+ const unknownKeys=Object.keys(suppliedBounds).filter(key=>!Object.prototype.hasOwnProperty.call(allowedBounds,key));
+ if(unknownKeys.length){
+  return {ok:false,reason:'invalid-input',errors:['Неизвестные параметры неопределённости: '+unknownKeys.join(', ')+'.'],expanded:0};
+ }
+ const scenarios=[];
+ const baseParams={...options.params};
+ for(const key of Object.keys(allowedBounds)){
+  if(!Object.prototype.hasOwnProperty.call(suppliedBounds,key))continue;
+  const bound=suppliedBounds[key];
+  const limits=allowedBounds[key];
+  const nominal=baseParams[key];
+  if(!bound||typeof bound!=='object'||!Number.isFinite(bound.min)||!Number.isFinite(bound.max)||
+     bound.min>bound.max||bound.min>nominal||bound.max<nominal||
+     bound.min<limits[0]||bound.max>limits[1]){
+   return {ok:false,reason:'invalid-input',errors:[key+': диапазон должен быть конечным, содержать номинальное значение и оставаться в пределах '+limits[0]+'–'+limits[1]+'.'],expanded:0};
+  }
+  for(const [side,value] of [['min',bound.min],['max',bound.max]]){
+   if(Math.abs(value-nominal)<=1e-12)continue;
+   const scenarioParams={...baseParams,[key]:value};
+   const errors=rootPhysics.validateVehicleParams(scenarioParams);
+   if(errors.length){
+    return {ok:false,reason:'invalid-input',errors:[key+' ('+side+'): '+errors.join(' ')],expanded:0};
+   }
+   scenarios.push({name:key+' '+side,value,parameter:key,params:scenarioParams});
+  }
+ }
+ if(scenarios.length>10){
+  return {ok:false,reason:'invalid-input',errors:['Однофакторная проверка допускает не более десяти крайних сценариев.'],expanded:0};
+ }
+ const baseOptions={...options};
+ delete baseOptions.vehicleParameterBounds;
+ const originalProgress=options.onProgress;
+ const perCandidateMaxExpansions=options.alternativeMaxExpansions??options.maxExpansions??24000;
+ const reserveScenarioCount=(options.measurementUncertainty??0)>0?2:1;
+ const totalScenarioCount=scenarios.length+1;
+ const totalBudget=perCandidateMaxExpansions*5*reserveScenarioCount*2*totalScenarioCount;
+ let expandedOffset=0;
+ function runScenario(name,params,index){
+  const scenarioOptions={...baseOptions,params};
+  if(typeof originalProgress==='function'){
+   scenarioOptions.onProgress=progress=>{
+    try{
+     originalProgress({
+      ...progress,
+      parameterScenario:name,
+      parameterScenarioIndex:index,
+      parameterScenarioCount:totalScenarioCount,
+      expanded:expandedOffset+(progress.expanded||0),
+      maxExpansions:totalBudget
+     });
+    }catch(_){}
+   };
+  }
+  const result=planAlternativesWithGeometryUncertainty(scenarioOptions);
+  expandedOffset+=result.expanded||0;
+  return result;
+ }
+ const nominal=runScenario('номинальные размеры',baseParams,1);
+ const boundsSummary=Object.fromEntries(Object.entries(suppliedBounds).map(([key,value])=>[
+  key,{min:value.min,max:value.max,nominal:baseParams[key]}
+ ]));
+ if(!scenarios.length){
+  return {
+   ...nominal,expanded:expandedOffset,
+   parameterSensitivity:{
+    status:'not-varied',coverage:'none',
+    suppliedBounds:boundsSummary,testedScenarioCount:0,
+    kinematicParameterUncertaintyIncluded:false,
+    note:'Все заданные диапазоны имеют нулевую ширину или не заданы; неопределённость размеров автопоезда не проверялась.'
+   }
+  };
+ }
+ if(!nominal.ok){
+  return {
+   ...nominal,expanded:expandedOffset,
+   parameterSensitivity:{
+    status:'nominal-unavailable',coverage:'one-parameter-at-a-time-endpoints',
+    suppliedBounds:boundsSummary,testedScenarioCount:0,
+    nominalReason:nominal.reason
+   }
+  };
+ }
+ const nominalAction=recommendationAction(nominal);
+ const completed=[];
+ for(let index=0;index<scenarios.length;index++){
+  const scenario=scenarios[index];
+  const result=runScenario(scenario.name,scenario.params,index+2);
+  if(!result.ok){
+   return {
+    ok:false,reason:'parameter-scenario-unavailable',expanded:expandedOffset,
+    candidatesFound:0,
+    parameterSensitivity:{
+     status:'scenario-unavailable',coverage:'one-parameter-at-a-time-endpoints',
+     suppliedBounds:boundsSummary,scenarioCount:scenarios.length,
+     completedScenarios:completed,failedScenario:scenario.name,
+     failedParameter:scenario.parameter,failedValue:scenario.value,
+     failureReason:result.reason,nominalAction
+    }
+   };
+  }
+  const comparison=compareRecommendationSensitivity(nominal,result);
+  const summary={
+   name:scenario.name,parameter:scenario.parameter,value:scenario.value,
+   status:comparison.status,changedFields:comparison.changedFields||[],
+   recommendation:recommendationAction(result),
+   candidatesFound:result.candidatesFound??0,
+   geometryStatus:result.geometrySensitivity?.status??'not-reported'
+  };
+  completed.push(summary);
+  if(comparison.status!=='stable'){
+   return {
+    ok:false,reason:'parameter-sensitive-start',expanded:expandedOffset,
+    candidatesFound:result.candidatesFound??0,
+    parameterSensitivity:{
+     status:'start-action-changed',coverage:'one-parameter-at-a-time-endpoints',
+     suppliedBounds:boundsSummary,scenarioCount:scenarios.length,
+     completedScenarios:completed,failedScenario:scenario.name,
+     failedParameter:scenario.parameter,failedValue:scenario.value,
+     nominalAction,scenarioAction:recommendationAction(result),
+     changedFields:comparison.changedFields||[]
+    }
+   };
+  }
+ }
+ return {
+  ...nominal,expanded:expandedOffset,
+  parameterSensitivity:{
+   status:'stable-across-one-at-a-time-bounds',
+   coverage:'one-parameter-at-a-time-endpoints',
+   suppliedBounds:boundsSummary,scenarioCount:scenarios.length,
+   testedScenarioCount:completed.length,completedScenarios:completed,
+   nominalAction,
+   allParameterCombinationsEvaluated:false,
+   kinematicParameterUncertaintyIncluded:true,
+   note:'Начальное действие совпало во всех проверенных крайних сценариях по одному параметру за раз. Совместные комбинации ошибок и весь диапазон непрерывных значений не проверялись.'
+  }
+ };
+}
+
+return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions});
 });
