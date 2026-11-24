@@ -744,7 +744,7 @@ if(result.reason==='geometry-sensitive-start'||result.reason==='geometry-envelop
   $('routeAdvice').textContent='Поиск в расширенной геометрической оболочке не подтвердил маршрут в заданном лимите вычислений. Это не доказывает невозможность других маршрутов; рекомендация не выдаётся.';
   $('difficultyAdvice').textContent='Автопроезд заблокирован: выбранный маршрут не подтверждён при расширении прямоугольных контуров препятствий и автопоезда. Не уменьшайте резерв только ради получения маршрута.';
  }
- $('difficultyAdvice').textContent+=' Границы проверки: положение препятствия ±'+Number(geometry.obstaclePositionUncertainty||0).toFixed(2)+' м по каждой оси; ошибка полного размера препятствия ±'+Number(geometry.obstacleSizeUncertainty||0).toFixed(2)+' м; расширение каждой внешней грани автопоезда '+Number(geometry.vehicleFootprintUncertainty||0).toFixed(2)+' м. Кинематические размеры проверяются отдельно только при ненулевых допусках; это однофакторные крайние сценарии, а не все совместные комбинации.';
+ $('difficultyAdvice').textContent+=' Границы проверки: положение препятствия ±'+Number(geometry.obstaclePositionUncertainty||0).toFixed(2)+' м по каждой оси; ошибка полного размера препятствия ±'+Number(geometry.obstacleSizeUncertainty||0).toFixed(2)+' м; расширение каждой внешней грани автопоезда '+Number(geometry.vehicleFootprintUncertainty||0).toFixed(2)+' м. Кинематические размеры проверяются отдельно при ненулевых допусках: совместные крайние сценарии плюс середины диапазонов по одному параметру; это не полный перебор всех комбинаций и не непрерывный worst-case анализ.';
  draw();
  return;
 }
@@ -759,9 +759,9 @@ if(result.reason==='parameter-sensitive-start'||result.reason==='parameter-scena
   item.key+'='+Number(item.value).toFixed(3)+' м ('+item.side+')'
  ).join('; ');
  const coverageText=sensitivity.coverage==='pairwise-endpoint-covering-array'?
-  'Проверено парное покрытие крайних значений для каждой пары активных параметров; все совместные комбинации четырёх/пяти параметров и промежуточные значения не проверялись.':
+  'Проверено парное покрытие крайних значений для каждой пары активных параметров; дополнительно проверены середины отдельных диапазонов по одному параметру. Все многопараметрические внутренние сочетания не проверялись.':
   sensitivity.coverage==='full-endpoint-combinations'?
-  'Проверены все сочетания нижних и верхних границ активных параметров (до трёх параметров); промежуточные значения не проверялись.':
+  'Проверены все сочетания нижних и верхних границ активных параметров (до трёх параметров), а также середина каждого диапазона отдельно. Совместные внутренние сочетания не проверялись.':
   'Покрытие неопределённости физических размеров не подтверждено.';
  if(result.reason==='parameter-sensitive-start'){
   $('routeAdvice').textContent='Начальное действие меняется в сценарии «'+scenarioName+'»'+
@@ -896,8 +896,14 @@ const parameterSensitivity=result.parameterSensitivity||{};
 const parameterRanges=Object.entries(parameterSensitivity.suppliedBounds||{}).map(([key,bound])=>
  key+' '+Number(bound.min).toFixed(3)+'–'+Number(bound.max).toFixed(3)+' м'
 ).join('; ');
-const parameterNote=parameterSensitivity.status==='stable-across-one-at-a-time-bounds'?
- ' Проверены '+parameterSensitivity.testedScenarioCount+' крайних сценариев физических размеров по одному параметру за раз ('+parameterRanges+'); начальное действие совпало среди найденных кандидатов. Совместные комбинации диапазонов не проверялись.':
+const stableParameterStatuses=[
+ 'stable-across-joint-endpoint-combinations',
+ 'stable-across-pairwise-endpoint-scenarios',
+ 'stable-across-one-at-a-time-bounds'
+];
+const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status)?
+ ' Проверено '+parameterSensitivity.testedScenarioCount+' сценариев физических размеров ('+parameterRanges+'); начальное действие совпало среди найденных кандидатов. '+
+ (parameterSensitivity.note||'Проверка ограничена заданными сценариями.') :
  parameterSensitivity.status==='not-varied'?
  ' Неопределённости физических размеров не заданы (нулевые допуски означают «не оценивалось», а не доказанную точность).':
  ' Устойчивость к диапазонам физических размеров не подтверждена.';
