@@ -745,7 +745,7 @@ test('swept displacement bound contains every body-corner displacement across ar
 });
 
 
-test('vehicle parameter bounds run one-at-a-time endpoint scenarios and report limited coverage',()=>{
+test('vehicle parameter bounds evaluate all endpoint combinations for one active parameter',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
  let target={...start};
  for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
@@ -764,14 +764,76 @@ test('vehicle parameter bounds run one-at-a-time endpoint scenarios and report l
   vehicleParameterBounds:bounds
  });
  assert.equal(result.ok,true,JSON.stringify(result));
- assert.equal(result.parameterSensitivity.status,'stable-across-one-at-a-time-bounds');
- assert.equal(result.parameterSensitivity.coverage,'one-parameter-at-a-time-endpoints');
- assert.equal(result.parameterSensitivity.testedScenarioCount,1);
- assert.equal(result.parameterSensitivity.allParameterCombinationsEvaluated,false);
- assert.equal(result.parameterSensitivity.completedScenarios[0].parameter,'wheelbase');
- assert.equal(result.parameterSensitivity.completedScenarios[0].value,3.7999);
+ assert.equal(result.parameterSensitivity.status,'stable-across-joint-endpoint-combinations');
+ assert.equal(result.parameterSensitivity.coverage,'full-endpoint-combinations');
+ assert.equal(result.parameterSensitivity.testedScenarioCount,2);
+ assert.equal(result.parameterSensitivity.allParameterCombinationsEvaluated,true);
+ assert.equal(result.parameterSensitivity.pairwiseEndpointCoverage,false);
  assert.deepEqual(params,originalParams);
  assert.deepEqual(bounds,{wheelbase:{min:3.7999,max:3.8}});
+});
+
+test('vehicle parameter bounds pairwise covering array checks every endpoint pair for five active dimensions',()=>{
+ const start={x:0,y:0,psi:0,psiT:0};
+ let target={...start};
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ const bounds={
+  wheelbase:{min:3.799,max:3.801},
+  hitchOffset:{min:0.574,max:0.576},
+  kingpinAxles:{min:7.999,max:8.001},
+  trailerLength:{min:13.599,max:13.601},
+  trailerWidth:{min:2.549,max:2.551}
+ };
+ const result=planner.planAlternativesWithVehicleParameterBounds({
+  start,goal:{x:target.x,y:target.y,heading:target.psi},
+  params,obstacles:[],integrate,
+  alternativeMaxExpansions:1200,
+  positionTolerance:0.02,headingTolerance:0.01,
+  maxTerminalArticulation:0.5,minClearance:0.30,
+  measurementUncertainty:0,
+  obstaclePositionUncertainty:0,
+  obstacleSizeUncertainty:0,
+  vehicleFootprintUncertainty:0,
+  vehicleParameterBounds:bounds
+ });
+ assert.equal(result.ok,true,JSON.stringify(result));
+ const sensitivity=result.parameterSensitivity;
+ assert.equal(sensitivity.status,'stable-across-pairwise-endpoint-scenarios');
+ assert.equal(sensitivity.coverage,'pairwise-endpoint-covering-array');
+ assert.equal(sensitivity.testedScenarioCount,9);
+ assert.equal(sensitivity.allParameterCombinationsEvaluated,false);
+ assert.equal(sensitivity.pairwiseEndpointCoverage,true);
+ const keys=Object.keys(bounds);
+ const expected=['max/max','max/min','min/max','min/min'];
+ for(let i=0;i<keys.length;i++)for(let j=i+1;j<keys.length;j++){
+  const observed=new Set(sensitivity.completedScenarios.map(s=>
+   s.endpointSides[keys[i]]+'/'+s.endpointSides[keys[j]]
+  ));
+  assert.deepEqual([...observed].sort(),expected);
+ }
+});
+
+test('vehicle parameter bounds reject a physically invalid joint endpoint combination',()=>{
+ const start={x:0,y:0,psi:0,psiT:0};
+ let target={...start};
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ const result=planner.planAlternativesWithVehicleParameterBounds({
+  start,goal:{x:target.x,y:target.y,heading:target.psi},
+  params,obstacles:[],integrate,
+  alternativeMaxExpansions:1200,
+  positionTolerance:0.02,headingTolerance:0.01,
+  maxTerminalArticulation:0.5,
+  vehicleParameterBounds:{
+   kingpinAxles:{min:8,max:10.2},
+   trailerLength:{min:12.9,max:13.6}
+  }
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'parameter-scenario-unavailable');
+ assert.equal(result.parameterSensitivity.status,'joint-scenario-invalid');
+ assert.equal(result.parameterSensitivity.failedScenario,'совместная комбинация 02/4');
+ assert.deepEqual(result.parameterSensitivity.failedParameters.map(item=>item.key),['kingpinAxles','trailerLength']);
+ assert.ok(result.parameterSensitivity.validationErrors.length>0);
 });
 
 test('vehicle parameter bounds report not-varied instead of implying zero physical uncertainty',()=>{
