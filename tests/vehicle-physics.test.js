@@ -378,6 +378,25 @@ test('vehicle geometry rejects a cab outside the tractor envelope and mirrors ou
 });
 
 
+test('Ackermann steering gives the inner front wheel a larger angle for left and right turns',()=>{
+ const p={wheelbase:3.8,tractorFrontTrack:2.05,tractorSteeringTrack:2.05};
+ const straight=physics.frontWheelSteerAngles(0,p);
+ near(straight.left,0);near(straight.right,0);
+ const left=physics.frontWheelSteerAngles(0.3,p);
+ assert.ok(left.left>left.right&&left.right>0);
+ near(1/Math.tan(left.right)-1/Math.tan(left.left),2.05/3.8,1e-9);
+ const right=physics.frontWheelSteerAngles(-0.3,p);
+ assert.ok(right.left<0&&right.right<0);
+ assert.ok(Math.abs(right.right)>Math.abs(right.left));
+ near(1/Math.tan(Math.abs(right.left))-1/Math.tan(Math.abs(right.right)),2.05/3.8,1e-9);
+});
+
+test('Ackermann steering rejects a turn radius that cannot fit inside half the steering track',()=>{
+ const p={wheelbase:3.8,tractorSteeringTrack:2.4};
+ const limitingSteer=Math.atan(3.8/1.2);
+ assert.throws(()=>physics.frontWheelSteerAngles(limitingSteer,p),/Радиус поворота слишком мал/);
+});
+
 test('calibrated wheel footprints cover two tractor axles and all three trailer axles',()=>{
  const p={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
@@ -387,6 +406,7 @@ test('calibrated wheel footprints cover two tractor axles and all three trailer 
  };
  const q={x:4,y:-2,psi:Math.PI/2,psiT:Math.PI/2};
  const wheels=physics.wheelFootprints(q,p,0.18);
+ const steeringAngles=physics.frontWheelSteerAngles(0.18,p);
  assert.equal(wheels.length,10);
  assert.equal(wheels.filter(wheel=>wheel.vehiclePart==='тягач').length,4);
  assert.equal(wheels.filter(wheel=>wheel.vehiclePart==='полуприцеп').length,6);
@@ -394,7 +414,11 @@ test('calibrated wheel footprints cover two tractor axles and all three trailer 
  assert.ok(frontLeft);
  near(frontLeft.center.x,4-2.05/2);
  near(frontLeft.center.y,1.8);
- near(frontLeft.heading,Math.PI/2+0.18);
+ near(frontLeft.heading,Math.PI/2+steeringAngles.left);
+ const frontRight=wheels.find(wheel=>wheel.name==='правое переднее колесо тягача');
+ assert.ok(frontRight);
+ near(frontRight.heading,Math.PI/2+steeringAngles.right);
+ assert.ok(steeringAngles.left>steeringAngles.right);
  const trailerLeft=wheels.find(wheel=>wheel.name==='левое колесо 1-й оси полуприцепа');
  assert.ok(trailerLeft);
  near(trailerLeft.heading,Math.PI/2);
