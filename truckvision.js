@@ -1186,6 +1186,29 @@ async function buildRoute(){
 
 
   
+if(result.reason==='search-incomplete'||result.reason==='geometry-search-incomplete'){
+ if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: поиск начальных действий не завершён.');
+ plannedRoute=[];
+ alternativeRoutes=[];
+ routeAssessment=null;
+ const chooser=$('alternativeRouteSelect');
+ if(chooser){chooser.innerHTML='<option value="">Поиск не завершён</option>';chooser.style.display='none';}
+ const incomplete=result.incompleteActions||
+  result.reserveFailure?.incompleteActions||
+  result.envelopeFailure?.incompleteActions||[];
+ const actionNames=incomplete.map(item=>item.label).filter(Boolean);
+ const actionNote=actionNames.length?
+  ' Не завершены проверки: '+actionNames.join('; ')+'.':'';
+ const geometrySearch=result.reason==='geometry-search-incomplete'||
+  result.geometrySensitivity?.status==='envelope-search-incomplete';
+ $('routeAdvice').textContent=geometrySearch?
+  'Поиск в расширенной геометрической оболочке не завершён: достигнут лимит расширений до проверки всех необходимых начальных действий. Рекомендация и виртуальный автопроезд заблокированы.'+actionNote:
+  'Поиск не завершён: достигнут лимит расширений до проверки всех необходимых начальных действий. Найденные варианты не считаются полным сравнением; сторона и передача не рекомендованы.'+actionNote;
+ $('difficultyAdvice').textContent='Это ограничение вычислительного поиска, а не доказательство отсутствия маршрута. Увеличьте допустимый вычислительный бюджет или уточните сцену и повторите расчёт. Не уменьшайте геометрические и измерительные резервы ради получения рекомендации.';
+ draw();
+ return;
+}
+
 if(result.reason==='geometry-sensitive-start'||result.reason==='geometry-envelope-no-route'){
  if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: геометрическая неопределённость не подтверждает выбранный старт.');
  plannedRoute=[];
