@@ -83,7 +83,7 @@ let plannerWorker=null,plannerRequestId=0,plannerReject=null,routeBuildToken=0;
 // Учебный коридор: стены параллельны направлению движения (+X).
 // Между внутренними гранями стен остаётся 9.3 м; паллеты стоят
 // снаружи коридора и не перекрывают прямой тестовый маршрут к цели (22, 0).
-const cameraObstacles=[]; // Legacy diagnostic API; not part of the normal driver workflow.
+const cameraObstacles=[]; // Session-local obstacles registered through the camera measurement UI.
 let perceptionObstacles=[];
 let perceptionFrameId=null;
 let perceptionFrameTimestamp=0;
