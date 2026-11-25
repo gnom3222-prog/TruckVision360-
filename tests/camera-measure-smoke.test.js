@@ -9,12 +9,12 @@ const geometry=require('../camera-geometry.js');
 function bootCamera(options={}){
  const elements={},windowListeners={};
  const context={clearRect(){},beginPath(){},moveTo(){},lineTo(){},closePath(){},stroke(){},arc(){},fill(){},fillText(){}};
- const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateWidthUncertainty','gateCenterX','gateCenterY','gateHeadingDeg','gateResult','cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading'];
+ const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateWidthUncertainty','gateCenterX','gateCenterY','gateHeadingDeg','gateResult','cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg'];
  for(const id of ids){
   elements[id]={
    id,value:({
     cameraReferenceWidth:'2.970',cameraReferenceHeight:'2.100',
-    cameraPointSigma:'2',cameraReferenceSigma:'2',gateWidth:'3.50',gateWidthUncertainty:'0',gateCenterX:'12',gateCenterY:'0',gateHeadingDeg:'90',cameraObstacleName:'Опорный столб',cameraObstacleX:'3',cameraObstacleY:'4',cameraObstacleHeading:'90'
+    cameraPointSigma:'2',cameraReferenceSigma:'2',gateWidth:'3.50',gateWidthUncertainty:'0',gateCenterX:'12',gateCenterY:'0',gateHeadingDeg:'90',cameraObstacleName:'Опорный столб',cameraObstacleX:'3',cameraObstacleY:'4',cameraObstacleHeading:'90',cameraObstaclePositionUncertaintyX:'0.10',cameraObstaclePositionUncertaintyY:'0.15',cameraObstacleHeadingUncertaintyDeg:'2'
    })[id]||'',
    textContent:'',style:{},listeners:{},width:0,height:0,
    videoWidth:id==='measureVideo'?640:0,
@@ -33,7 +33,7 @@ function bootCamera(options={}){
  const win={
   TruckVisionCameraGeometry:options.geometry||geometry,
   TruckVisionApplyGateRegistration:options.applyGateRegistration||((registration)=>{appliedRegistrations.push(registration);elements.gateWidth.value=registration.clearWidth.toFixed(2);elements.gateWidthUncertainty.value=registration.widthUncertaintyBound.toFixed(3);elements.gateCenterX.value=registration.centerX.toFixed(2);elements.gateCenterY.value=registration.centerY.toFixed(2);elements.gateHeadingDeg.value=registration.headingDeg.toFixed(2);return true;}),
-  TruckVisionAddCameraObstacle:options.addCameraObstacle||((measurement,anchor,heading,name)=>{obstacleRegistrations.push({measurement,anchor,heading,name});return true;}),
+  TruckVisionAddCameraObstacle:options.addCameraObstacle||((measurement,anchor,heading,name,poseUncertainty)=>{obstacleRegistrations.push({measurement,anchor,heading,name,poseUncertainty});return true;}),
   TruckVisionClearCameraObstacles:options.clearCameraObstacles||(()=>{clearCalls++;return true;}),
   addEventListener(type,fn){(windowListeners[type]??=[]).push(fn);}
  };
@@ -196,6 +196,7 @@ test('camera-measured obstacle is registered with manual map pose and can be cle
  assert.equal(registration.anchor.y,4);
  assert.equal(registration.heading,Math.PI/2);
  assert.equal(registration.name,'Опорный столб');
+ assert.deepEqual(registration.poseUncertainty,{positionX:0.10,positionY:0.15,headingDeg:2});
  assert.ok(registration.measurement.width>0);
  assert.ok(registration.measurement.height>0);
  assert.match(camera.elements.cameraStatus.textContent,/Препятствие добавлено на карту/);
@@ -221,7 +222,7 @@ test('camera obstacle registration requires explicit map coordinates and heading
 
 test('measurement page exposes the complete camera obstacle workflow',()=>{
  const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
- for(const id of ['cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading']){
+ for(const id of ['cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg']){
   assert.match(html,new RegExp('id="'+id+'"'),'missing camera obstacle control '+id);
  }
  assert.match(html,/в той же плоскости пола/);
@@ -239,4 +240,28 @@ test('camera-registered obstacles remain in planner input while live perception 
  assert.ok(cameraPush>=0,'camera obstacles must always be appended');
  assert.ok(perceptionPush>cameraPush,'live perception objects must be appended after camera obstacles');
  assert.doesNotMatch(body,/if\s*\(!perceptionFrameTimestamp\)\s*result\.push\(\.\.\.cameraObstacles/);
+ assert.match(app,/inflateObstaclePoseUncertainty/);
+ assert.match(app,/mapPoseUncertainty/);
+ assert.match(app,/Нижние оценки по каждому из 10 колёс/);
+});
+
+
+test('camera obstacle registration requires explicit bounded map-pose uncertainty',async()=>{
+ const camera=bootCamera();
+ camera.elements.cameraObstaclePositionUncertaintyX.value='';
+ await camera.fire('cameraStart','click');
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
+ await camera.fire('cameraMeasureObstacle','click');
+ await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
+ assert.equal(camera.obstacleRegistrations.length,0);
+ assert.match(camera.elements.cameraStatus.textContent,/отдельные допуски положения X\/Y и направления/);
+ camera.elements.cameraObstaclePositionUncertaintyX.value='0.1';
+ camera.elements.cameraObstaclePositionUncertaintyY.value='0.1';
+ camera.elements.cameraObstacleHeadingUncertaintyDeg.value='46';
+ await camera.fire('cameraMeasureObstacle','click');
+ await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
+ assert.equal(camera.obstacleRegistrations.length,0);
+ assert.match(camera.elements.cameraStatus.textContent,/Допуски привязки должны быть/);
+ camera.fire('cameraStop','click');
 });
