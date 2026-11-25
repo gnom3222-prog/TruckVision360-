@@ -818,6 +818,19 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
  const articulationPeak=planner.articulationExposure(path);
  maxBeta=articulationPeak.maxAngleDegrees;
  const scrubExposure=physics.trailerAxleScrubExposure(path,cfg,0.7);
+ const wheelTrajectory=physics.trailerWheelTrajectoryDiagnostics(path,cfg);
+ const wheelTrackSummary=wheelTrajectory.axles.map((axle,index)=>{
+  const differences=wheelTrajectory.segments
+   .map(segment=>segment.axles[index]?.outerMinusInner)
+   .filter(Number.isFinite);
+  return {
+   axleIndex:axle.axleIndex,
+   centerDistance:axle.center.sampledTravel,
+   leftWheelDistance:axle.left.sampledTravel,
+   rightWheelDistance:axle.right.sampledTravel,
+   maxOuterMinusInnerPerSample:differences.length?Math.max(0,...differences):0
+  };
+ });
  const turns=gearChanges+steeringChanges;
  const clearanceByPart=Array.isArray(trajectoryClearance?.parts)?trajectoryClearance.parts:[];
  const partLowerBounds=clearanceByPart.map(part=>part.minimumClearanceLowerBound).filter(Number.isFinite);
@@ -863,6 +876,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   axleScrubTravelProxy:scrubExposure.totalAbsoluteLateralTravel,
   axleScrubTravelByAxle:scrubExposure.cumulativeAbsoluteLateralTravelByAxle,
   axleScrubSpeedByAxle:scrubExposure.maxAbsLateralVelocityByAxle,
+  wheelTrackSummary,
   level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',
   maxBeta,articulationPeak,articulationWarning,clearance:minClearance,clearanceDetail:minClearanceDetail,
   clearanceLowerBound:clearanceForAssessment,effectiveClearance,
@@ -1302,7 +1316,7 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
   $('difficultyAdvice').textContent=
    'Сложность: '+m.level+'. Причины: '+m.reasons.join('; ')+
    '. Максимальный угол сочленения '+m.maxBeta.toFixed(1)+'°; '+articulationPeakText+'; конечная ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+
-   '°; конечный угол тягач–полуприцеп '+m.finalArticulationDeg.toFixed(1)+'°; геометрический индикатор боковой скорости крайних осей при расчётной скорости 0,7 м/с '+m.maxAxleScrubSpeed.toFixed(3)+' м/с; по осям (передняя/средняя/задняя): '+m.axleScrubSpeedByAxle.map(value=>value.toFixed(3)).join('/')+' м/с; накопленный proxy по осям: '+m.axleScrubTravelByAxle.map(value=>value.toFixed(2)).join('/')+' м; суммарный proxy '+m.axleScrubTravelProxy.toFixed(2)+' м (не модель шин); минимальный зазор до тестовых препятствий '+
+   '°; конечный угол тягач–полуприцеп '+m.finalArticulationDeg.toFixed(1)+'°; геометрический индикатор боковой скорости крайних осей при расчётной скорости 0,7 м/с '+m.maxAxleScrubSpeed.toFixed(3)+' м/с; по осям (передняя/средняя/задняя): '+m.axleScrubSpeedByAxle.map(value=>value.toFixed(3)).join('/')+' м/с; накопленный proxy по осям: '+m.axleScrubTravelByAxle.map(value=>value.toFixed(2)).join('/')+' м; суммарный proxy '+m.axleScrubTravelProxy.toFixed(2)+' м (не модель шин); выборочные траектории колёс трёх осей (центр/левое/правое, м): '+m.wheelTrackSummary.map(item=>'ось '+item.axleIndex+' '+item.centerDistance.toFixed(2)+'/'+item.leftWheelDistance.toFixed(2)+'/'+item.rightWheelDistance.toFixed(2)+'; max разница внешнего и внутреннего колеса на сегменте '+item.maxOuterMinusInnerPerSample.toFixed(3)).join('; ')+'; длины — хорды между узлами маршрута, не непрерывная оценка; минимальный зазор до тестовых препятствий '+
    (Number.isFinite(m.clearance)?m.clearance.toFixed(2)+' м':'не определён')+
    '; ближайшая проверенная часть автопоезда: '+closestLocationText+
    '; нижняя оценка между узлами '+(Number.isFinite(m.clearanceLowerBound)?m.clearanceLowerBound.toFixed(2)+' м':'не ограничена')+
