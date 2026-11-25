@@ -473,6 +473,181 @@
    note:'Для сегмента атрибутируется часть автопоезда; ближайшее препятствие в середине сегмента может отличаться от препятствия в начальной позе.'
   };
  }
+
+ // A wheel's circumscribed tire envelope is orientation-independent. This lets
+ // the swept bound remain valid even when steering changes between sampled poses.
+ function wheelEnvelopePolygon(center,radius,segments=16){
+  if(!center||![center.x,center.y,radius].every(Number.isFinite)||radius<=0){
+   throw new Error('Wheel envelope requires a finite center and positive radius.');
+  }
+  const vertexRadius=radius/Math.cos(Math.PI/segments);
+  return Array.from({length:segments},(_,index)=>{
+   const angle=2*Math.PI*index/segments;
+   return {x:center.x+vertexRadius*Math.cos(angle),y:center.y+vertexRadius*Math.sin(angle)};
+  });
+ }
+ function matrixSpectralNorm2x2(a,b,c,d){
+  const column1=a*a+c*c,column2=b*b+d*d,cross=a*b+c*d;
+  const largestEigenvalue=0.5*(column1+column2+Math.hypot(column1-column2,2*cross));
+  return Math.sqrt(Math.max(0,largestEigenvalue));
+ }
+ function wheelCenterDisplacementRatePerMeter(wheel,p,previousState,currentState){
+  const previousSteer=previousState.steer===undefined?0:previousState.steer;
+  const currentSteer=currentState.steer===undefined?0:currentState.steer;
+  const maxAbsSteer=Math.max(Math.abs(previousSteer),Math.abs(currentSteer));
+  const curvature=Math.abs(Math.tan(maxAbsSteer)/p.wheelbase);
+  if(wheel.vehiclePart==='тягач'){
+   const longitudinal=wheel.axleIndex===1?p.wheelbase:0;
+   const track=wheel.axleIndex===1?(p.tractorFrontTrack??2.05):(p.tractorRearTrack??2.05);
+   const lateral=Math.abs(track/2);
+   return Math.hypot(1+lateral*curvature,longitudinal*curvature);
+  }
+  if(wheel.vehiclePart==='полуприцеп'){
+   const spacing=p.trailerAxleSpacing??1.3;
+   const longitudinal=[spacing,0,-spacing][wheel.axleIndex-1];
+   if(!Number.isFinite(longitudinal))throw new Error('Trailer wheel axle index is invalid for swept-clearance analysis.');
+   const track=p.trailerTrack??(p.trailerWidth+0.24);
+   const lateral=(wheel.side==='left'?1:-1)*track/2;
+   const couplingMagnitude=p.hitchOffset*curvature;
+   let maximum=0;
+   for(const sign of [-1,1]){
+    const coupling=sign*couplingMagnitude;
+    const a=1+coupling*lateral/p.kingpinAxles;
+    const b=coupling-lateral/p.kingpinAxles;
+    const c=-coupling*longitudinal/p.kingpinAxles;
+    const d=longitudinal/p.kingpinAxles;
+    maximum=Math.max(maximum,matrixSpectralNorm2x2(a,b,c,d));
+   }
+   return maximum;
+  }
+  throw new Error('Unknown vehicle part in wheel swept-clearance analysis.');
+ }
+ function analyzeWheelTrajectoryClearance(states,obstacles,p){
+  if(!Array.isArray(states)||states.length===0){
+   throw new Error('Route states are required for per-wheel clearance analysis.');
+  }
+  const geometryErrors=rootPhysics&&typeof rootPhysics.validateVehicleParams==='function'?
+   rootPhysics.validateVehicleParams(p):['Vehicle geometry validation is unavailable.'];
+  if(geometryErrors.length)throw new Error('Invalid vehicle geometry for per-wheel clearance analysis: '+geometryErrors.join(' '));
+  if(!rootPhysics||typeof rootPhysics.wheelFootprints!=='function'){
+   throw new Error('Shared wheel geometry is unavailable for per-wheel clearance analysis.');
+  }
+  const obstacleErrors=validateObstacles(obstacles);
+  if(obstacleErrors.length)throw new Error('Invalid obstacles for per-wheel clearance analysis: '+obstacleErrors.join(' '));
+  const prepared=obstacles.map(obstacle=>({poly:obstaclePoly(obstacle),name:obstacle.name||'препятствие'}));
+  const uncertainty=Number.isFinite(p.footprintUncertainty)?p.footprintUncertainty:0;
+  const tireLength=p.tireLength??0.72,tireWidth=p.tireWidth??0.44;
+  const tireRadius=Math.hypot(tireLength/2+uncertainty,tireWidth/2+uncertainty);
+  const records=new Map();
+  let previousState=null,previousChecks=null,distanceAlongRoute=0;
+  const snapshot=state=>({
+   x:state.x,y:state.y,psi:state.psi,psiT:state.psiT,
+   gear:state.gear===-1?-1:1,steer:state.steer===undefined?0:state.steer
+  });
+  for(let index=0;index<states.length;index++){
+   const state=states[index];
+   if(!state||![state.x,state.y,state.psi,state.psiT].every(Number.isFinite)){
+    throw new Error('Route state '+index+' is invalid for per-wheel clearance analysis.');
+   }
+   const gear=state.gear===undefined?1:state.gear;
+   const steer=state.steer===undefined?0:state.steer;
+   if(gear!==1&&gear!==-1)throw new Error('Route state '+index+' has an invalid gear for per-wheel clearance analysis.');
+   if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2){
+    throw new Error('Route state '+index+' has an invalid steering angle for per-wheel clearance analysis.');
+   }
+   let segmentStartDistance=distanceAlongRoute,stepDistance=null;
+   if(index>0){
+    stepDistance=state.stepDistance;
+    if(!Number.isFinite(stepDistance)||stepDistance<=0){
+     throw new Error('Route state '+index+' is missing its positive integration stepDistance; per-wheel swept bound cannot be established.');
+    }
+    const chordDistance=Math.hypot(state.x-previousState.x,state.y-previousState.y);
+    if(chordDistance>stepDistance+1e-6){
+     throw new Error('Route state '+index+' moves farther than its integration stepDistance; per-wheel swept bound is invalid.');
+    }
+    segmentStartDistance=distanceAlongRoute;
+    distanceAlongRoute+=stepDistance;
+   }
+   const footprints=rootPhysics.wheelFootprints(state,p,steer);
+   if(footprints.length!==10)throw new Error('Per-wheel geometry must contain exactly ten wheel footprints.');
+   const currentChecks=footprints.map(wheel=>{
+    const envelope=wheelEnvelopePolygon(wheel.center,tireRadius);
+    let envelopeDistance=Infinity,envelopeObstacle=null;
+    let polygonDistance=Infinity,polygonObstacle=null;
+    for(const obstacle of prepared){
+     const envelopeGap=polyDist(envelope,obstacle.poly);
+     if(envelopeGap<envelopeDistance){envelopeDistance=envelopeGap;envelopeObstacle=obstacle.name;}
+     const polygonGap=polyDist(wheel.polygon,obstacle.poly);
+     if(polygonGap<polygonDistance){polygonDistance=polygonGap;polygonObstacle=obstacle.name;}
+    }
+    let record=records.get(wheel.name);
+    if(!record){
+     record={
+      name:wheel.name,vehiclePart:wheel.vehiclePart,axleIndex:wheel.axleIndex,side:wheel.side,
+      minimumSampledPolygonClearance:Infinity,minimumSampledPolygonDetail:null,
+      minimumSampledEnvelopeClearance:Infinity,minimumSampledEnvelopeDetail:null,
+      minimumClearanceLowerBound:Infinity,limitingDetail:null
+     };
+     records.set(wheel.name,record);
+    }
+    if(polygonDistance<record.minimumSampledPolygonClearance){
+     record.minimumSampledPolygonClearance=polygonDistance;
+     record.minimumSampledPolygonDetail=Number.isFinite(polygonDistance)?{
+      obstacle:polygonObstacle,state:snapshot(state),distanceAlongRoute
+     }:null;
+    }
+    if(envelopeDistance<record.minimumSampledEnvelopeClearance){
+     record.minimumSampledEnvelopeClearance=envelopeDistance;
+     record.minimumSampledEnvelopeDetail=Number.isFinite(envelopeDistance)?{
+      obstacle:envelopeObstacle,state:snapshot(state),distanceAlongRoute
+     }:null;
+    }
+    if(envelopeDistance<record.minimumClearanceLowerBound){
+     record.minimumClearanceLowerBound=envelopeDistance;
+     record.limitingDetail=Number.isFinite(envelopeDistance)?{
+      kind:'sampled-circumscribed-envelope',lowerBound:envelopeDistance,
+      obstacle:envelopeObstacle,state:snapshot(state),distanceAlongRoute
+     }:null;
+    }
+    return {wheel,envelopeDistance,envelopeObstacle,polygonDistance,polygonObstacle};
+   });
+   if(previousChecks){
+    const previousByName=new Map(previousChecks.map(item=>[item.wheel.name,item]));
+    for(const current of currentChecks){
+     const previous=previousByName.get(current.wheel.name);
+     if(!previous)throw new Error('Wheel identity changed between adjacent route states.');
+     if(!Number.isFinite(previous.envelopeDistance))continue;
+     const rate=wheelCenterDisplacementRatePerMeter(current.wheel,p,previousState,state);
+     const lowerBound=previous.envelopeDistance-rate*stepDistance;
+     const record=records.get(current.wheel.name);
+     if(lowerBound<record.minimumClearanceLowerBound){
+      record.minimumClearanceLowerBound=lowerBound;
+      record.limitingDetail={
+       kind:'segment-circumscribed-envelope-lower-bound',lowerBound,
+       obstacleAtReference:previous.envelopeObstacle,referenceDistance:previous.envelopeDistance,
+       displacementRate:rate,stepDistance,distanceAlongRoute:segmentStartDistance,
+       from:snapshot(previousState),to:snapshot(state),gear,steer
+      };
+     }
+    }
+   }
+   previousState=state;
+   previousChecks=currentChecks;
+  }
+  const wheels=[...records.values()];
+  const limitingWheel=wheels.reduce((best,wheel)=>
+   Number.isFinite(wheel.minimumClearanceLowerBound)&&
+   (!best||wheel.minimumClearanceLowerBound<best.minimumClearanceLowerBound)?wheel:best,null);
+  return {
+   statesAnalyzed:states.length,segmentsAnalyzed:Math.max(0,states.length-1),
+   distanceAlongRoute,wheels,limitingWheel,
+   minimumClearanceLowerBound:limitingWheel?limitingWheel.minimumClearanceLowerBound:Infinity,
+   envelope:'circumscribed-16-gon-around-rectangular-tire-footprint',
+   method:'per-wheel center displacement bound with orientation-independent circumscribed tire envelope',
+   note:'Нижняя оценка колеса использует описанную окружность прямоугольной оболочки шины и может быть строже фактического прямоугольного зазора. Между узлами применяется модельная граница перемещения центра; это не сертифицированная ошибка интегрирования.'
+  };
+ }
+
  function push(heap,n){
   let i=heap.length;heap.push(n);
   while(i){const p=(i-1)>>1;if(heap[p].f<=n.f)break;heap[i]=heap[p];i=p;heap[i]=n;}
@@ -1536,5 +1711,5 @@ function planAlternativesWithVehicleParameterBounds(options={}){
  };
 }
 
-return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon});
+return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon});
 });
