@@ -356,7 +356,6 @@
   }
   const hitchYawCoupling=hitchOffset*tractorYawPerMeter;
   const trailerTrack=p.trailerTrack??(trailerWidth+0.24);
-  const tireWidth=p.tireWidth??0.44;
   // The tire outer track can extend beyond the cargo-body width and therefore
   // must be included in the trailer point-motion bound.
   const trailerWidthWithUncertainty=Math.max(
