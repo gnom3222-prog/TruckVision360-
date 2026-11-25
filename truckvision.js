@@ -19,6 +19,13 @@ const cfg={
  trailerWidth:2.55,
  kingpinAxles:8,
  trailerAxleSpacing:1.3,
+ cabOffset:2.1,
+ cabFront:1.35,
+ cabRear:0.9,
+ cabWidth:2.25,
+ mirrorOutboard:0,
+ mirrorLongitudinal:3.0,
+ mirrorLength:0.8,
  trailerMass:30000,
  mu:0.7,
  crr:0.008,
@@ -320,6 +327,9 @@ function bodyCorners(origin,angle,front,rear,width){
 
 function vehiclePolygons(q){return physics.vehiclePolygons(q,{...cfg,footprintUncertainty:cfg.vehicleFootprintUncertainty});}
 function nominalVehiclePolygons(q){return physics.vehiclePolygons(q,{...cfg,footprintUncertainty:0});}
+function vehicleCollisionParts(q,uncertainty=cfg.vehicleFootprintUncertainty){
+ return physics.vehicleCollisionParts(q,{...cfg,footprintUncertainty:uncertainty});
+}
 
 function obstaclePolygon(o){
  if(Array.isArray(o.polygon))return o.polygon.map(point=>({x:point.x,y:point.y}));
@@ -383,12 +393,11 @@ function obstacleEnvelopePolygon(obstacle){
 function clearanceMeasurementReserve(){return 2*Math.max(0,cfg.measurementUncertainty);}
 
 function assessScene(q=state){
- const nominalVehicle=nominalVehiclePolygons(q);
- const boundedVehicle=vehiclePolygons(q);
- const bodyNames=['тягач','кабина','полуприцеп'];
+ const nominalParts=vehicleCollisionParts(q,0);
+ const boundedParts=vehicleCollisionParts(q,cfg.vehicleFootprintUncertainty);
  let nearest={
   distance:Infinity,geometryLowerBound:Infinity,effectiveDistance:Infinity,
-  name:'нет заданных препятствий',vehiclePart:null,bodyIndex:null
+  name:'нет заданных препятствий',vehiclePart:null,bodyIndex:null,component:null
  };
  let collision=false,collisionDetail=null;
 
@@ -396,18 +405,23 @@ function assessScene(q=state){
   for(const obstacle of sceneObstacles()){
    const nominalObstacle=obstaclePolygon(obstacle);
    const boundedObstacle=obstacleEnvelopePolygon(obstacle);
-   for(let i=0;i<boundedVehicle.length;i++){
-    const nominalDistance=polygonDistance(nominalVehicle[i],nominalObstacle);
-    const geometryLowerBound=polygonDistance(boundedVehicle[i],boundedObstacle);
-    const effectiveDistance=geometryLowerBound-clearanceMeasurementReserve();
-    const detail={
-     distance:nominalDistance,geometryLowerBound,effectiveDistance,
-     name:obstacle.name,vehiclePart:bodyNames[i]||('часть '+(i+1)),bodyIndex:i
-    };
-    if(effectiveDistance<nearest.effectiveDistance)nearest=detail;
-    if(nominalDistance===0){
-     collision=true;
-     if(!collisionDetail)collisionDetail=detail;
+   for(let i=0;i<boundedParts.length;i++){
+    for(let j=0;j<boundedParts[i].components.length;j++){
+     const nominalComponent=nominalParts[i].components[j];
+     const boundedComponent=boundedParts[i].components[j];
+     const nominalDistance=polygonDistance(nominalComponent.polygon,nominalObstacle);
+     const geometryLowerBound=polygonDistance(boundedComponent.polygon,boundedObstacle);
+     const effectiveDistance=geometryLowerBound-clearanceMeasurementReserve();
+     const detail={
+      distance:nominalDistance,geometryLowerBound,effectiveDistance,
+      name:obstacle.name,vehiclePart:boundedParts[i].vehiclePart,
+      bodyIndex:boundedParts[i].bodyIndex,component:boundedComponent.name
+     };
+     if(effectiveDistance<nearest.effectiveDistance)nearest=detail;
+     if(nominalDistance===0){
+      collision=true;
+      if(!collisionDetail)collisionDetail=detail;
+     }
     }
    }
   }
@@ -433,7 +447,9 @@ function updateAssistant(){
  }else{
   const a=assessScene();
   const effectiveClearance=a.nearest.effectiveDistance;
-  const partText=a.nearest.vehiclePart?'Часть автопоезда: '+a.nearest.vehiclePart+'. ':'';
+  const partText=a.nearest.vehiclePart?
+   'Часть автопоезда: '+a.nearest.vehiclePart+'. '+
+   (a.nearest.component?'Компонент: '+a.nearest.component+'. ':''):'';
 
   if(a.collision){
    const hit=a.collisionDetail||a.nearest;
@@ -550,7 +566,7 @@ function drawSweptCorridor(path,kind){
  const obstaclePolygons=showObstacles?sceneObstacles().map(obstacleEnvelopePolygon):[];
  let previous=null;
  for(const q of samples){
-  const polygons=physics.vehiclePolygons(q,{...cfg,footprintUncertainty:cfg.vehicleFootprintUncertainty});
+  const polygons=vehicleCollisionParts(q).flatMap(group=>group.components.map(component=>component.polygon));
   const fill=sweptClearanceColor(0,polygons,obstaclePolygons);
   polygons.forEach((poly,index)=>{
    const points=poly.map(toScreen);
@@ -1227,8 +1243,11 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
      part.minimumSampledClearance.toFixed(2)+' м':'не определён';
     const detail=part.limitingDetail;
     const obstacle=detail?.obstacleAtReference||detail?.obstacle||'препятствие не выделено';
+    const component=detail?.componentAtReference||detail?.component;
+    const componentText=component?' · '+component:'';
     const obstacleText=detail?.kind==='segment-lower-bound'?
-     'препятствие у начала сегмента «'+obstacle+'»':'препятствие «'+obstacle+'»';
+     'препятствие у начала сегмента «'+obstacle+'»'+componentText:
+     'препятствие «'+obstacle+'»'+componentText;
     const location=detail?.kind==='segment-lower-bound'?
      'сегмент около '+Number(detail.distanceAlongRoute).toFixed(1)+' м, '+(detail.gear<0?'задний ход':'вперёд'):
      detail?.kind==='sampled-pose'?'поза около '+Number(detail.distanceAlongRoute).toFixed(1)+' м пути':'положение не определено';
@@ -1379,8 +1398,15 @@ function drawVehicleDetails(){
   drawWheel(localPoint(frontAxle,state.psi,0,side*tractorHalfTrackVisual),state.psi+steer);
   drawWheel(localPoint(rearAxle,state.psi,0,side*tractorHalfTrackVisual),state.psi);
  });
+ // Отдельные зеркальные оболочки отображаются только при введённом измеренном выносе.
+ physics.mirrorPolygons(state,{...cfg,footprintUncertainty:0}).forEach(mirror=>{
+  drawPolygon(mirror.polygon,'#143b50');
+ });
  // Кабина: контрастное ветровое стекло и нос автомобиля.
- const windshield=bodyCorners(localPoint(state,state.psi,2.1),state.psi,1.15,0.25,2.20).map(toScreen);
+ const windshield=bodyCorners(
+  localPoint(state,state.psi,cfg.cabOffset),state.psi,
+  cfg.cabFront-0.2,cfg.cabFront-1.1,cfg.cabWidth-0.05
+ ).map(toScreen);
  ctx.beginPath();
  windshield.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
  ctx.closePath();
@@ -1406,7 +1432,7 @@ function drawVehicleDetails(){
 function fitSceneCamera(){
  const points=[];
  const add=poly=>{if(Array.isArray(poly))poly.forEach(p=>{if(Number.isFinite(p.x)&&Number.isFinite(p.y))points.push(p);});};
- add(vehiclePolygons(state).flat());
+ add(vehicleCollisionParts(state).flatMap(group=>group.components.map(component=>component.polygon)));
  if(showObstacles)sceneObstacles().forEach(o=>add(obstaclePolygon(o)));
  if(plannedRoute.length>1)plannedRoute.forEach(p=>points.push({x:p.x,y:p.y}));
  if(!points.length)return;
@@ -1470,7 +1496,7 @@ function draw(){
   .forEach(poly=>drawEnvelopePolygon(poly,'#ffd18b'));
  drawBody(h,state.psiT,1.5,-(cfg.trailerLength-1.5),cfg.trailerWidth,'#315b78');
  drawBody(state,state.psi,5,-1.2,2.55,'#087fa5');
- drawBody(localPoint(state,state.psi,2.1),state.psi,1.35,-0.9,2.25,'#35c8ef');
+ drawBody(localPoint(state,state.psi,cfg.cabOffset),state.psi,cfg.cabFront,-cfg.cabRear,cfg.cabWidth,'#35c8ef');
  drawVehicleDetails();
 
  const hp=toScreen(h);
@@ -1486,8 +1512,9 @@ function draw(){
  ctx.fill();
 
  const partClearances=clearanceForVehicleParts(state);
- physics.vehiclePolygons(state,{...cfg,footprintUncertainty:cfg.vehicleFootprintUncertainty})
-  .forEach((poly,index)=>drawEnvelopePolygon(poly,partClearances[index]?.color||'#8ba5b8'));
+ vehicleCollisionParts(state).forEach(group=>group.components.forEach(component=>
+  drawEnvelopePolygon(component.polygon,partClearances[group.bodyIndex]?.color||'#8ba5b8')
+ ));
  ctx.save();
  ctx.textAlign='center';
  ctx.font='bold 16px system-ui';
