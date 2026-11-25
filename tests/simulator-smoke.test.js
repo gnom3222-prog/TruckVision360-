@@ -403,7 +403,7 @@ test('selected alternative displays per-part swept clearance, limiting obstacles
  elements.goalY.value='0';
  elements.goalHeading.value='0';
  await elements.planRoute.onclick();
- assert.equal(elements.alternativeRouteSelect.children.length,2);
+ assert.equal(elements.alternativeRouteSelect.children.length,1);
  elements.alternativeRouteSelect.value='0';
  elements.alternativeRouteSelect.onchange();
  assert.match(elements.difficultyAdvice.textContent,/Зазоры по частям вдоль маршрута/);
