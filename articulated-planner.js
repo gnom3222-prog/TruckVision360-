@@ -571,7 +571,11 @@
   let previousState=null,previousChecks=null,distanceAlongRoute=0;
   let segmentsWithIntermediateKinematicSamples=0,segmentsWithoutIntermediateKinematicSamples=0;
   let segmentsSkippedForNoObstacles=0,intermediateSamplesAnalyzed=0;
-  const intermediateSampleFractions=[0.25,0.5,0.75];
+  let segmentsAtAdaptiveSamplingCap=0,maxAdaptiveIntervalsUsed=0;
+  let maximumWheelCenterDisplacementBound=0;
+  const targetMaxWheelCenterDisplacementPerInterval=0.05;
+  const minAdaptiveIntervals=4,maxAdaptiveIntervals=64;
+  const baselineIntermediateSampleFractions=[0.25,0.5,0.75];
   const endpointTolerance={position:1e-5,heading:1e-6};
   const segmentDiagnostics=[];
   const snapshot=state=>({
@@ -649,6 +653,30 @@
    });
    if(index>0){
     let intermediateSampleStatus='rk4-unavailable',endpointResidual=null;
+    let intervalCount=0,sampleFractions=[],maxWheelRate=0;
+    let maxCenterDisplacementPerInterval=0,adaptiveCapReached=false;
+    const previousByName=new Map(previousChecks.map(item=>[item.wheel.name,item]));
+    const ratesByWheel=new Map();
+    const applyFullSegmentFallbackBound=reason=>{
+     for(const current of currentChecks){
+      const previous=previousByName.get(current.wheel.name);
+      if(!previous)throw new Error('Wheel identity changed between adjacent route states.');
+      if(!Number.isFinite(previous.envelopeDistance))continue;
+      const rate=wheelCenterDisplacementRatePerMeter(current.wheel,p,previousState,state);
+      const lowerBound=previous.envelopeDistance-rate*stepDistance;
+      const record=records.get(current.wheel.name);
+      if(lowerBound<record.minimumClearanceLowerBound){
+       record.minimumClearanceLowerBound=lowerBound;
+       record.limitingDetail={
+        kind:'segment-circumscribed-envelope-lower-bound',lowerBound,
+        obstacleAtReference:previous.envelopeObstacle,referenceDistance:previous.envelopeDistance,
+        displacementRate:rate,stepDistance,distanceAlongRoute:segmentStartDistance,
+        from:snapshot(previousState),to:snapshot(state),gear,steer,
+        fallbackReason:reason
+       };
+      }
+     }
+    };
     if(prepared.length===0){
      intermediateSampleStatus='skipped-no-obstacles';
      segmentsSkippedForNoObstacles++;
@@ -671,7 +699,38 @@
       endpointResidual.tractorHeading<=endpointTolerance.heading&&
       endpointResidual.trailerHeading<=endpointTolerance.heading;
      if(endpointMatches){
-      for(const fraction of intermediateSampleFractions){
+      for(const current of currentChecks){
+       const previous=previousByName.get(current.wheel.name);
+       if(!previous)throw new Error('Wheel identity changed between adjacent route states.');
+       const rate=wheelCenterDisplacementRatePerMeter(current.wheel,p,previousState,state);
+       if(!Number.isFinite(rate)||rate<0)throw new Error('Wheel displacement-rate bound is invalid.');
+       ratesByWheel.set(current.wheel.name,rate);
+       maxWheelRate=Math.max(maxWheelRate,rate);
+      }
+      const requiredIntervals=Math.max(
+       minAdaptiveIntervals,
+       Math.ceil(maxWheelRate*stepDistance/targetMaxWheelCenterDisplacementPerInterval)
+      );
+      intervalCount=Math.min(maxAdaptiveIntervals,requiredIntervals);
+      adaptiveCapReached=requiredIntervals>maxAdaptiveIntervals;
+      if(adaptiveCapReached)segmentsAtAdaptiveSamplingCap++;
+      maxAdaptiveIntervalsUsed=Math.max(maxAdaptiveIntervalsUsed,intervalCount);
+      maxCenterDisplacementPerInterval=maxWheelRate*stepDistance/intervalCount;
+      maximumWheelCenterDisplacementBound=Math.max(
+       maximumWheelCenterDisplacementBound,maxCenterDisplacementPerInterval
+      );
+      sampleFractions=Array.from({length:intervalCount-1},(_,sampleIndex)=>
+       (sampleIndex+1)/intervalCount
+      );
+      const samplesByWheel=new Map();
+      for(const current of currentChecks){
+       const previous=previousByName.get(current.wheel.name);
+       samplesByWheel.set(current.wheel.name,[{
+        fraction:0,envelopeDistance:previous.envelopeDistance,
+        envelopeObstacle:previous.envelopeObstacle
+       }]);
+      }
+      for(const fraction of sampleFractions){
        const intermediateState=rootPhysics.rk4(
         previousState,segmentGear*0.7,segmentSteer,segmentDt*fraction,p
        );
@@ -714,44 +773,61 @@
           distanceAlongRoute:intermediateDistance,sampleFraction:fraction
          }:null;
         }
+        const wheelSamples=samplesByWheel.get(wheel.name);
+        if(!wheelSamples)throw new Error('Wheel identity changed during adaptive swept sampling.');
+        wheelSamples.push({fraction,envelopeDistance,envelopeObstacle});
        }
        intermediateSamplesAnalyzed++;
       }
-      intermediateSampleStatus='rk4-intermediate-samples';
+      for(const current of currentChecks){
+       const wheelName=current.wheel.name;
+       const samples=samplesByWheel.get(wheelName);
+       samples.push({
+        fraction:1,envelopeDistance:current.envelopeDistance,
+        envelopeObstacle:current.envelopeObstacle
+       });
+       const rate=ratesByWheel.get(wheelName);
+       const halfIntervalDisplacementBound=rate*stepDistance/(2*intervalCount);
+       const record=records.get(wheelName);
+       for(let sampleIndex=0;sampleIndex<samples.length-1;sampleIndex++){
+        const a=samples[sampleIndex],b=samples[sampleIndex+1];
+        const reference=a.envelopeDistance<=b.envelopeDistance?a:b;
+        const lowerBound=Math.min(a.envelopeDistance,b.envelopeDistance)-halfIntervalDisplacementBound;
+        if(lowerBound<record.minimumClearanceLowerBound){
+         record.minimumClearanceLowerBound=lowerBound;
+         record.limitingDetail={
+          kind:'adaptive-segment-circumscribed-envelope-lower-bound',lowerBound,
+          obstacleAtReference:reference.envelopeObstacle,referenceDistance:reference.envelopeDistance,
+          displacementRate:rate,stepDistance,intervalCount,
+          intervalFractionStart:a.fraction,intervalFractionEnd:b.fraction,
+          maximumCenterDisplacementBound:rate*stepDistance/intervalCount,
+          halfIntervalDisplacementBound,
+          distanceAlongRoute:segmentStartDistance+stepDistance*a.fraction,
+          from:snapshot(previousState),to:snapshot(state),gear,steer
+         };
+        }
+       }
+      }
+      intermediateSampleStatus='rk4-adaptive-intermediate-samples';
       segmentsWithIntermediateKinematicSamples++;
      }else{
       intermediateSampleStatus='kinematic-endpoint-mismatch';
       segmentsWithoutIntermediateKinematicSamples++;
+      applyFullSegmentFallbackBound('kinematic-endpoint-mismatch');
      }
     }else{
+     intermediateSampleStatus='rk4-unavailable';
      segmentsWithoutIntermediateKinematicSamples++;
+     applyFullSegmentFallbackBound('rk4-unavailable');
     }
     segmentDiagnostics.push({
      fromSample:index-1,toSample:index,stepDistance,
      status:intermediateSampleStatus,endpointResidual,
-     sampleFractions:intermediateSampleStatus==='rk4-intermediate-samples'?
-      intermediateSampleFractions.slice():[]
+     intervalCount,sampleCount:sampleFractions.length,
+     sampleFractions,adaptiveCapReached,
+     maxWheelCenterDisplacementPerInterval:maxCenterDisplacementPerInterval,
+     maxWheelCenterRatePerMeter:maxWheelRate
     });
-   }
-   if(previousChecks){
-    const previousByName=new Map(previousChecks.map(item=>[item.wheel.name,item]));
-    for(const current of currentChecks){
-     const previous=previousByName.get(current.wheel.name);
-     if(!previous)throw new Error('Wheel identity changed between adjacent route states.');
-     if(!Number.isFinite(previous.envelopeDistance))continue;
-     const rate=wheelCenterDisplacementRatePerMeter(current.wheel,p,previousState,state);
-     const lowerBound=previous.envelopeDistance-rate*stepDistance;
-     const record=records.get(current.wheel.name);
-     if(lowerBound<record.minimumClearanceLowerBound){
-      record.minimumClearanceLowerBound=lowerBound;
-      record.limitingDetail={
-       kind:'segment-circumscribed-envelope-lower-bound',lowerBound,
-       obstacleAtReference:previous.envelopeObstacle,referenceDistance:previous.envelopeDistance,
-       displacementRate:rate,stepDistance,distanceAlongRoute:segmentStartDistance,
-       from:snapshot(previousState),to:snapshot(state),gear,steer
-      };
-     }
-    }
    }
    previousState=state;
    previousChecks=currentChecks;
@@ -766,11 +842,14 @@
    minimumClearanceLowerBound:limitingWheel?limitingWheel.minimumClearanceLowerBound:Infinity,
    segmentsWithIntermediateKinematicSamples,segmentsWithoutIntermediateKinematicSamples,
    segmentsSkippedForNoObstacles,intermediateSamplesAnalyzed,
-   intermediateSampleFractions:intermediateSampleFractions.slice(),segmentDiagnostics,
-   intermediateSamplingMethod:'rk4-quarter-points-after-endpoint-consistency-check',
+   intermediateSampleFractions:baselineIntermediateSampleFractions,
+   segmentsAtAdaptiveSamplingCap,maxAdaptiveIntervalsUsed,maximumWheelCenterDisplacementBound,
+   targetMaxWheelCenterDisplacementPerInterval,minAdaptiveIntervals,maxAdaptiveIntervals,
+   segmentDiagnostics,
+   intermediateSamplingMethod:'adaptive-rk4-samples-with-per-interval-circumscribed-envelope-lower-bound',
    envelope:'circumscribed-16-gon-around-rectangular-tire-footprint',
-   method:'per-wheel center displacement bound with orientation-independent circumscribed tire envelope plus intermediate RK4 samples',
-   note:'Нижняя оценка колеса использует описанную окружность прямоугольной оболочки шины и модельную границу перемещения центра. Промежуточные RK4-точки — дополнительные выборочные проверки, а не доказательство непрерывного отсутствия контакта; численная граница не сертифицирована.'
+   method:'per-wheel center displacement rate bound refined by adaptive RK4 samples and half-interval envelope-distance bounds',
+   note:'Нижняя оценка использует модельную верхнюю границу скорости центра колеса на каждом интервале и минимум расстояний в его концах. Она применима только при согласованной RK4-реконструкции сегмента и корректных параметрах модели; при достижении лимита число интервалов ограничивается 64, что отражается в диагностике. Это не сертифицированная непрерывная проверка реального автопоезда.'
   };
  }
 
