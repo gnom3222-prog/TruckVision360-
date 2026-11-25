@@ -735,9 +735,12 @@ test('multi-start planner searches a free route and four constrained first actio
   assert.ok(['single-candidate','preferred'].includes(result.status));
   assert.ok(result.states.length>1);
   assert.ok(result.recommendation);
+  assert.equal(result.trajectoryClearance.parts.length,3);
  }else{
   assert.equal(result.reason,'ambiguous-start');
   assert.equal(result.comparison.recommendation,null);
+  assert.ok(result.candidateRoutes.every(candidate=>candidate.trajectoryClearance?.parts?.length===3),
+   'ambiguous alternatives must retain their per-part trajectory diagnostics');
  }
 });
 
