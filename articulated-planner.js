@@ -102,6 +102,31 @@
    return {x:previous.a.x+t*rx,y:previous.a.y+t*ry};
   });
  }
+ function inflateObstaclePoseUncertainty(poly,anchor,uncertainty={}) {
+  if(!isConvexPolygon(poly))throw new Error('Для оценки неопределённости положения требуется конечный выпуклый многоугольник.');
+  if(!anchor||![anchor.x,anchor.y].every(Number.isFinite)||Math.abs(anchor.x)>10000||Math.abs(anchor.y)>10000){
+   throw new Error('Опорная точка препятствия должна иметь конечные координаты.');
+  }
+  const positionX=uncertainty.positionX??0;
+  const positionY=uncertainty.positionY??0;
+  const headingDeg=uncertainty.headingDeg??0;
+  if(![positionX,positionY,headingDeg].every(Number.isFinite)||
+     positionX<0||positionX>2||positionY<0||positionY>2||
+     headingDeg<0||headingDeg>45){
+   throw new Error('Допуски положения препятствия должны быть в диапазоне 0–2 м по X/Y и 0–45° по курсу.');
+  }
+  const maxRadius=Math.max(...poly.map(point=>Math.hypot(point.x-anchor.x,point.y-anchor.y)));
+  const positionInflation=Math.hypot(positionX,positionY);
+  const headingInflation=2*maxRadius*Math.sin(headingDeg*Math.PI/360);
+  const totalInflation=positionInflation+headingInflation;
+  return {
+   polygon:inflateConvexPolygon(poly,totalInflation),
+   positionInflation,headingInflation,totalInflation,maxRadius,
+   positionUncertaintyX:positionX,positionUncertaintyY:positionY,
+   headingUncertaintyDeg:headingDeg
+  };
+ }
+
  function createGateObstacles(gate){
   if(!gate||typeof gate!=='object')throw new Error('Параметры ворот отсутствуют.');
   const {centerX,centerY,clearWidth,postWidth,depth,heading}=gate;
@@ -1763,5 +1788,5 @@ function planAlternativesWithVehicleParameterBounds(options={}){
  };
 }
 
-return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,parameterEndpointVectors,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon});
+return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,parameterEndpointVectors,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon,inflateObstaclePoseUncertainty});
 });
