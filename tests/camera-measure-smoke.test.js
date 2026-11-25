@@ -226,6 +226,7 @@ test('measurement page exposes the complete camera obstacle workflow',()=>{
  }
  assert.match(html,/в той же плоскости пола/);
  assert.match(html,/Центр основания X на карте/);
+ assert.match(html,/placeholder="Введите направление"/);
 });
 
 test('camera-registered obstacles remain in planner input while live perception is active',()=>{
