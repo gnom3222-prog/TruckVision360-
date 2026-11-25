@@ -931,6 +931,12 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   }
  }
  const limitingWheelClearance=wheelClearance?.limitingWheel||null;
+ const intermediateWheelContact=Array.isArray(wheelClearance?.wheels)&&
+  wheelClearance.wheels.some(wheel=>
+   Number.isFinite(wheel.minimumIntermediatePolygonClearance)&&
+   wheel.minimumIntermediatePolygonClearance<=1e-9
+  );
+ if(intermediateWheelContact)collision=true;
  const wheelLowerBounds=Array.isArray(wheelClearance?.wheels)?
   wheelClearance.wheels.map(wheel=>wheel.minimumClearanceLowerBound).filter(Number.isFinite):[];
  const turns=gearChanges+steeringChanges;
@@ -997,7 +1003,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   maxBeta,articulationPeak,articulationWarning,clearance:minClearance,clearanceDetail:minClearanceDetail,
   clearanceLowerBound:clearanceForAssessment,effectiveClearance,
   clearanceByPart,limitingPartClearance,trajectoryClearance,sweptClearanceDetail,
-  wheelClearance,limitingWheelClearance,wheelClearanceError,
+  wheelClearance,limitingWheelClearance,wheelClearanceError,intermediateWheelContact,
   collision,reached,finalHeadingErrorDeg,finalArticulationDeg,clearanceInsufficient,articulationBlocked,reasons};
 }
 
@@ -1009,7 +1015,9 @@ function wheelClearanceSummaryText(metrics){
  const wheelItems=Array.isArray(metrics?.wheelClearance?.wheels)?metrics.wheelClearance.wheels:[];
  const perWheel=wheelItems.length===10?
   ' Нижние оценки по каждому из 10 колёс: '+wheelItems.map(item=>
-   item.name+' — '+(Number.isFinite(item.minimumClearanceLowerBound)?item.minimumClearanceLowerBound.toFixed(2)+' м':'не ограничен')
+   item.name+' — '+(Number.isFinite(item.minimumClearanceLowerBound)?item.minimumClearanceLowerBound.toFixed(2)+' м':'не ограничен')+
+   (Number.isFinite(item.minimumIntermediatePolygonClearance)?
+    '; промежуточная выборка '+item.minimumIntermediatePolygonClearance.toFixed(2)+' м':'')
   ).join('; ')+'.':'';
  const wheel=metrics?.limitingWheelClearance;
  if(!wheel||!Number.isFinite(wheel.minimumClearanceLowerBound)){
