@@ -513,29 +513,35 @@ function sweptClearanceColor(pathIndex,polygons,obstaclePolygons){
 }
 
 function clearanceForVehicleParts(q=state){
- const nominalBodies=nominalVehiclePolygons(q);
- const boundedBodies=vehiclePolygons(q);
+ const nominalParts=vehicleCollisionParts(q,0);
+ const boundedParts=vehicleCollisionParts(q,cfg.vehicleFootprintUncertainty);
  const obstacles=showObstacles?sceneObstacles().map(obstacle=>({
   name:obstacle.name,
   nominalPolygon:obstaclePolygon(obstacle),
   boundedPolygon:obstacleEnvelopePolygon(obstacle)
  })):[];
- const bodyNames=['тягач','кабина','полуприцеп'];
- return boundedBodies.map((body,index)=>{
+ return boundedParts.map((group,index)=>{
   let nearest={
    distance:Infinity,geometryLowerBound:Infinity,effective:Infinity,
-   name:'нет препятствий',vehiclePart:bodyNames[index]||('часть '+(index+1))
+   name:'нет препятствий',vehiclePart:group.vehiclePart,component:null
   };
   for(const obstacle of obstacles){
-   const distance=polygonDistance(nominalBodies[index],obstacle.nominalPolygon);
-   const geometryLowerBound=polygonDistance(body,obstacle.boundedPolygon);
-   const effective=geometryLowerBound-clearanceMeasurementReserve();
-   if(effective<nearest.effective){
-    nearest={distance,geometryLowerBound,effective,name:obstacle.name,vehiclePart:bodyNames[index]||('часть '+(index+1))};
+   for(let componentIndex=0;componentIndex<group.components.length;componentIndex++){
+    const nominalComponent=nominalParts[index].components[componentIndex];
+    const boundedComponent=group.components[componentIndex];
+    const distance=polygonDistance(nominalComponent.polygon,obstacle.nominalPolygon);
+    const geometryLowerBound=polygonDistance(boundedComponent.polygon,obstacle.boundedPolygon);
+    const effective=geometryLowerBound-clearanceMeasurementReserve();
+    if(effective<nearest.effective){
+     nearest={
+      distance,geometryLowerBound,effective,name:obstacle.name,
+      vehiclePart:group.vehiclePart,component:boundedComponent.name
+     };
+    }
    }
   }
   const color=!showObstacles?'#8ba5b8':nearest.effective<0.45?'#ff6262':nearest.effective<1?'#ffc45f':'#42d6a0';
-  return{index,...nearest,color};
+  return{index,bodyIndex:group.bodyIndex,...nearest,color};
  });
 }
 
