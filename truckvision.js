@@ -1195,12 +1195,16 @@ if(result.reason==='geometry-sensitive-start'||result.reason==='geometry-envelop
  const gateNote=gate&&gate.enabled?
   ' Совместная оболочка ворот: ширина '+Number(gate.nominalClearWidth).toFixed(2)+' → '+Number(gate.conservativeClearWidth).toFixed(2)+' м; центр ±'+Number(gate.positionUncertaintyPerAxis).toFixed(2)+' м по X/Y; курс ±'+Number(gate.headingUncertaintyDeg).toFixed(2)+'°.':
   '';
+ const perObstacleCount=Math.max(0,Number(geometry.perObstaclePoseEnvelopeCount)||0);
+ const perObstacleNote=perObstacleCount?
+  ' Отдельно сравнивались номинальные и консервативные контуры '+perObstacleCount+' препятствий с индивидуальной погрешностью.':
+  '';
  if(result.reason==='geometry-sensitive-start'){
-  $('routeAdvice').textContent='Начальное действие меняется при одновременном учёте заданной геометрической неопределённости. Сторона и передача не выбраны; номинальный и консервативный маршруты требуют разных действий.'+gateNote;
-  $('difficultyAdvice').textContent='Рекомендация неустойчива к заданным границам погрешности препятствий и внешних габаритов автопоезда. Уточните геометрию рулеткой и повторите расчёт. Проверяется ограниченная оболочка, не все возможные комбинации ошибок.'+gateNote;
+  $('routeAdvice').textContent='Начальное действие меняется при одновременном учёте заданной геометрической неопределённости. Сторона и передача не выбраны; номинальный и консервативный маршруты требуют разных действий.'+gateNote+perObstacleNote;
+  $('difficultyAdvice').textContent='Рекомендация неустойчива к заданным границам погрешности препятствий и внешних габаритов автопоезда. Уточните геометрию рулеткой и повторите расчёт. Проверяется ограниченная оболочка, не все возможные комбинации ошибок.'+gateNote+perObstacleNote;
  }else{
-  $('routeAdvice').textContent='Поиск в расширенной геометрической оболочке не подтвердил маршрут в заданном лимите вычислений. Это не доказывает невозможность других маршрутов; рекомендация не выдаётся.'+gateNote;
-  $('difficultyAdvice').textContent='Автопроезд заблокирован: выбранный маршрут не подтверждён при расширении геометрии препятствий и автопоезда. Не уменьшайте резерв только ради получения маршрута.'+gateNote;
+  $('routeAdvice').textContent='Поиск в расширенной геометрической оболочке не подтвердил маршрут в заданном лимите вычислений. Это не доказывает невозможность других маршрутов; рекомендация не выдаётся.'+gateNote+perObstacleNote;
+  $('difficultyAdvice').textContent='Автопроезд заблокирован: выбранный маршрут не подтверждён при расширении геометрии препятствий и автопоезда. Не уменьшайте резерв только ради получения маршрута.'+gateNote+perObstacleNote;
  }
  $('difficultyAdvice').textContent+=' Границы проверки: положение препятствия ±'+Number(geometry.obstaclePositionUncertainty||0).toFixed(2)+' м по каждой оси; ошибка полного размера препятствия ±'+Number(geometry.obstacleSizeUncertainty||0).toFixed(2)+' м; расширение каждой внешней грани автопоезда '+Number(geometry.vehicleFootprintUncertainty||0).toFixed(2)+' м. Кинематические размеры проверяются отдельно при ненулевых допусках: совместные крайние сценарии плюс середины диапазонов по одному параметру; это не полный перебор всех комбинаций и не непрерывный worst-case анализ.';
  draw();
