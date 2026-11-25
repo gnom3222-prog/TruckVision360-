@@ -277,23 +277,25 @@
   const bodyNames=['тягач','кабина','полуприцеп'];
   return function(q){
    const bodies=polygons(q,p),bodyBounds=bodies.map(polygonBounds);
-   let min=Infinity,hit=null,vehiclePart=null,bodyIndex=null;
+   const perPart=bodyNames.map((vehiclePart,bodyIndex)=>({
+    distance:Infinity,obstacle:null,vehiclePart,bodyIndex
+   }));
    for(const obstacle of prepared){
     for(let i=0;i<bodies.length;i++){
-     if(aabbDistance(bodyBounds[i],obstacle.bounds)>=min)continue;
+     if(aabbDistance(bodyBounds[i],obstacle.bounds)>=perPart[i].distance)continue;
      const d=polyDist(bodies[i],obstacle.poly);
-     if(d<min){
-      min=d;
-      hit=obstacle.name;
-      vehiclePart=bodyNames[i]||('часть '+(i+1));
-      bodyIndex=i;
+     if(d<perPart[i].distance){
+      perPart[i]={distance:d,obstacle:obstacle.name,vehiclePart:bodyNames[i],bodyIndex:i};
      }
     }
    }
-   return {distance:min,hit,obstacle:hit,vehiclePart,bodyIndex};
+   let nearest=perPart[0];
+   for(let i=1;i<perPart.length;i++)if(perPart[i].distance<nearest.distance)nearest=perPart[i];
+   return {distance:nearest.distance,hit:nearest.obstacle,obstacle:nearest.obstacle,
+    vehiclePart:nearest.vehiclePart,bodyIndex:nearest.bodyIndex,perPart};
   };
  }
- function sweptDisplacementPerMeter(steer,p,q=null,maxDistance=0.05){
+ function sweptDisplacementRatesPerMeter(steer,p,q=null,maxDistance=0.05){
   if(!p||typeof p!=='object')throw new Error('Vehicle geometry is missing for swept-clearance checking.');
   if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2)throw new Error('Steering angle is outside the valid range.');
   const geometryErrors=rootPhysics&&typeof rootPhysics.validateVehicleParams==='function'?
@@ -306,18 +308,11 @@
   const footprintUncertainty=Number.isFinite(p.footprintUncertainty)?p.footprintUncertainty:0;
   const tractorRadius=Math.hypot(5+footprintUncertainty,(2.55+2*footprintUncertainty)/2);
   const cabRadiusFromRearAxle=2.1+Math.hypot(1.35+footprintUncertainty,(2.25+2*footprintUncertainty)/2);
-  // vehiclePolygons() places the trailer body relative to the kingpin, while
-  // the articulated yaw reference is the equivalent axle-group center.
-  // Include the same outward footprint envelope used by the clearance checker.
   const trailerFrontFromAxle=kingpinAxles+1.5+footprintUncertainty;
   const trailerRearFromAxle=kingpinAxles-(trailerLength-1.5+footprintUncertainty);
   if(q&&(!Number.isFinite(q.psi)||!Number.isFinite(q.psiT))){
    throw new Error('Articulation state is invalid for swept-clearance checking.');
   }
-  // For fixed steering, each trailer corner's velocity in trailer coordinates
-  // is a 2x2 linear map of [cos(beta), sin(beta)]. Its spectral norm is the
-  // exact maximum speed over every articulation angle. Evaluate all four
-  // corners and both gear signs to cover forward and reverse motion.
   const hitchYawCoupling=hitchOffset*tractorYawPerMeter;
   const trailerWidthWithUncertainty=trailerWidth+2*footprintUncertainty;
   const trailerLongitudinalOffsets=[trailerFrontFromAxle,trailerRearFromAxle];
@@ -332,20 +327,92 @@
      const column1=m11*m11+m21*m21;
      const column2=m12*m12+m22*m22;
      const cross=m11*m12+m21*m22;
-     const largestEigenvalue=0.5*(
-      column1+column2+Math.hypot(column1-column2,2*cross)
-     );
+     const largestEigenvalue=0.5*(column1+column2+Math.hypot(column1-column2,2*cross));
      trailerPointRate=Math.max(trailerPointRate,Math.sqrt(Math.max(0,largestEigenvalue)));
     }
    }
   }
-  return Math.max(
-   1+tractorRadius*tractorYawPerMeter,
-   1+cabRadiusFromRearAxle*tractorYawPerMeter,
-   trailerPointRate
-  );
+  return {
+   tractor:1+tractorRadius*tractorYawPerMeter,
+   cab:1+cabRadiusFromRearAxle*tractorYawPerMeter,
+   trailer:trailerPointRate
+  };
+ }
+ function sweptDisplacementPerMeter(steer,p,q=null,maxDistance=0.05){
+  const rates=sweptDisplacementRatesPerMeter(steer,p,q,maxDistance);
+  return Math.max(rates.tractor,rates.cab,rates.trailer);
  }
  function clearance(q,obstacles,p){return createClearanceChecker(obstacles,p)(q);}
+ function analyzeTrajectoryClearance(states,obstacles,p){
+  if(!Array.isArray(states)||states.length===0)throw new Error('Route states are required for per-part clearance analysis.');
+  const check=createClearanceChecker(obstacles,p);
+  const partNames=['тягач','кабина','полуприцеп'];
+  const parts=partNames.map((vehiclePart,bodyIndex)=>({
+   vehiclePart,bodyIndex,minimumSampledClearance:Infinity,minimumSampledDetail:null,
+   minimumClearanceLowerBound:Infinity,limitingDetail:null
+  }));
+  let previousState=null,previousCheck=null,distanceAlongRoute=0;
+  const snapshot=q=>({x:q.x,y:q.y,psi:q.psi,psiT:q.psiT,gear:q.gear===-1?-1:1,
+   steer:Number.isFinite(q.steer)?q.steer:0});
+  for(let index=0;index<states.length;index++){
+   const state=states[index];
+   if(!state||![state.x,state.y,state.psi,state.psiT].every(Number.isFinite)){
+    throw new Error('Route state '+index+' is invalid for per-part clearance analysis.');
+   }
+   const currentCheck=check(state);
+   for(let partIndex=0;partIndex<parts.length;partIndex++){
+    const sample=currentCheck.perPart[partIndex];
+    if(sample.distance<parts[partIndex].minimumSampledClearance){
+     parts[partIndex].minimumSampledClearance=sample.distance;
+     parts[partIndex].minimumSampledDetail=Number.isFinite(sample.distance)?
+      {...sample,state:snapshot(state),distanceAlongRoute}:null;
+    }
+    if(sample.distance<parts[partIndex].minimumClearanceLowerBound){
+     parts[partIndex].minimumClearanceLowerBound=sample.distance;
+     parts[partIndex].limitingDetail=Number.isFinite(sample.distance)?
+      {kind:'sampled-pose',lowerBound:sample.distance,state:snapshot(state),distanceAlongRoute,
+       obstacle:sample.obstacle,vehiclePart:sample.vehiclePart}:null;
+    }
+   }
+   if(index>0){
+    const stepDistance=state.stepDistance;
+    if(!Number.isFinite(stepDistance)||stepDistance<=0){
+     throw new Error('Route state '+index+' is missing its positive integration stepDistance; continuous per-part bound cannot be established.');
+    }
+    const rates=sweptDisplacementRatesPerMeter(
+     Number.isFinite(state.steer)?state.steer:0,p,previousState,stepDistance
+    );
+    const rateByPart=[rates.tractor,rates.cab,rates.trailer];
+    for(let partIndex=0;partIndex<parts.length;partIndex++){
+     const reference=previousCheck.perPart[partIndex];
+     if(!Number.isFinite(reference.distance))continue;
+     const lowerBound=reference.distance-rateByPart[partIndex]*stepDistance;
+     if(lowerBound<parts[partIndex].minimumClearanceLowerBound){
+      parts[partIndex].minimumClearanceLowerBound=lowerBound;
+      parts[partIndex].limitingDetail={
+       kind:'segment-lower-bound',lowerBound,vehiclePart:partNames[partIndex],bodyIndex:partIndex,
+       obstacleAtReference:reference.obstacle,referenceDistance:reference.distance,
+       displacementRate:rateByPart[partIndex],stepDistance,distanceAlongRoute,
+       from:snapshot(previousState),to:snapshot(state),
+       gear:state.gear===-1?-1:1,steer:Number.isFinite(state.steer)?state.steer:0
+      };
+     }
+    }
+    distanceAlongRoute+=stepDistance;
+   }
+   previousState=state;
+   previousCheck=currentCheck;
+  }
+  const limitingPart=parts.reduce((best,item)=>
+   item.minimumClearanceLowerBound<best.minimumClearanceLowerBound?item:best,parts[0]);
+  return {
+   statesAnalyzed:states.length,segmentsAnalyzed:Math.max(0,states.length-1),distanceAlongRoute,
+   parts,minimumClearanceLowerBound:limitingPart.minimumClearanceLowerBound,
+   limitingPart:limitingPart.vehiclePart,limitingDetail:limitingPart.limitingDetail,
+   method:'per-part Hausdorff displacement bound from each segment start pose',
+   note:'Для сегмента атрибутируется часть автопоезда; ближайшее препятствие в середине сегмента может отличаться от препятствия в начальной позе.'
+  };
+ }
  function push(heap,n){
   let i=heap.length;heap.push(n);
   while(i){const p=(i-1)>>1;if(heap[p].f<=n.f)break;heap[i]=heap[p];i=p;heap[i]=n;}
@@ -487,7 +554,7 @@
      currentClearanceDetail=Number.isFinite(c.distance)?
       {...c,state:snapshot(next,gear,steer)}:null;
      travelled+=travel;
-     samples.push({x:q.x,y:q.y,psi:q.psi,psiT:q.psiT,gear,steer});
+     samples.push({x:q.x,y:q.y,psi:q.psi,psiT:q.psiT,gear,steer,stepDistance:travel});
     }
     if(!valid)continue;
     const nk=key(q);
@@ -513,7 +580,7 @@
   }
   const chain=[];for(let n=finish;n&&n.parent;n=n.parent)chain.push(n);
   chain.reverse();
-  const states=[{x:start.x,y:start.y,psi:start.psi,psiT:start.psiT,gear:1,steer:0}];
+  const states=[{x:start.x,y:start.y,psi:start.psi,psiT:start.psiT,gear:1,steer:0,stepDistance:0}];
   for(const n of chain)states.push(...n.samples);
   let pathMinimum=startClearance;
   let minimumClearanceDetail=startDetail;
@@ -523,13 +590,16 @@
     minimumClearanceDetail=node.minClearanceDetail;
    }
   }
+  const trajectoryClearance=analyzeTrajectoryClearance(states,obstacles,params);
+  const minimumClearanceLowerBound=Math.min(
+   finish.sweptLowerBound,trajectoryClearance.minimumClearanceLowerBound
+  );
   return {
    ok:true,states,expanded,length:finish.g,
-   minimumClearance:pathMinimum,
-   minimumClearanceDetail,
-   minimumClearanceLowerBound:finish.sweptLowerBound,
+   minimumClearance:pathMinimum,minimumClearanceDetail,
+   minimumClearanceLowerBound,
    sweptClearanceDetail:finish.sweptLowerBoundDetail,
-   requiredClearance,
+   trajectoryClearance,requiredClearance,
    terminalErrors:goalErrors(finish.q,goal)
   };
  }
@@ -1405,5 +1475,5 @@ function planAlternativesWithVehicleParameterBounds(options={}){
  };
 }
 
-return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon});
+return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon});
 });
