@@ -412,6 +412,7 @@ test('selected alternative displays per-part swept clearance, limiting obstacles
  assert.match(elements.difficultyAdvice.textContent,/полуприцеп: 0\.50 м, препятствие у начала сегмента «rear trailer pallet»/);
  assert.match(elements.difficultyAdvice.textContent,/выборочные траектории колёс трёх осей/);
  assert.match(elements.difficultyAdvice.textContent,/ось 1/);
+ assert.match(elements.difficultyAdvice.textContent,/внутренняя сторона/);
  assert.match(elements.difficultyAdvice.textContent,/задний ход/);
  assert.match(elements.difficultyAdvice.textContent,/Автопроезд остаётся заблокирован/);
 });
