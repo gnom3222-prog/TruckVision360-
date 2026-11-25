@@ -1221,9 +1221,29 @@ if(result.reason==='geometry-sensitive-start'||result.reason==='geometry-envelop
   '. '+comparisonLabels.reserve+': '+describeStartAction(comparison.reserveAction)+
   '. Изменились поля: '+(comparison.changedFields||[]).join(', ')+'.':
   '';
+ const clearanceEvidence=comparison?.clearanceEvidence;
+ const describeClearanceEvidence=(label,evidence)=>{
+  if(!evidence)return '';
+  const obstacle=evidence.limitingObstacle;
+  const part=evidence.limitingVehiclePart;
+  const lowerBound=evidence.minimumClearanceLowerBound;
+  if(!obstacle&&!part&&!Number.isFinite(lowerBound))return '';
+  return ' '+label+': ближайшее ограничение — '+
+   (obstacle?'«'+obstacle+'»':'препятствие не идентифицировано')+
+   (part?' ('+part+')':'')+
+   (Number.isFinite(lowerBound)?', нижняя оценка зазора '+lowerBound.toFixed(2)+' м':'')+'.';
+ };
+ const nominalClearanceNote=describeClearanceEvidence('Номинальный маршрут',clearanceEvidence?.nominal);
+ const reserveClearanceNote=describeClearanceEvidence('Маршрут с учётом погрешности',clearanceEvidence?.reserve);
+ const obstacleChangeNote=clearanceEvidence?.limitingObstacleChanged&&
+  clearanceEvidence.nominal?.limitingObstacle&&clearanceEvidence.reserve?.limitingObstacle?
+  ' Ограничивающее препятствие в двух сценариях различается: «'+
+   clearanceEvidence.nominal.limitingObstacle+'» → «'+
+   clearanceEvidence.reserve.limitingObstacle+'».':'';
+ const clearanceNote=nominalClearanceNote+reserveClearanceNote+obstacleChangeNote;
  if(result.reason==='geometry-sensitive-start'){
-  $('routeAdvice').textContent='Начальное действие меняется при одновременном учёте заданной геометрической неопределённости. Сторона и передача не выбраны; номинальный и консервативный маршруты требуют разных действий.'+comparisonNote+gateNote+perObstacleNote;
-  $('difficultyAdvice').textContent='Рекомендация неустойчива к заданным границам погрешности препятствий и внешних габаритов автопоезда. Уточните геометрию рулеткой и повторите расчёт. Проверяется ограниченная оболочка, не все возможные комбинации ошибок.'+comparisonNote+gateNote+perObstacleNote;
+  $('routeAdvice').textContent='Начальное действие меняется при одновременном учёте заданной геометрической неопределённости. Сторона и передача не выбраны; номинальный и консервативный маршруты требуют разных действий.'+comparisonNote+clearanceNote+gateNote+perObstacleNote;
+  $('difficultyAdvice').textContent='Рекомендация неустойчива к заданным границам погрешности препятствий и внешних габаритов автопоезда. Уточните геометрию рулеткой и повторите расчёт. Проверяется ограниченная оболочка, не все возможные комбинации ошибок.'+comparisonNote+clearanceNote+gateNote+perObstacleNote;
  }else if(geometry.status==='ambiguous-under-envelope'){
   $('routeAdvice').textContent='В расширенной геометрической оболочке остаются несколько близких вариантов с разными начальными действиями. Однозначная сторона и передача не выбраны; виртуальный автопроезд заблокирован.'+gateNote+perObstacleNote;
   $('difficultyAdvice').textContent='Погрешность оставляет неоднозначность между вариантами манёвра. Уточните положение препятствий и геометрию автопоезда; отсутствие единственной рекомендации не означает, что другие траектории невозможны.'+gateNote+perObstacleNote;
