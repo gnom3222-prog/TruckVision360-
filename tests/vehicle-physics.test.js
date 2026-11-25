@@ -376,3 +376,55 @@ test('vehicle geometry rejects a cab outside the tractor envelope and mirrors ou
  });
  assert.ok(mirrorErrors.some(message=>message.includes('mirrorLongitudinal/mirrorLength')));
 });
+
+
+test('calibrated wheel footprints cover two tractor axles and all three trailer axles',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.79,
+  tireLength:0.72,tireWidth:0.44
+ };
+ const q={x:4,y:-2,psi:Math.PI/2,psiT:Math.PI/2};
+ const wheels=physics.wheelFootprints(q,p,0.18);
+ assert.equal(wheels.length,10);
+ assert.equal(wheels.filter(wheel=>wheel.vehiclePart==='тягач').length,4);
+ assert.equal(wheels.filter(wheel=>wheel.vehiclePart==='полуприцеп').length,6);
+ const frontLeft=wheels.find(wheel=>wheel.name==='левое переднее колесо тягача');
+ assert.ok(frontLeft);
+ near(frontLeft.center.x,4-2.05/2);
+ near(frontLeft.center.y,1.8);
+ near(frontLeft.heading,Math.PI/2+0.18);
+ const trailerLeft=wheels.find(wheel=>wheel.name==='левое колесо 1-й оси полуприцепа');
+ assert.ok(trailerLeft);
+ near(trailerLeft.heading,Math.PI/2);
+ assert.equal(trailerLeft.polygon.length,4);
+});
+
+test('trailer tire footprints are part of the collision envelope beyond the cargo body',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerTrack:2.79,tireLength:0.72,tireWidth:0.44
+ };
+ const q={x:0,y:0,psi:0,psiT:0};
+ const parts=physics.vehicleCollisionParts(q,p);
+ const trailer=parts.find(part=>part.vehiclePart==='полуприцеп');
+ assert.equal(trailer.components.length,7);
+ assert.ok(trailer.components.some(component=>component.name==='левое колесо 1-й оси полуприцепа'));
+ const leftWheel=physics.wheelFootprints(q,p,0).find(wheel=>wheel.name==='левое колесо 1-й оси полуприцепа');
+ const outerY=Math.max(...leftWheel.polygon.map(point=>point.y));
+ near(outerY,2.79/2+0.44/2);
+ assert.ok(outerY>p.trailerWidth/2);
+});
+
+test('wheel calibration rejects an implausible track and tire-width combination',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,
+  tractorFrontTrack:3.0,tireWidth:0.8
+ };
+ const errors=physics.validateVehicleParams(p);
+ assert.ok(errors.some(message=>message.includes('tractorTrack/tireWidth')));
+ assert.throws(()=>physics.wheelFootprints({x:0,y:0,psi:0,psiT:0},p),/Некорректные параметры колёс/);
+});
