@@ -442,6 +442,21 @@ function conservativeSelectionWorkerResult(){
  };
 }
 
+function incompleteWheelSamplingWorkerResult(){
+ const result=conservativeSelectionWorkerResult();
+ const states=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
+  {x:0.5,y:0,psi:0.1,psiT:0,gear:1,steer:0,stepDistance:0.5},
+  {x:1,y:0,psi:0.2,psiT:0,gear:1,steer:0,stepDistance:0.5}
+ ];
+ return {
+  ...result,
+  conservativeCandidateRoutes:result.conservativeCandidateRoutes.map(candidate=>({
+   ...candidate,states:states.map(state=>({...state}))
+  }))
+ };
+}
+
 test('selected alternative displays per-part swept clearance, limiting obstacles and route segment direction',async()=>{
  const simulator=bootSimulator({workerResult:perPartClearanceWorkerResult()});
  const {elements}=simulator;
@@ -604,6 +619,22 @@ test('route assessment fails closed when per-wheel swept clearance cannot valida
  assert.match(elements.difficultyAdvice.textContent,/Проверка отдельных колёс не подтверждена/);
  assert.match(elements.difficultyAdvice.textContent,/stepDistance/);
  assert.match(elements.difficultyAdvice.textContent,/Автопроезд остаётся заблокирован/);
+});
+
+
+test('route assessment blocks virtual driving when any wheel-sweep segment cannot be reconstructed',async()=>{
+ const simulator=bootSimulator({workerResult:incompleteWheelSamplingWorkerResult()});
+ const {elements}=simulator;
+ elements.goalX.value='22';
+ elements.goalY.value='0';
+ elements.goalHeading.value='0';
+ await elements.planRoute.onclick();
+ elements.alternativeRouteSelect.value='0';
+ elements.alternativeRouteSelect.onchange();
+ assert.match(elements.difficultyAdvice.textContent,/Промежуточная проверка не завершена на 2 сегментах/);
+ assert.match(elements.difficultyAdvice.textContent,/Автопроезд остаётся заблокирован/);
+ elements.routeStart.onclick();
+ assert.match(elements.routeAdvice.textContent,/Автопроезд заблокирован/);
 });
 
 
