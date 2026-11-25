@@ -1502,7 +1502,9 @@ function planAlternativesWithVehicleParameterBounds(options={}){
   hitchOffset:[0,5],
   kingpinAxles:[0.5,30],
   trailerLength:[4,30],
-  trailerWidth:[1.5,5]
+  trailerWidth:[1.5,5],
+  trailerAxleSpacing:[0.3,5],
+  tractorSteeringTrack:[1,3.5]
  };
  const unknownKeys=Object.keys(suppliedBounds).filter(key=>!Object.prototype.hasOwnProperty.call(allowedBounds,key));
  if(unknownKeys.length){
@@ -1547,7 +1549,7 @@ function planAlternativesWithVehicleParameterBounds(options={}){
   }
   // An 8-row binary orthogonal array of strength two. Distinct non-zero
   // columns over GF(2)^3 ensure every pair sees all four endpoint pairs.
-  const columnMasks=[1,2,4,3,5].slice(0,count);
+  const columnMasks=[1,2,4,3,5,6,7].slice(0,count);
   const rows=[];
   const parity=value=>{
    let result=0;
@@ -1634,7 +1636,7 @@ function planAlternativesWithVehicleParameterBounds(options={}){
  const interiorCoverage='one-factor-midpoints';
  const coverageNote=(allParameterCombinationsEvaluated?
   'Проверены все сочетания нижних и верхних границ активных параметров.':
-  'Для четырёх или пяти активных параметров применён 8-строчный парный covering array плюс совместный верхний угол; каждая пара параметров проверена во всех четырёх сочетаниях min/max, но все многопараметрические комбинации не перебирались.')+
+  'Для четырёх–семи активных параметров применён 8-строчный парный covering array плюс совместный верхний угол; каждая пара параметров проверена во всех четырёх сочетаниях min/max, но все многопараметрические комбинации не перебирались.')+
   ' Дополнительно проверяется середина каждого активного диапазона по одному параметру за раз; совместные промежуточные отклонения и непрерывный интервал не проверяются.';
  const testedMidpoints=()=>completed.filter(item=>item.kind==='one-factor-midpoint').length;
  if(!nominal.ok){
