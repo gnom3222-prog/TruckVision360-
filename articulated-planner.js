@@ -359,6 +359,14 @@
    if(!state||![state.x,state.y,state.psi,state.psiT].every(Number.isFinite)){
     throw new Error('Route state '+index+' is invalid for per-part clearance analysis.');
    }
+   const gear=state.gear===undefined?1:state.gear;
+   const steer=state.steer===undefined?0:state.steer;
+   if(gear!==1&&gear!==-1){
+    throw new Error('Route state '+index+' has an invalid gear for per-part clearance analysis.');
+   }
+   if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2){
+    throw new Error('Route state '+index+' has an invalid steering angle for per-part clearance analysis.');
+   }
    const currentCheck=check(state);
    for(let partIndex=0;partIndex<parts.length;partIndex++){
     const sample=currentCheck.perPart[partIndex];
