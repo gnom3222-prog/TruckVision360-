@@ -1234,3 +1234,49 @@ test('tractor swept displacement bound includes wider calibrated tire tracks',()
  assert.equal(wide.cab,narrow.cab);
  assert.equal(wide.trailer,narrow.trailer);
 });
+
+
+test('per-wheel trajectory clearance identifies the limiting outboard trailer tire',()=>{
+ const p={...params,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerTrack:2.79,tireLength:0.72,tireWidth:0.44};
+ const q={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
+ const firstAxle=physics.trailerAxlePoints(q,p)[0];
+ const obstacle={x:firstAxle.x,y:1.66,w:0.1,h:0.1,name:'outer trailer post'};
+ const result=planner.analyzeWheelTrajectoryClearance([q],[obstacle],p);
+ assert.equal(result.wheels.length,10);
+ assert.equal(result.limitingWheel.name,'левое колесо 1-й оси полуприцепа');
+ assert.equal(result.limitingWheel.limitingDetail.obstacle,'outer trailer post');
+ assert.ok(result.limitingWheel.minimumSampledPolygonClearance<0.05);
+ assert.ok(result.minimumClearanceLowerBound<=result.limitingWheel.minimumSampledEnvelopeClearance+1e-9);
+ assert.match(result.envelope,/circumscribed/);
+});
+
+test('per-wheel trajectory clearance applies a segment lower bound between sampled poses',()=>{
+ const start={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
+ const next={x:0.05,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0.1};
+ const obstacle={x:4.55,y:1.025,w:0.2,h:0.2,name:'front wheel post'};
+ const result=planner.analyzeWheelTrajectoryClearance([start,next],[obstacle],{
+  ...params,tractorFrontTrack:2.05,tireLength:0.72,tireWidth:0.44
+ });
+ const wheel=result.wheels.find(item=>item.name==='левое переднее колесо тягача');
+ assert.ok(wheel);
+ assert.equal(wheel.limitingDetail.kind,'segment-circumscribed-envelope-lower-bound');
+ assert.ok(wheel.minimumClearanceLowerBound<=wheel.minimumSampledEnvelopeClearance+1e-9);
+ assert.equal(wheel.limitingDetail.obstacleAtReference,'front wheel post');
+});
+
+test('per-wheel trajectory clearance rejects missing or inconsistent integration distances',()=>{
+ const start={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
+ const missing={x:0.05,y:0,psi:0,psiT:0,gear:1,steer:0};
+ const tooFar={x:0.2,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0.05};
+ assert.throws(()=>planner.analyzeWheelTrajectoryClearance([start,missing],[],params),/stepDistance/);
+ assert.throws(()=>planner.analyzeWheelTrajectoryClearance([start,tooFar],[],params),/integration stepDistance/);
+});
+
+test('per-wheel trajectory clearance reports no limiting wheel when the obstacle set is empty',()=>{
+ const path=[{x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0}];
+ const result=planner.analyzeWheelTrajectoryClearance(path,[],params);
+ assert.equal(result.wheels.length,10);
+ assert.equal(result.limitingWheel,null);
+ assert.equal(result.minimumClearanceLowerBound,Infinity);
+});
