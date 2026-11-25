@@ -9,12 +9,12 @@ const geometry=require('../camera-geometry.js');
 function bootCamera(options={}){
  const elements={},windowListeners={};
  const context={clearRect(){},beginPath(){},moveTo(){},lineTo(){},closePath(){},stroke(){},arc(){},fill(){},fillText(){}};
- const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateWidthUncertainty','gateCenterX','gateCenterY','gateHeadingDeg','gateResult'];
+ const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateWidthUncertainty','gateCenterX','gateCenterY','gateHeadingDeg','gateResult','cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading'];
  for(const id of ids){
   elements[id]={
    id,value:({
     cameraReferenceWidth:'2.970',cameraReferenceHeight:'2.100',
-    cameraPointSigma:'2',cameraReferenceSigma:'2',gateWidth:'3.50',gateWidthUncertainty:'0',gateCenterX:'12',gateCenterY:'0',gateHeadingDeg:'90'
+    cameraPointSigma:'2',cameraReferenceSigma:'2',gateWidth:'3.50',gateWidthUncertainty:'0',gateCenterX:'12',gateCenterY:'0',gateHeadingDeg:'90',cameraObstacleName:'Опорный столб',cameraObstacleX:'3',cameraObstacleY:'4',cameraObstacleHeading:'90'
    })[id]||'',
    textContent:'',style:{},listeners:{},width:0,height:0,
    videoWidth:id==='measureVideo'?640:0,
@@ -23,14 +23,18 @@ function bootCamera(options={}){
    addEventListener(type,fn){(this.listeners[type]??=[]).push(fn);},
    getBoundingClientRect(){return{left:0,top:0,width:640,height:480};},
    getContext(){return context;},
-   paused:true,\n   play(){this.paused=false;return options.playError?Promise.reject(new Error('video playback failed')):Promise.resolve();},\n   pause(){this.paused=true;}
+   paused:true,
+   play(){this.paused=false;return options.playError?Promise.reject(new Error('video playback failed')):Promise.resolve();},
+   pause(){this.paused=true;}
   };
  }
- let permissionRequests=0,trackStops=0;
- const appliedRegistrations=[];
+ let permissionRequests=0,trackStops=0,clearCalls=0;
+ const appliedRegistrations=[],obstacleRegistrations=[];
  const win={
   TruckVisionCameraGeometry:options.geometry||geometry,
   TruckVisionApplyGateRegistration:options.applyGateRegistration||((registration)=>{appliedRegistrations.push(registration);elements.gateWidth.value=registration.clearWidth.toFixed(2);elements.gateWidthUncertainty.value=registration.widthUncertaintyBound.toFixed(3);elements.gateCenterX.value=registration.centerX.toFixed(2);elements.gateCenterY.value=registration.centerY.toFixed(2);elements.gateHeadingDeg.value=registration.headingDeg.toFixed(2);return true;}),
+  TruckVisionAddCameraObstacle:options.addCameraObstacle||((measurement,anchor,heading,name)=>{obstacleRegistrations.push({measurement,anchor,heading,name});return true;}),
+  TruckVisionClearCameraObstacles:options.clearCameraObstacles||(()=>{clearCalls++;return true;}),
   addEventListener(type,fn){(windowListeners[type]??=[]).push(fn);}
  };
  const sandbox={
@@ -46,7 +50,7 @@ function bootCamera(options={}){
  const tap=async points=>{
   for(const p of points)fire('measureOverlay','pointerdown',{clientX:p.x,clientY:p.y});
  };
- return {elements,windowListeners,fire,tap,appliedRegistrations,get permissionRequests(){return permissionRequests;},get trackStops(){return trackStops;}};
+ return {elements,windowListeners,fire,tap,appliedRegistrations,obstacleRegistrations,get clearCalls(){return clearCalls;},get permissionRequests(){return permissionRequests;},get trackStops(){return trackStops;}};
 }
 
 test('camera permission is requested only on tap; measurement reports uncertainty and orientation invalidates calibration',async()=>{
@@ -175,5 +179,41 @@ test('camera rejects a skewed gate quadrilateral and keeps the previous width an
  assert.match(camera.elements.gateResult.textContent,/Форма измеренного проёма не соответствует прямоугольнику/);
  assert.match(camera.elements.cameraStatus.textContent,/Ширина ворот не обновлена/);
  assert.equal(camera.appliedRegistrations.length,0);
+ camera.fire('cameraStop','click');
+});
+
+
+test('camera-measured obstacle is registered with manual map pose and can be cleared',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
+ await camera.fire('cameraMeasureObstacle','click');
+ await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
+ assert.equal(camera.obstacleRegistrations.length,1);
+ const registration=camera.obstacleRegistrations[0];
+ assert.equal(registration.anchor.x,3);
+ assert.equal(registration.anchor.y,4);
+ assert.equal(registration.heading,Math.PI/2);
+ assert.equal(registration.name,'Опорный столб');
+ assert.ok(registration.measurement.width>0);
+ assert.ok(registration.measurement.height>0);
+ assert.match(camera.elements.cameraStatus.textContent,/Препятствие добавлено на карту/);
+ await camera.fire('cameraClearObstacles','click');
+ assert.equal(camera.clearCalls,1);
+ assert.match(camera.elements.cameraStatus.textContent,/препятствия удалены с карты/);
+ camera.fire('cameraStop','click');
+});
+
+test('camera obstacle registration requires explicit map coordinates and heading',async()=>{
+ const camera=bootCamera();
+ camera.elements.cameraObstacleX.value='';
+ await camera.fire('cameraStart','click');
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
+ await camera.fire('cameraMeasureObstacle','click');
+ await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
+ assert.equal(camera.obstacleRegistrations.length,0);
+ assert.match(camera.elements.cameraStatus.textContent,/Введите координаты центра и направление препятствия/);
  camera.fire('cameraStop','click');
 });
