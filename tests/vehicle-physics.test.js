@@ -428,3 +428,110 @@ test('wheel calibration rejects an implausible track and tire-width combination'
  assert.ok(errors.some(message=>message.includes('tractorTrack/tireWidth')));
  assert.throws(()=>physics.wheelFootprints({x:0,y:0,psi:0,psiT:0},p),/Некорректные параметры колёс/);
 });
+
+test('trailer wheel trajectory diagnostics returns sampled centers for all six tires and three axle centers',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerTrack:2.79,tireLength:0.72,tireWidth:0.44
+ };
+ const radius=12,offset=p.kingpinAxles+p.hitchOffset;
+ const path=[];
+ for(let i=0;i<=5;i++){
+  const theta=i*0.05;
+  const center={x:radius*Math.sin(theta),y:radius*(1-Math.cos(theta))};
+  path.push({
+   x:center.x+offset*Math.cos(theta),
+   y:center.y+offset*Math.sin(theta),
+   psi:theta,psiT:theta,gear:1,steer:0
+  });
+ }
+ const result=physics.trailerWheelTrajectoryDiagnostics(path,p);
+ assert.equal(result.samples,6);
+ assert.equal(result.axles.length,3);
+ assert.equal(result.segments.length,5);
+ for(const axle of result.axles){
+  assert.equal(axle.center.points.length,6);
+  assert.equal(axle.left.points.length,6);
+  assert.equal(axle.right.points.length,6);
+  assert.ok(axle.center.sampledTravel>0);
+  assert.ok(axle.left.sampledTravel>0);
+  assert.ok(axle.right.sampledTravel>0);
+ }
+ near(result.axles[0].left.points[0].y,p.trailerTrack/2);
+ near(result.axles[0].right.points[0].y,-p.trailerTrack/2);
+ assert.equal(result.model,'single-equivalent-trailer-axle-group');
+});
+
+test('trailer wheel paths identify inner and outer sides for forward and reverse turns',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerTrack:2.79
+ };
+ const makeArc=(angles,gear)=>{
+  const radius=12,offset=p.kingpinAxles+p.hitchOffset;
+  return angles.map(theta=>{
+   const center={x:radius*Math.sin(theta),y:radius*(1-Math.cos(theta))};
+   return {
+    x:center.x+offset*Math.cos(theta),
+    y:center.y+offset*Math.sin(theta),
+    psi:theta,psiT:theta,gear,steer:0
+   };
+  });
+ };
+ const forward=physics.trailerWheelTrajectoryDiagnostics(
+  makeArc([0,0.05,0.1,0.15,0.2],1),p
+ );
+ for(const segment of forward.segments){
+  assert.equal(segment.axles[0].turnDirection,'left');
+  assert.equal(segment.axles[0].innerSide,'left');
+  assert.equal(segment.axles[0].outerSide,'right');
+  assert.ok(segment.axles.every(axle=>axle.outerMinusInner>0));
+ }
+ const reverse=physics.trailerWheelTrajectoryDiagnostics(
+  makeArc([0,-0.05,-0.1,-0.15,-0.2],-1),p
+ );
+ for(const segment of reverse.segments){
+  assert.equal(segment.axles[0].turnDirection,'right');
+  assert.equal(segment.axles[0].innerSide,'left');
+  assert.equal(segment.axles[0].outerSide,'right');
+  assert.ok(segment.axles.every(axle=>axle.outerMinusInner>0));
+ }
+});
+
+test('trailer wheel trajectory diagnostics rejects malformed and sparse route data',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3
+ };
+ assert.throws(()=>physics.trailerWheelTrajectoryDiagnostics([],p),/хотя бы одно состояние/);
+ assert.throws(()=>physics.trailerWheelTrajectoryDiagnostics(new Array(1),p),/некорректные координаты/);
+ assert.throws(()=>physics.trailerWheelTrajectoryDiagnostics([
+  {x:0,y:0,psi:0,psiT:0,gear:0}
+ ],p),/Передача/);
+ assert.throws(()=>physics.trailerWheelTrajectoryDiagnostics([
+  {x:0,y:0,psi:0,psiT:0,stepDistance:0}
+ ],p),/stepDistance/);
+ assert.throws(()=>physics.trailerWheelTrajectoryDiagnostics([
+  {x:0,y:0,psi:0,psiT:0},
+  {x:2,y:0,psi:0,psiT:0,stepDistance:1}
+ ],p),/превышает stepDistance/);
+});
+
+test('trailer wheel trajectory diagnostics marks gear changes without hiding sampled geometry',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3
+ };
+ const path=[
+  {x:0,y:0,psi:0,psiT:0,gear:1},
+  {x:0.5,y:0,psi:0,psiT:0,gear:-1,stepDistance:0.5}
+ ];
+ const result=physics.trailerWheelTrajectoryDiagnostics(path,p);
+ assert.equal(result.segments.length,1);
+ assert.equal(result.segments[0].gear,-1);
+ assert.equal(result.segments[0].gearChanged,true);
+ assert.equal(result.segments[0].axles[0].turnDirection,'straight');
+});
+
