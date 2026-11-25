@@ -936,8 +936,8 @@ function wheelClearanceSummaryText(metrics){
 
 function wheelTrackSummaryText(metrics){
  const items=Array.isArray(metrics?.wheelTrackSummary)?metrics.wheelTrackSummary:[];
- if(!items.length)return 'Выборочные траектории колёс трёх осей не определены';
- return 'Выборочные траектории колёс трёх осей (центр/левое/правое, м): '+
+ if(!items.length)return 'выборочные траектории колёс трёх осей не определены';
+ return 'выборочные траектории колёс трёх осей (центр/левое/правое, м): '+
   items.map(item=>'ось '+item.axleIndex+' '+
    item.centerDistance.toFixed(2)+'/'+item.leftWheelDistance.toFixed(2)+'/'+item.rightWheelDistance.toFixed(2)+
    '; внутренняя сторона '+item.innerSideSummary+
