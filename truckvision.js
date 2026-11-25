@@ -933,6 +933,19 @@ function wheelClearanceSummaryText(metrics){
   ' (консервативная геометрическая оценка)';
 }
 
+
+function wheelTrackSummaryText(metrics){
+ const items=Array.isArray(metrics?.wheelTrackSummary)?metrics.wheelTrackSummary:[];
+ if(!items.length)return 'Выборочные траектории колёс трёх осей не определены';
+ return 'Выборочные траектории колёс трёх осей (центр/левое/правое, м): '+
+  items.map(item=>'ось '+item.axleIndex+' '+
+   item.centerDistance.toFixed(2)+'/'+item.leftWheelDistance.toFixed(2)+'/'+item.rightWheelDistance.toFixed(2)+
+   '; внутренняя сторона '+item.innerSideSummary+
+   '; максимальная разница внешнего и внутреннего колеса на сегменте '+
+   item.maxOuterMinusInnerPerSample.toFixed(3)).join('; ')+
+  '; длины — хорды между узлами маршрута, не непрерывная оценка';
+}
+
 function updateRecommendationCard(data={}){
  const fields={
   recommendationStatus:data.status||'Ожидает расчёта',
@@ -2161,7 +2174,7 @@ $('alternativeRouteSelect').onchange=()=>{
    detail?.kind==='sampled-pose'?'поза '+Number(detail.distanceAlongRoute).toFixed(1)+' м':'положение не определено';
   return part.vehiclePart+': '+lower+', '+obstacleText+', '+location;
  }).join('; ');
- $('difficultyAdvice').textContent='Сложность: '+routeAssessment.level+'. Длина '+routeAssessment.length.toFixed(1)+' м; пиковый угол сочленения '+routeAssessment.maxBeta.toFixed(1)+'°; минимальный эффективный зазор '+(Number.isFinite(routeAssessment.effectiveClearance)?routeAssessment.effectiveClearance.toFixed(2)+' м':'не определён')+'. Зазоры по частям вдоль маршрута: '+selectedPartClearanceText+'. '+wheelClearanceSummaryText(routeAssessment)+'. '+(passed?'Автопроезд разрешён только в виртуальной модели.':'Автопроезд остаётся заблокирован.');
+ $('difficultyAdvice').textContent='Сложность: '+routeAssessment.level+'. Длина '+routeAssessment.length.toFixed(1)+' м; пиковый угол сочленения '+routeAssessment.maxBeta.toFixed(1)+'°; минимальный эффективный зазор '+(Number.isFinite(routeAssessment.effectiveClearance)?routeAssessment.effectiveClearance.toFixed(2)+' м':'не определён')+'. Зазоры по частям вдоль маршрута: '+selectedPartClearanceText+'. '+wheelClearanceSummaryText(routeAssessment)+'. '+wheelTrackSummaryText(routeAssessment)+'. Причины: '+routeAssessment.reasons.join('; ')+'. '+(passed?'Автопроезд разрешён только в виртуальной модели.':'Автопроезд остаётся заблокирован.');
  const selectedRecommendation=planner.recommendStart(plannedRoute);
  updateRecommendationCard({
   status:'Вариант '+(index+1)+' выбран',
