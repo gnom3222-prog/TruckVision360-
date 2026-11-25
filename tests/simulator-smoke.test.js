@@ -337,6 +337,34 @@ test('ambiguous planner results preserve candidate states and simulator draws th
 });
 
 
+function perPartClearanceWorkerResult(){
+ const states=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
+  {x:1,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:1}
+ ];
+ const trajectoryClearance={
+  statesAnalyzed:2,segmentsAnalyzed:1,distanceAlongRoute:1,
+  parts:[
+   {vehiclePart:'тягач',minimumSampledClearance:0.8,minimumClearanceLowerBound:0.7,
+    limitingDetail:{kind:'segment-lower-bound',obstacleAtReference:'front pallet',distanceAlongRoute:0.4,gear:1}},
+   {vehiclePart:'кабина',minimumSampledClearance:0.9,minimumClearanceLowerBound:0.8,
+    limitingDetail:{kind:'segment-lower-bound',obstacleAtReference:'cab-side pallet',distanceAlongRoute:0.4,gear:1}},
+   {vehiclePart:'полуприцеп',minimumSampledClearance:0.6,minimumClearanceLowerBound:0.5,
+    limitingDetail:{kind:'segment-lower-bound',obstacleAtReference:'rear trailer pallet',distanceAlongRoute:0.7,gear:-1}}
+  ],
+  minimumClearanceLowerBound:0.5,limitingPart:'полуприцеп'
+ };
+ const recommendation={initialGear:1,firstTurn:'left',firstTurnGear:1,firstTurnDistance:0.4,tractorYawDirection:'left'};
+ return {
+  ok:false,reason:'ambiguous-start',
+  candidateRoutes:[{index:0,label:'проверенный тестовый вариант',cost:1,states,
+   metrics:{minimumClearanceLowerBound:0.65,sweptClearanceDetail:null},
+   trajectoryClearance,recommendation}],
+  candidateSummaries:[{label:'проверенный тестовый вариант',cost:1,initialGear:1,firstTurn:'left',
+   firstTurnGear:1,tractorYawDirection:'left'}]
+ };
+}
+
 function conservativeSelectionWorkerResult(){
  const states=[
   {x:0,y:0,psi:0,psiT:0,gear:1,steer:0},
@@ -367,6 +395,24 @@ function conservativeSelectionWorkerResult(){
   }
  };
 }
+
+test('selected alternative displays per-part swept clearance, limiting obstacles and route segment direction',async()=>{
+ const simulator=bootSimulator({workerResult:perPartClearanceWorkerResult()});
+ const {elements}=simulator;
+ elements.goalX.value='1';
+ elements.goalY.value='0';
+ elements.goalHeading.value='0';
+ await elements.planRoute.onclick();
+ assert.equal(elements.alternativeRouteSelect.children.length,2);
+ elements.alternativeRouteSelect.value='0';
+ elements.alternativeRouteSelect.onchange();
+ assert.match(elements.difficultyAdvice.textContent,/Зазоры по частям вдоль маршрута/);
+ assert.match(elements.difficultyAdvice.textContent,/тягач: 0\.70 м, front pallet/);
+ assert.match(elements.difficultyAdvice.textContent,/кабина: 0\.80 м, cab-side pallet/);
+ assert.match(elements.difficultyAdvice.textContent,/полуприцеп: 0\.50 м, rear trailer pallet/);
+ assert.match(elements.difficultyAdvice.textContent,/задний ход/);
+ assert.match(elements.difficultyAdvice.textContent,/Автопроезд остаётся заблокирован/);
+});
 
 test('clearing the alternative-route placeholder clears the selected route instead of coercing an empty value to index zero',async()=>{
  const simulator=bootSimulator({workerResult:conservativeSelectionWorkerResult()});
