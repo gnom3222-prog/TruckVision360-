@@ -217,3 +217,25 @@ test('camera obstacle registration requires explicit map coordinates and heading
  assert.match(camera.elements.cameraStatus.textContent,/Введите координаты центра и направление препятствия/);
  camera.fire('cameraStop','click');
 });
+
+
+test('measurement page exposes the complete camera obstacle workflow',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
+ for(const id of ['cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading']){
+  assert.match(html,new RegExp('id="'+id+'"'),'missing camera obstacle control '+id);
+ }
+ assert.match(html,/в той же плоскости пола/);
+ assert.match(html,/Центр основания X на карте/);
+});
+
+test('camera-registered obstacles remain in planner input while live perception is active',()=>{
+ const app=fs.readFileSync(path.join(__dirname,'..','truckvision.js'),'utf8');
+ const match=app.match(/function getObstacles\(\)\s*\{([\s\S]*?)\n\}/);
+ assert.ok(match,'getObstacles function must exist');
+ const body=match[1];
+ const cameraPush=body.indexOf('result.push(...cameraObstacles');
+ const perceptionPush=body.indexOf('result.push(...perceptionObstacles');
+ assert.ok(cameraPush>=0,'camera obstacles must always be appended');
+ assert.ok(perceptionPush>cameraPush,'live perception objects must be appended after camera obstacles');
+ assert.doesNotMatch(body,/if\s*\(!perceptionFrameTimestamp\)\s*result\.push\(\.\.\.cameraObstacles/);
+});
