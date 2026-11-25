@@ -10,6 +10,9 @@ test('articulated planner reaches a clear goal in open space',()=>{
  assert.equal(result.ok,true,JSON.stringify(result));
  assert.ok(result.states.length>10);
  assert.ok(Math.hypot(result.states.at(-1).x-7,result.states.at(-1).y)<0.9);
+ assert.equal(result.trajectoryClearance.parts.length,3);
+ assert.equal(result.states[0].stepDistance,0);
+ assert.ok(result.states.slice(1).every(state=>Number.isFinite(state.stepDistance)&&state.stepDistance>0));
 });
 test('articulated planner satisfies the requested terminal tractor heading and trailer alignment',()=>{
  const result=planner.plan({
@@ -128,6 +131,17 @@ test('trajectory clearance attributes sampled and swept lower bounds to each veh
  assert.equal(result.limitingPart,'полуприцеп');
  assert.ok(result.minimumClearanceLowerBound<=trailer.minimumClearanceLowerBound+1e-9);
  assert.ok(cab.minimumClearanceLowerBound>=tractor.minimumClearanceLowerBound);
+});
+
+test('per-part trajectory clearance rejects a chord longer than the declared integration distance',()=>{
+ const states=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
+  {x:0.2,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0.05}
+ ];
+ assert.throws(
+  ()=>planner.analyzeTrajectoryClearance(states,[{x:6.3,y:0,w:1,h:1}],params),
+  /moves farther than its integration stepDistance/
+ );
 });
 
 test('per-part trajectory clearance fails closed when an integration step distance is missing',()=>{
