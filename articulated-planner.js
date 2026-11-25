@@ -1491,8 +1491,8 @@ function planAlternativesWithGeometryUncertainty(options={}){
 
 
 function parameterEndpointVectors(count){
- if(!Number.isInteger(count)||count<0||count>15){
-  throw new Error('Число активных параметров должно быть целым числом от 0 до 15.');
+ if(!Number.isInteger(count)||count<0||count>31){
+  throw new Error('Число активных параметров должно быть целым числом от 0 до 31.');
  }
  if(count<=3){
   return Array.from({length:1<<count},(_,mask)=>
@@ -1500,8 +1500,8 @@ function parameterEndpointVectors(count){
   );
  }
  // Distinct non-zero vectors over GF(2)^k are pairwise independent.
- // Use 8 rows for 4–7 dimensions and 16 rows for 8–15 dimensions.
- const width=count<=7?3:4;
+ // Use 8, 16, or 32 orthogonal rows for 4–7, 8–15, or 16–31 dimensions.
+ const width=count<=7?3:count<=15?4:5;
  const rowCount=1<<width;
  const columnMasks=Array.from({length:rowCount-1},(_,index)=>index+1).slice(0,count);
  const rows=[];
@@ -1538,7 +1538,14 @@ function planAlternativesWithVehicleParameterBounds(options={}){
   tractorRearTrack:[1,3.5],
   trailerTrack:[1,4.5],
   tireLength:[0.2,1.5],
-  tireWidth:[0.1,0.8]
+  tireWidth:[0.1,0.8],
+  cabOffset:[0,6],
+  cabFront:[0.5,3.5],
+  cabRear:[0.3,2.5],
+  cabWidth:[1.8,2.55],
+  mirrorOutboard:[0,1],
+  mirrorLongitudinal:[-2,8],
+  mirrorLength:[0.2,2]
  };
  const unknownKeys=Object.keys(suppliedBounds).filter(key=>!Object.prototype.hasOwnProperty.call(allowedBounds,key));
  if(unknownKeys.length){
@@ -1575,8 +1582,8 @@ function planAlternativesWithVehicleParameterBounds(options={}){
   gateBounds.headingUncertaintyDeg??0
  ].some(value=>Number.isFinite(value)&&value>0);
  const geometryScenarioCount=hasGeometryBounds||hasGateBounds?2:1;
- if(activeDimensions.length>15){
-  return {ok:false,reason:'invalid-input',errors:['Поддерживается не более 15 активных параметров неопределённости.'],expanded:0};
+ if(activeDimensions.length>31){
+  return {ok:false,reason:'invalid-input',errors:['Поддерживается не более 31 активного параметра неопределённости.'],expanded:0};
  }
  const endpointRows=parameterEndpointVectors(activeDimensions.length);
  const endpointScenarios=endpointRows.map((row,index)=>{
@@ -1655,7 +1662,9 @@ function planAlternativesWithVehicleParameterBounds(options={}){
   'Проверены все сочетания нижних и верхних границ активных параметров.':
   (activeDimensions.length<=7?
    'Для 4–7 активных параметров применён 8-строчный парный covering array на GF(2)^3 плюс совместный верхний угол; каждая пара проверена во всех четырёх сочетаниях min/max.':
-   'Для 8–15 активных параметров применён 16-строчный парный covering array на GF(2)^4 плюс совместный верхний угол; каждая пара проверена во всех четырёх сочетаниях min/max.')+
+   (activeDimensions.length<=15?
+    'Для 8–15 активных параметров применён 16-строчный парный covering array на GF(2)^4 плюс совместный верхний угол; каждая пара проверена во всех четырёх сочетаниях min/max.':
+    'Для 16–31 активного параметра применён 32-строчный парный covering array на GF(2)^5 плюс совместный верхний угол; каждая пара проверена во всех четырёх сочетаниях min/max.'))+
    ' Полные многопараметрические комбинации не перебирались.')+
   ' Дополнительно проверяется середина каждого активного диапазона по одному параметру за раз; совместные промежуточные отклонения и непрерывный интервал не проверяются.';
  const testedMidpoints=()=>completed.filter(item=>item.kind==='one-factor-midpoint').length;
