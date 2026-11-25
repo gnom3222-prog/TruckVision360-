@@ -498,10 +498,14 @@ test('simulator applies measured mirror geometry and reports a mirror-side obsta
 test('simulator exposes calibrated wheel tracks and invalidates a route when they change',()=>{
  const {elements}=bootSimulator();
  assert.equal(elements.tractorFrontTrack.value,'2.05');
+ assert.equal(elements.tractorSteeringTrack.value,'2.05');
  assert.equal(elements.tractorRearTrack.value,'2.05');
  assert.equal(elements.trailerTrack.value,'2.79');
  assert.equal(elements.tireLength.value,'0.72');
  assert.equal(elements.tireWidth.value,'0.44');
+ elements.tractorSteeringTrack.value='2.12';
+ elements.apply.onclick();
+ assert.match(elements.routeAdvice.textContent,/Параметры модели изменены/);
  elements.trailerTrack.value='2.65';
  elements.apply.onclick();
  assert.match(elements.routeAdvice.textContent,/Параметры модели изменены/);
