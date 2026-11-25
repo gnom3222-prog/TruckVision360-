@@ -1501,3 +1501,58 @@ test('bounded obstacle map pose uncertainty lowers individual clearances for the
  assert.ok(nominalWheel.minimumSampledPolygonClearance>0,JSON.stringify(nominalWheel));
  assert.ok(boundedWheel.minimumSampledPolygonClearance<nominalWheel.minimumSampledPolygonClearance,JSON.stringify({nominalWheel,boundedWheel}));
 });
+
+test('multiple independently uncertain obstacles constrain all ten wheels along a route segment',()=>{
+ const p={...params,tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.79,tireLength:0.72,tireWidth:0.44};
+ const start={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
+ const next={...start,x:0.05,stepDistance:0.05};
+ const footprints=physics.wheelFootprints(start,p,0);
+ const postForWheel=(wheel,side,name,bounds)=>{
+  const xs=wheel.polygon.map(point=>point.x),ys=wheel.polygon.map(point=>point.y);
+  const anchor={
+   x:(Math.min(...xs)+Math.max(...xs))/2,
+   y:side==='left'?Math.max(...ys)+0.55:Math.min(...ys)-0.55
+  };
+  const half=0.04;
+  const polygon=[
+   {x:anchor.x-half,y:anchor.y-half},
+   {x:anchor.x+half,y:anchor.y-half},
+   {x:anchor.x+half,y:anchor.y+half},
+   {x:anchor.x-half,y:anchor.y+half}
+  ];
+  const inflated=planner.inflateObstaclePoseUncertainty(polygon,anchor,bounds);
+  return {
+   nominal:{name,polygon},
+   bounded:{name,polygon:inflated.polygon}
+  };
+ };
+ const frontLeft=footprints.find(wheel=>wheel.name==='левое переднее колесо тягача');
+ const trailerRightRear=footprints.find(wheel=>wheel.name==='правое колесо 3-й оси полуприцепа');
+ assert.ok(frontLeft&&trailerRightRear);
+ const frontPost=postForWheel(frontLeft,'left','столб у переднего левого колеса',{positionX:0.12,positionY:0.08,headingDeg:5});
+ const trailerPost=postForWheel(trailerRightRear,'right','столб у правого колеса третьей оси',{positionX:0.08,positionY:0.14,headingDeg:7});
+ const nominal=planner.analyzeWheelTrajectoryClearance([start,next],[frontPost.nominal,trailerPost.nominal],p);
+ const bounded=planner.analyzeWheelTrajectoryClearance([start,next],[frontPost.bounded,trailerPost.bounded],p);
+ assert.equal(nominal.statesAnalyzed,2);
+ assert.equal(bounded.statesAnalyzed,2);
+ assert.equal(nominal.segmentsAnalyzed,1);
+ assert.equal(bounded.segmentsAnalyzed,1);
+ assert.equal(nominal.wheels.length,10);
+ assert.equal(bounded.wheels.length,10);
+ for(const wheel of bounded.wheels){
+  assert.ok(Number.isFinite(wheel.minimumSampledPolygonClearance),JSON.stringify(wheel));
+  assert.ok(Number.isFinite(wheel.minimumClearanceLowerBound),JSON.stringify(wheel));
+ }
+ const nominalFront=nominal.wheels.find(wheel=>wheel.name===frontLeft.name);
+ const boundedFront=bounded.wheels.find(wheel=>wheel.name===frontLeft.name);
+ const nominalTrailer=nominal.wheels.find(wheel=>wheel.name===trailerRightRear.name);
+ const boundedTrailer=bounded.wheels.find(wheel=>wheel.name===trailerRightRear.name);
+ assert.equal(nominalFront.minimumSampledPolygonDetail.obstacle,frontPost.nominal.name);
+ assert.equal(boundedFront.minimumSampledPolygonDetail.obstacle,frontPost.bounded.name);
+ assert.equal(nominalTrailer.minimumSampledPolygonDetail.obstacle,trailerPost.nominal.name);
+ assert.equal(boundedTrailer.minimumSampledPolygonDetail.obstacle,trailerPost.bounded.name);
+ assert.ok(boundedFront.minimumSampledPolygonClearance<nominalFront.minimumSampledPolygonClearance);
+ assert.ok(boundedTrailer.minimumSampledPolygonClearance<nominalTrailer.minimumSampledPolygonClearance);
+ assert.ok(boundedFront.minimumClearanceLowerBound<=nominalFront.minimumClearanceLowerBound+1e-9);
+ assert.ok(boundedTrailer.minimumClearanceLowerBound<=nominalTrailer.minimumClearanceLowerBound+1e-9);
+});
