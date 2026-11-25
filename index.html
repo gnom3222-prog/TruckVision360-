@@ -325,6 +325,17 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <div><label for="vehicleFootprintUncertainty">Расширение каждой грани автопоезда, м</label><input id="vehicleFootprintUncertainty" type="number" min="0" max="0.5" value="0.03" step="0.01"></div>
 </div>
 <p class="small">Это отдельные пользовательские границы, не оценка 1σ камеры: положение каждого прямоугольного препятствия расширяется по X/Y на заданную величину, его полный размер — на заданную погрешность, а все три прямоугольных контура автопоезда расширяются наружу с каждой грани. Планировщик ищет путь в этой геометрической оболочке и сравнивает начальное действие с номинальным поиском. Погрешности кинематических размеров задаются отдельно в следующем разделе; проверяются крайние значения по одному параметру за раз, а не все совместные комбинации.</p>
+<div class="section">Геометрия кабины и зеркал · калибровка</div>
+<div class="grid">
+<div><label for="cabOffset">Центр кабины от задней оси, м</label><input id="cabOffset" type="number" min="0" max="6" value="2.10" step="0.01"></div>
+<div><label for="cabFront">Вылет кабины вперёд от её центра, м</label><input id="cabFront" type="number" min="0.5" max="3.5" value="1.35" step="0.01"></div>
+<div><label for="cabRear">Вылет кабины назад от её центра, м</label><input id="cabRear" type="number" min="0.3" max="2.5" value="0.90" step="0.01"></div>
+<div><label for="cabWidth">Ширина кабины без зеркал, м</label><input id="cabWidth" type="number" min="1.8" max="2.55" value="2.25" step="0.01"></div>
+<div><label for="mirrorOutboard">Вынос оболочки каждого зеркала за бок кабины, м</label><input id="mirrorOutboard" type="number" min="0" max="1" value="0" step="0.01"></div>
+<div><label for="mirrorLongitudinal">Центр зеркал от задней оси, м</label><input id="mirrorLongitudinal" type="number" min="-2" max="8" value="3.00" step="0.01"></div>
+<div><label for="mirrorLength">Длина оболочки зеркала вдоль машины, м</label><input id="mirrorLength" type="number" min="0.2" max="2" value="0.80" step="0.01"></div>
+</div>
+<p class="small">Размеры кабины и зеркал — измеряемые калибровочные параметры, не заводская спецификация Volvo. Значение выноса зеркала 0 означает, что зеркала не входят в геометрию столкновений. После измерения задайте фактический наружный вынос, продольное положение и длину оболочки; планировщик добавит левое и правое зеркало к проверке зазоров и учтёт их радиус в оценке перемещения контура. Учитывается прямоугольная статическая оболочка, но не складывание, вибрация и деформация зеркал.</p>
 <div class="section">Неопределённость размеров автопоезда</div>
 <div class="grid">
 <div><label for="wheelbaseUncertainty">Колёсная база ±, м</label><input id="wheelbaseUncertainty" type="number" min="0" max="2" value="0" step="0.01"></div>
@@ -391,9 +402,9 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 </section>
 </main>
 
-<script src="vehicle-physics.js?v=20261124-6"></script>
-<script src="articulated-planner.js?v=20261125-2"></script>\n<script src="sensor-perception.js?v=20261124-1"></script>
-<script src="truckvision.js?v=20261125-2"></script>
+<script src="vehicle-physics.js?v=20261125-3"></script>
+<script src="articulated-planner.js?v=20261125-3"></script>\n<script src="sensor-perception.js?v=20261124-1"></script>
+<script src="truckvision.js?v=20261125-3"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261124-13"></script>
 <script src="camera-measure.js?v=20261124-16"></script>
