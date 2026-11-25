@@ -492,6 +492,10 @@ function updateAssistant(){
   }
  }
 
+ if(helperEnabled&&showObstacles&&cfg.mirrorOutboard<=0){
+  message+=' Геометрия зеркал не задана: зеркала не входят в проверку зазоров. Измерьте их вынос и настройте оболочку в параметрах.';
+  if(color==='#83d6a8')color='#ffd18b';
+ }
  if(el){
   el.textContent=message;
   el.style.color=color;
@@ -554,7 +558,9 @@ window.TruckVisionGetClearanceDiagnostics=()=>({
   measurement:cfg.measurementUncertainty,
   obstaclePosition:cfg.obstaclePositionUncertainty,
   obstacleSize:cfg.obstacleSizeUncertainty,
-  vehicleFootprint:cfg.vehicleFootprintUncertainty
+  vehicleFootprint:cfg.vehicleFootprintUncertainty,
+  cab:{offset:cfg.cabOffset,front:cfg.cabFront,rear:cfg.cabRear,width:cfg.cabWidth},
+  mirror:{outboard:cfg.mirrorOutboard,longitudinal:cfg.mirrorLongitudinal,length:cfg.mirrorLength,enabled:cfg.mirrorOutboard>0}
  }
 });
 
@@ -839,6 +845,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
  if(scrubExposure.maxAbsLateralVelocity>1e-3){
   reasons.push('геометрический индикатор бокового перемещения крайних осей: до '+scrubExposure.maxAbsLateralVelocity.toFixed(3)+' м/с; интегральный proxy '+scrubExposure.totalAbsoluteLateralTravel.toFixed(2)+' м, не модель шин');
  }
+ if(cfg.mirrorOutboard<=0)reasons.push('геометрия зеркал не задана; зеркала не входят в проверку зазоров');
  if(!reasons.length)reasons.push('в проверенной модели препятствия не пересечены');
  return {length,turns,gearChanges,steeringChanges,reverseDistance,reverseSegments,
   maxAxleScrubSpeed:scrubExposure.maxAbsLateralVelocity,
@@ -1233,7 +1240,8 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
    m.finalArticulationDeg.toFixed(1)+'° (допуск '+articulationLimitDegrees.toFixed(0)+'°); '+articulationPeakText+'.'+geometryNote+parameterNote;
 
   const closestLocationText=m.clearanceDetail?
-   m.clearanceDetail.vehiclePart+' рядом с препятствием «'+m.clearanceDetail.obstacle+
+   m.clearanceDetail.vehiclePart+(m.clearanceDetail.component?' · '+m.clearanceDetail.component:'')+
+   ' рядом с препятствием «'+m.clearanceDetail.obstacle+
    '» около X '+m.clearanceDetail.state.x.toFixed(1)+' м, Y '+
    m.clearanceDetail.state.y.toFixed(1)+' м':
    'не определена (препятствия выключены или зазор бесконечен)';
@@ -1535,7 +1543,10 @@ function draw(){
  ctx.save();
  ctx.font='bold 15px system-ui';
  ctx.fillStyle=mapAlert.effective<0.45?'#ff7777':mapAlert.effective<1?'#ffd078':'#83e5bb';
- const clearanceLabel=Number.isFinite(mapAlert.effective)?mapAlert.effective.toFixed(2)+' м · '+mapAlert.vehiclePart+' / '+mapAlert.name:'Зазор не рассчитан';
+ const clearanceLabel=Number.isFinite(mapAlert.effective)?
+  mapAlert.effective.toFixed(2)+' м · '+mapAlert.vehiclePart+
+  (mapAlert.component?' / '+mapAlert.component:'')+' / '+mapAlert.name:
+  'Зазор не рассчитан';
  ctx.fillText(showObstacles?'МИН. ЗАЗОР: '+clearanceLabel:'ПРЕПЯТСТВИЯ НЕ ПРОВЕРЯЮТСЯ',18,28);
  ctx.restore();
 
