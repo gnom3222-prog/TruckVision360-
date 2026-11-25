@@ -115,7 +115,8 @@ function sceneObstacles(){
   if(typeof invalidateRouteForSettingsChange==='function')invalidateRouteForSettingsChange();
  }
  const result=perceptionFrameTimestamp?[]:obstacles.map(obstacle=>({...obstacle}));
- if(!perceptionFrameTimestamp)result.push(...cameraObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point}))})));
+ // User-registered camera obstacles remain part of the map while live perception is active.
+ result.push(...cameraObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point}))})));
  result.push(...perceptionObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point}))})));
  const gateGeometry=gateGeometryForPlanner();
  if(gateGeometry)result.push(...planner.createGateObstacles(gateGeometry));
