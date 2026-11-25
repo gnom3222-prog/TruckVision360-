@@ -410,6 +410,8 @@ test('selected alternative displays per-part swept clearance, limiting obstacles
  assert.match(elements.difficultyAdvice.textContent,/тягач: 0\.70 м, препятствие у начала сегмента «front pallet»/);
  assert.match(elements.difficultyAdvice.textContent,/кабина: 0\.80 м, препятствие у начала сегмента «cab-side pallet»/);
  assert.match(elements.difficultyAdvice.textContent,/полуприцеп: 0\.50 м, препятствие у начала сегмента «rear trailer pallet»/);
+ assert.match(elements.difficultyAdvice.textContent,/выборочные траектории колёс трёх осей/);
+ assert.match(elements.difficultyAdvice.textContent,/ось 1/);
  assert.match(elements.difficultyAdvice.textContent,/задний ход/);
  assert.match(elements.difficultyAdvice.textContent,/Автопроезд остаётся заблокирован/);
 });
