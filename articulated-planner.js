@@ -569,6 +569,11 @@
   const tireRadius=Math.hypot(tireLength/2+uncertainty,tireWidth/2+uncertainty);
   const records=new Map();
   let previousState=null,previousChecks=null,distanceAlongRoute=0;
+  let segmentsWithIntermediateKinematicSamples=0,segmentsWithoutIntermediateKinematicSamples=0;
+  let segmentsSkippedForNoObstacles=0,intermediateSamplesAnalyzed=0;
+  const intermediateSampleFractions=[0.25,0.5,0.75];
+  const endpointTolerance={position:1e-5,heading:1e-6};
+  const segmentDiagnostics=[];
   const snapshot=state=>({
    x:state.x,y:state.y,psi:state.psi,psiT:state.psiT,
    gear:state.gear===-1?-1:1,steer:state.steer===undefined?0:state.steer
@@ -615,6 +620,8 @@
       name:wheel.name,vehiclePart:wheel.vehiclePart,axleIndex:wheel.axleIndex,side:wheel.side,
       minimumSampledPolygonClearance:Infinity,minimumSampledPolygonDetail:null,
       minimumSampledEnvelopeClearance:Infinity,minimumSampledEnvelopeDetail:null,
+      minimumIntermediatePolygonClearance:Infinity,minimumIntermediatePolygonDetail:null,
+      minimumIntermediateEnvelopeClearance:Infinity,minimumIntermediateEnvelopeDetail:null,
       minimumClearanceLowerBound:Infinity,limitingDetail:null
      };
      records.set(wheel.name,record);
@@ -640,6 +647,92 @@
     }
     return {wheel,envelopeDistance,envelopeObstacle,polygonDistance,polygonObstacle};
    });
+   if(index>0){
+    let intermediateSampleStatus='rk4-unavailable',endpointResidual=null;
+    if(prepared.length===0){
+     intermediateSampleStatus='skipped-no-obstacles';
+     segmentsSkippedForNoObstacles++;
+    }else if(typeof rootPhysics.rk4==='function'){
+     // Reconstruct the planner segment with its active gear and steering input.
+     // Intermediate samples are accepted only when the reconstructed endpoint
+     // matches the actual route node within the documented numerical tolerance.
+     const segmentGear=gear,segmentSteer=steer;
+     const segmentDt=stepDistance/0.7;
+     const reconstructedEnd=rootPhysics.rk4(
+      previousState,segmentGear*0.7,segmentSteer,segmentDt,p
+     );
+     endpointResidual={
+      position:Math.hypot(reconstructedEnd.x-state.x,reconstructedEnd.y-state.y),
+      tractorHeading:Math.abs(norm(reconstructedEnd.psi-state.psi)),
+      trailerHeading:Math.abs(norm(reconstructedEnd.psiT-state.psiT))
+     };
+     const endpointMatches=
+      endpointResidual.position<=endpointTolerance.position&&
+      endpointResidual.tractorHeading<=endpointTolerance.heading&&
+      endpointResidual.trailerHeading<=endpointTolerance.heading;
+     if(endpointMatches){
+      for(const fraction of intermediateSampleFractions){
+       const intermediateState=rootPhysics.rk4(
+        previousState,segmentGear*0.7,segmentSteer,segmentDt*fraction,p
+       );
+       const intermediateDistance=segmentStartDistance+stepDistance*fraction;
+       const intermediateFootprints=rootPhysics.wheelFootprints(
+        intermediateState,p,segmentSteer
+       );
+       if(intermediateFootprints.length!==10){
+        throw new Error('Intermediate wheel geometry must contain exactly ten footprints.');
+       }
+       for(const wheel of intermediateFootprints){
+        const envelope=wheelEnvelopePolygon(wheel.center,tireRadius);
+        let envelopeDistance=Infinity,envelopeObstacle=null;
+        let polygonDistance=Infinity,polygonObstacle=null;
+        for(const obstacle of prepared){
+         const envelopeGap=polyDist(envelope,obstacle.poly);
+         if(envelopeGap<envelopeDistance){
+          envelopeDistance=envelopeGap;
+          envelopeObstacle=obstacle.name;
+         }
+         const polygonGap=polyDist(wheel.polygon,obstacle.poly);
+         if(polygonGap<polygonDistance){
+          polygonDistance=polygonGap;
+          polygonObstacle=obstacle.name;
+         }
+        }
+        const record=records.get(wheel.name);
+        if(!record)throw new Error('Wheel identity changed during intermediate swept sampling.');
+        if(polygonDistance<record.minimumIntermediatePolygonClearance){
+         record.minimumIntermediatePolygonClearance=polygonDistance;
+         record.minimumIntermediatePolygonDetail=Number.isFinite(polygonDistance)?{
+          obstacle:polygonObstacle,state:snapshot({...intermediateState,gear:segmentGear,steer:segmentSteer}),
+          distanceAlongRoute:intermediateDistance,sampleFraction:fraction
+         }:null;
+        }
+        if(envelopeDistance<record.minimumIntermediateEnvelopeClearance){
+         record.minimumIntermediateEnvelopeClearance=envelopeDistance;
+         record.minimumIntermediateEnvelopeDetail=Number.isFinite(envelopeDistance)?{
+          obstacle:envelopeObstacle,state:snapshot({...intermediateState,gear:segmentGear,steer:segmentSteer}),
+          distanceAlongRoute:intermediateDistance,sampleFraction:fraction
+         }:null;
+        }
+       }
+       intermediateSamplesAnalyzed++;
+      }
+      intermediateSampleStatus='rk4-intermediate-samples';
+      segmentsWithIntermediateKinematicSamples++;
+     }else{
+      intermediateSampleStatus='kinematic-endpoint-mismatch';
+      segmentsWithoutIntermediateKinematicSamples++;
+     }
+    }else{
+     segmentsWithoutIntermediateKinematicSamples++;
+    }
+    segmentDiagnostics.push({
+     fromSample:index-1,toSample:index,stepDistance,
+     status:intermediateSampleStatus,endpointResidual,
+     sampleFractions:intermediateSampleStatus==='rk4-intermediate-samples'?
+      intermediateSampleFractions.slice():[]
+    });
+   }
    if(previousChecks){
     const previousByName=new Map(previousChecks.map(item=>[item.wheel.name,item]));
     for(const current of currentChecks){
@@ -671,9 +764,13 @@
    statesAnalyzed:states.length,segmentsAnalyzed:Math.max(0,states.length-1),
    distanceAlongRoute,wheels,limitingWheel,
    minimumClearanceLowerBound:limitingWheel?limitingWheel.minimumClearanceLowerBound:Infinity,
+   segmentsWithIntermediateKinematicSamples,segmentsWithoutIntermediateKinematicSamples,
+   segmentsSkippedForNoObstacles,intermediateSamplesAnalyzed,
+   intermediateSampleFractions:intermediateSampleFractions.slice(),segmentDiagnostics,
+   intermediateSamplingMethod:'rk4-quarter-points-after-endpoint-consistency-check',
    envelope:'circumscribed-16-gon-around-rectangular-tire-footprint',
-   method:'per-wheel center displacement bound with orientation-independent circumscribed tire envelope',
-   note:'Нижняя оценка колеса использует описанную окружность прямоугольной оболочки шины и может быть строже фактического прямоугольного зазора. Между узлами применяется модельная граница перемещения центра; это не сертифицированная ошибка интегрирования.'
+   method:'per-wheel center displacement bound with orientation-independent circumscribed tire envelope plus intermediate RK4 samples',
+   note:'Нижняя оценка колеса использует описанную окружность прямоугольной оболочки шины и модельную границу перемещения центра. Промежуточные RK4-точки — дополнительные выборочные проверки, а не доказательство непрерывного отсутствия контакта; численная граница не сертифицирована.'
   };
  }
 
