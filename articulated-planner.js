@@ -955,6 +955,7 @@
    initialGear,
    initialSteer:Number(first.steer)||0,
    firstTurn,
+   steeringWheelDirection:firstTurn,
    firstTurnDistance,
    firstTurnGear,
    tractorYawDirection,
@@ -1021,6 +1022,7 @@
    index:candidate.index,label:candidate.label,cost:candidate.cost,
    initialGear:candidate.recommendation.initialGear,
    firstTurn:candidate.recommendation.firstTurn,
+   steeringWheelDirection:candidate.recommendation.steeringWheelDirection??candidate.recommendation.firstTurn,
    firstTurnGear:candidate.recommendation.firstTurnGear,
    tractorYawDirection:candidate.recommendation.tractorYawDirection,
    firstTurnDistance:candidate.recommendation.firstTurnDistance,
@@ -1083,10 +1085,10 @@
    return {ok:false,reason:'invalid-input',errors:['Допуск сравнения стоимости должен быть конечным неотрицательным числом.'],expanded:0};
   }
   const constraints=[
-   {initialGear:1,firstTurn:'left',label:'вперёд, первый поворот влево'},
-   {initialGear:1,firstTurn:'right',label:'вперёд, первый поворот вправо'},
-   {initialGear:-1,firstTurn:'left',label:'назад, первый поворот влево'},
-   {initialGear:-1,firstTurn:'right',label:'назад, первый поворот вправо'}
+   {initialGear:1,firstTurn:'left',label:'вперёд, руль влево'},
+   {initialGear:1,firstTurn:'right',label:'вперёд, руль вправо'},
+   {initialGear:-1,firstTurn:'left',label:'назад, руль влево'},
+   {initialGear:-1,firstTurn:'right',label:'назад, руль вправо'}
   ];
   const baseOptions={...options};
   delete baseOptions.alternativeMaxExpansions;
@@ -1140,6 +1142,7 @@
      label:candidate.label,cost:candidate.cost,
      initialGear:candidate.recommendation.initialGear,
      firstTurn:candidate.recommendation.firstTurn,
+     steeringWheelDirection:candidate.recommendation.steeringWheelDirection??candidate.recommendation.firstTurn,
      firstTurnGear:candidate.recommendation.firstTurnGear,
      tractorYawDirection:candidate.recommendation.tractorYawDirection,
      pathLength:candidate.score.pathLength,
@@ -1169,6 +1172,7 @@
    label:candidate.label,cost:candidate.cost,
    initialGear:candidate.recommendation.initialGear,
    firstTurn:candidate.recommendation.firstTurn,
+   steeringWheelDirection:candidate.recommendation.steeringWheelDirection??candidate.recommendation.firstTurn,
    firstTurnGear:candidate.recommendation.firstTurnGear,
    tractorYawDirection:candidate.recommendation.tractorYawDirection,
    pathLength:candidate.score.pathLength,
@@ -1216,6 +1220,7 @@
   return {
    initialGear:recommendation.initialGear,
    firstTurn:recommendation.firstTurn??null,
+   steeringWheelDirection:recommendation.steeringWheelDirection??recommendation.firstTurn??null,
    firstTurnGear:recommendation.firstTurnGear??null,
    tractorYawDirection:recommendation.tractorYawDirection??null,
    firstTurnAfterGearChange:recommendation.firstTurnAfterGearChange??null,
