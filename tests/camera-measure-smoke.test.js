@@ -23,7 +23,7 @@ function bootCamera(options={}){
    addEventListener(type,fn){(this.listeners[type]??=[]).push(fn);},
    getBoundingClientRect(){return{left:0,top:0,width:640,height:480};},
    getContext(){return context;},
-   play(){return options.playError?Promise.reject(new Error('video playback failed')):Promise.resolve();}
+   paused:true,\n   play(){this.paused=false;return options.playError?Promise.reject(new Error('video playback failed')):Promise.resolve();},\n   pause(){this.paused=true;}
   };
  }
  let permissionRequests=0,trackStops=0;
