@@ -242,7 +242,7 @@
 
  // Collision components are grouped into the same three driver-facing parts.
  // Mirrors are separate cab components, so their nearest obstacle can be named.
- function vehicleCollisionParts(q,params,steer=0){
+ function vehicleCollisionParts(q,params,steer=Number.isFinite(q&&q.steer)?q.steer:0){
   if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2){
    throw new Error('Угол поворота колёс для проверки столкновений некорректен.');
   }
@@ -354,7 +354,7 @@
   return wheels;
  }
 
- function wheelFootprints(q,params,steer=0){
+ function wheelFootprints(q,params,steer=Number.isFinite(q&&q.steer)?q.steer:0){
   const errors=validateVehicleParams(params);
   if(errors.length)throw new Error('Некорректные параметры колёс: '+errors.join(' '));
   if(!q||![q.x,q.y,q.psi,q.psiT].every(Number.isFinite)){
