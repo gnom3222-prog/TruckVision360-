@@ -26,6 +26,11 @@ const cfg={
  mirrorOutboard:0,
  mirrorLongitudinal:3.0,
  mirrorLength:0.8,
+ tractorFrontTrack:2.05,
+ tractorRearTrack:2.05,
+ trailerTrack:2.79,
+ tireLength:0.72,
+ tireWidth:0.44,
  trailerMass:30000,
  mu:0.7,
  crr:0.008,
@@ -154,6 +159,11 @@ function readSettings(){
   crr:[0,0.1],
   brakeDecel:[0.1,12],
   maxAccel:[0.1,3],
+  tractorFrontTrack:[1,3.5],
+  tractorRearTrack:[1,3.5],
+  trailerTrack:[1,4.5],
+  tireLength:[0.2,1.5],
+  tireWidth:[0.1,0.8],
   gateWidth:[1,20],
   gateCenterX:[-100,100],
   gateCenterY:[-100,100],
@@ -1386,32 +1396,10 @@ function drawRoute(){
  }
 }
 
-function drawWheel(center,angle){
- // Рисуем колесо как полигон в координатах карты: это работает
- // и в браузерном Canvas, и в облегчённом Canvas-контексте тестов.
- const halfLength=0.36,halfWidth=0.22;
- drawPolygon([
-  localPoint(center,angle,halfLength,halfWidth),
-  localPoint(center,angle,-halfLength,halfWidth),
-  localPoint(center,angle,-halfLength,-halfWidth),
-  localPoint(center,angle,halfLength,-halfWidth)
- ],'#050b11');
-}
-
 function drawVehicleDetails(){
- // Три оси полуприцепа: по два отчётливо видимых колеса на каждой оси.
- physics.trailerAxlePoints(state,cfg).forEach(point=>{
-  drawWheel(localPoint(point,state.psiT,0,cfg.trailerWidth/2+0.12),state.psiT);
-  drawWheel(localPoint(point,state.psiT,0,-cfg.trailerWidth/2-0.12),state.psiT);
- });
- // q is the rear-axle reference: front steer axle is +wheelbase, rear drive axle is q.
- const [frontAxle,rearAxle]=physics.tractorAxlePoints(state,cfg);
- // Display-only inset keeps illustrative tires inside the 2.55 m body outline;
- // it is not a measured Volvo track width and is not used by the dynamics.
- const tractorHalfTrackVisual=2.55/2-0.25;
- [1,-1].forEach(side=>{
-  drawWheel(localPoint(frontAxle,state.psi,0,side*tractorHalfTrackVisual),state.psi+steer);
-  drawWheel(localPoint(rearAxle,state.psi,0,side*tractorHalfTrackVisual),state.psi);
+ // Rendering and collision checks share the same calibrated tire footprints.
+ physics.wheelFootprints(state,cfg,steer).forEach(wheel=>{
+  drawPolygon(wheel.polygon,'#050b11');
  });
  // Отдельные зеркальные оболочки отображаются только при введённом измеренном выносе.
  physics.mirrorPolygons(state,{...cfg,footprintUncertainty:0}).forEach(mirror=>{
