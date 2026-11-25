@@ -62,7 +62,14 @@ const cfg={
  tractorRearTrackUncertainty:0,
  trailerTrackUncertainty:0,
  tireLengthUncertainty:0,
- tireWidthUncertainty:0
+ tireWidthUncertainty:0,
+ cabOffsetUncertainty:0,
+ cabFrontUncertainty:0,
+ cabRearUncertainty:0,
+ cabWidthUncertainty:0,
+ mirrorOutboardUncertainty:0,
+ mirrorLongitudinalUncertainty:0,
+ mirrorLengthUncertainty:0
 };
 
 let state,steer=0,targetSpeed=2,speed=0,drive=0;
@@ -198,7 +205,14 @@ function readSettings(){
   tractorRearTrackUncertainty:[0,1.25],
   trailerTrackUncertainty:[0,1.5],
   tireLengthUncertainty:[0,0.5],
-  tireWidthUncertainty:[0,0.3]
+  tireWidthUncertainty:[0,0.3],
+  cabOffsetUncertainty:[0,2],
+  cabFrontUncertainty:[0,1],
+  cabRearUncertainty:[0,1],
+  cabWidthUncertainty:[0,0.5],
+  mirrorOutboardUncertainty:[0,0.5],
+  mirrorLongitudinalUncertainty:[0,1],
+  mirrorLengthUncertainty:[0,0.5]
  };
  for(const [key,range] of Object.entries(limits)){
   const value=candidate[key];
@@ -222,13 +236,23 @@ function readSettings(){
   tractorRearTrackUncertainty:'tractorRearTrack',
   trailerTrackUncertainty:'trailerTrack',
   tireLengthUncertainty:'tireLength',
-  tireWidthUncertainty:'tireWidth'
+  tireWidthUncertainty:'tireWidth',
+  cabOffsetUncertainty:'cabOffset',
+  cabFrontUncertainty:'cabFront',
+  cabRearUncertainty:'cabRear',
+  cabWidthUncertainty:'cabWidth',
+  mirrorOutboardUncertainty:'mirrorOutboard',
+  mirrorLongitudinalUncertainty:'mirrorLongitudinal',
+  mirrorLengthUncertainty:'mirrorLength'
  };
  for(const [uncertaintyKey,parameterKey] of Object.entries(parameterUncertaintyMap)){
   const uncertainty=candidate[uncertaintyKey];
   if(!Number.isFinite(uncertainty)||uncertainty<0)continue;
   if(uncertainty===0)continue;
-  for(const endpoint of [candidate[parameterKey]-uncertainty,candidate[parameterKey]+uncertainty]){
+  const dimensionLimits=physics.VEHICLE_PARAMETER_LIMITS[parameterKey];
+  const lower=dimensionLimits?Math.max(dimensionLimits.min,candidate[parameterKey]-uncertainty):candidate[parameterKey]-uncertainty;
+  const upper=dimensionLimits?Math.min(dimensionLimits.max,candidate[parameterKey]+uncertainty):candidate[parameterKey]+uncertainty;
+  for(const endpoint of [lower,upper]){
    const endpointErrors=physics.validateVehicleParams({...candidate,[parameterKey]:endpoint});
    endpointErrors.forEach(message=>errors.push(uncertaintyKey+': крайнее значение '+parameterKey+'='+endpoint.toFixed(3)+' м: '+message));
   }
@@ -252,15 +276,23 @@ function vehicleParameterBoundsFromSettings(){
   tractorRearTrackUncertainty:'tractorRearTrack',
   trailerTrackUncertainty:'trailerTrack',
   tireLengthUncertainty:'tireLength',
-  tireWidthUncertainty:'tireWidth'
+  tireWidthUncertainty:'tireWidth',
+  cabOffsetUncertainty:'cabOffset',
+  cabFrontUncertainty:'cabFront',
+  cabRearUncertainty:'cabRear',
+  cabWidthUncertainty:'cabWidth',
+  mirrorOutboardUncertainty:'mirrorOutboard',
+  mirrorLongitudinalUncertainty:'mirrorLongitudinal',
+  mirrorLengthUncertainty:'mirrorLength'
  };
  const bounds={};
  for(const [uncertaintyKey,parameterKey] of Object.entries(mapping)){
   const uncertainty=cfg[uncertaintyKey];
   if(uncertainty>0){
+   const limits=physics.VEHICLE_PARAMETER_LIMITS[parameterKey];
    bounds[parameterKey]={
-    min:cfg[parameterKey]-uncertainty,
-    max:cfg[parameterKey]+uncertainty
+    min:limits?Math.max(limits.min,cfg[parameterKey]-uncertainty):cfg[parameterKey]-uncertainty,
+    max:limits?Math.min(limits.max,cfg[parameterKey]+uncertainty):cfg[parameterKey]+uncertainty
    };
   }
  }
