@@ -455,7 +455,7 @@ test('simulator applies measured mirror geometry and reports a mirror-side obsta
  elements.mirrorLongitudinal.value='3.00';
  elements.mirrorLength.value='0.80';
  elements.apply.onclick();
- assert.match(elements.routeAdvice.textContent,/Параметры модели проверены/);
+ assert.match(elements.routeAdvice.textContent,/Параметры модели изменены/);
  const frame=windowObject.TruckVisionSetPerceptionFrame({
   frameId:'mirror-calibration-smoke',
   timestamp:Date.now(),
