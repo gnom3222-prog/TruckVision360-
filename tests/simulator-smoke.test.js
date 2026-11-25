@@ -558,3 +558,41 @@ test('route assessment fails closed when per-wheel swept clearance cannot valida
  assert.match(elements.difficultyAdvice.textContent,/stepDistance/);
  assert.match(elements.difficultyAdvice.textContent,/Автопроезд остаётся заблокирован/);
 });
+
+
+test('simulator collision diagnostics use the current Ackermann steering angle for a protruding front tire',()=>{
+ const {elements,windowObject}=bootSimulator();
+ elements.tractorFrontTrack.value='2.4';
+ elements.tractorSteeringTrack.value='2.4';
+ elements.tireLength.value='1.2';
+ elements.tireWidth.value='0.8';
+ elements.apply.onclick();
+ elements.steer.value='35';
+ elements.steer.oninput();
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  tractorFrontTrack:2.4,tractorSteeringTrack:2.4,tractorRearTrack:2.05,
+  trailerTrack:2.79,tireLength:1.2,tireWidth:0.8,footprintUncertainty:0.03
+ };
+ const wheel=physics.wheelFootprints({x:0,y:0,psi:0,psiT:0},p,35*Math.PI/180).find(item=>
+  item.name==='левое переднее колесо тягача'
+ );
+ assert.ok(wheel);
+ const corner=wheel.polygon[0];
+ const frame=windowObject.TruckVisionSetPerceptionFrame({
+  frameId:'ackermann-front-wheel-smoke-001',timestamp:Date.now(),
+  coordinateFrame:'vehicle-local',vehiclePose:{x:0,y:0,heading:0},
+  objects:[{
+   id:'steered-front-wheel-post',type:'post',
+   pose:{x:corner.x,y:corner.y,heading:0},
+   dimensions:{length:0.1,width:0.1,height:1.0},
+   confidence:0.99,source:'fused'
+  }]
+ });
+ assert.equal(frame.ok,true);
+ const diagnostics=windowObject.TruckVisionGetClearanceDiagnostics();
+ const tractor=diagnostics.parts.find(part=>part.vehiclePart==='тягач');
+ assert.ok(tractor);
+ assert.equal(tractor.component,'левое переднее колесо тягача');
+});
