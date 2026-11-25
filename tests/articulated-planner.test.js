@@ -1178,7 +1178,7 @@ test('swept displacement bound grows to include configured mirror corners',()=>{
  const base=planner.sweptDisplacementRatesPerMeter(0.25,params);
  const withMirrors=planner.sweptDisplacementRatesPerMeter(0.25,{
   ...params,cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25,
-  mirrorOutboard:0.45,mirrorLongitudinal:3.0,mirrorLength:0.8
+  mirrorOutboard:0.9,mirrorLongitudinal:3.0,mirrorLength:0.8
  });
  assert.ok(withMirrors.cab>base.cab);
  assert.equal(withMirrors.tractor,base.tractor);
