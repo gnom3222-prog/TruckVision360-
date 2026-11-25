@@ -407,6 +407,7 @@ test('selected alternative displays per-part swept clearance, limiting obstacles
  elements.alternativeRouteSelect.value='0';
  elements.alternativeRouteSelect.onchange();
  assert.match(elements.difficultyAdvice.textContent,/Зазоры по частям вдоль маршрута/);
+ assert.match(elements.difficultyAdvice.textContent,/Ограничивающее колесо:/);
  assert.match(elements.difficultyAdvice.textContent,/тягач: 0\.70 м, препятствие у начала сегмента «front pallet»/);
  assert.match(elements.difficultyAdvice.textContent,/кабина: 0\.80 м, препятствие у начала сегмента «cab-side pallet»/);
  assert.match(elements.difficultyAdvice.textContent,/полуприцеп: 0\.50 м, препятствие у начала сегмента «rear trailer pallet»/);
@@ -504,4 +505,52 @@ test('simulator exposes calibrated wheel tracks and invalidates a route when the
  elements.trailerTrack.value='2.65';
  elements.apply.onclick();
  assert.match(elements.routeAdvice.textContent,/Параметры модели изменены/);
+});
+
+
+test('route assessment names the individual trailer wheel that limits the swept clearance',async()=>{
+ const simulator=bootSimulator({workerResult:perPartClearanceWorkerResult()});
+ const {elements,windowObject}=simulator;
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerTrack:2.79,tireLength:0.72,tireWidth:0.44
+ };
+ const firstAxle=physics.trailerAxlePoints({x:0,y:0,psi:0,psiT:0},p)[0];
+ const frame=windowObject.TruckVisionSetPerceptionFrame({
+  frameId:'wheel-clearance-smoke-001',
+  timestamp:Date.now(),
+  coordinateFrame:'vehicle-local',
+  vehiclePose:{x:0,y:0,heading:0},
+  objects:[{
+   id:'outer-wheel-post',type:'post',
+   pose:{x:firstAxle.x,y:1.66,heading:0},
+   dimensions:{length:0.1,width:0.1,height:1.0},
+   confidence:0.99,source:'fused'
+  }]
+ });
+ assert.equal(frame.ok,true);
+ elements.goalX.value='1';
+ elements.goalY.value='0';
+ elements.goalHeading.value='0';
+ await elements.planRoute.onclick();
+ elements.alternativeRouteSelect.value='0';
+ elements.alternativeRouteSelect.onchange();
+ assert.match(elements.difficultyAdvice.textContent,/Ограничивающее колесо: левое колесо 1-й оси полуприцепа/);
+ assert.match(elements.difficultyAdvice.textContent,/консервативная геометрическая оценка/);
+ assert.match(elements.difficultyAdvice.textContent,/Автопроезд остаётся заблокирован/);
+});
+
+test('route assessment fails closed when per-wheel swept clearance cannot validate integration steps',async()=>{
+ const simulator=bootSimulator({workerResult:conservativeSelectionWorkerResult()});
+ const {elements}=simulator;
+ elements.goalX.value='22';
+ elements.goalY.value='0';
+ elements.goalHeading.value='0';
+ await elements.planRoute.onclick();
+ elements.alternativeRouteSelect.value='0';
+ elements.alternativeRouteSelect.onchange();
+ assert.match(elements.difficultyAdvice.textContent,/Проверка отдельных колёс не подтверждена/);
+ assert.match(elements.difficultyAdvice.textContent,/stepDistance/);
+ assert.match(elements.difficultyAdvice.textContent,/Автопроезд остаётся заблокирован/);
 });
