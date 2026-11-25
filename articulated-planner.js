@@ -277,8 +277,8 @@
    const poly=obstaclePoly(o);
    return {poly,bounds:polygonBounds(poly),name:o.name||'препятствие'};
   });
-  return function(q){
-   const steer=q&&q.steer!==undefined?q.steer:0;
+  return function(q,steerOverride){
+   const steer=steerOverride!==undefined?steerOverride:(q&&q.steer!==undefined?q.steer:0);
    const groups=rootPhysics.vehicleCollisionParts(q,p,steer);
    const perPart=groups.map(group=>({
     distance:Infinity,obstacle:null,vehiclePart:group.vehiclePart,bodyIndex:group.bodyIndex,component:null
@@ -390,7 +390,7 @@
   const rates=sweptDisplacementRatesPerMeter(steer,p,q,maxDistance);
   return Math.max(rates.tractor,rates.cab,rates.trailer);
  }
- function clearance(q,obstacles,p){return createClearanceChecker(obstacles,p)(q);}
+ function clearance(q,obstacles,p,steerOverride){return createClearanceChecker(obstacles,p)(q,steerOverride);}
  function analyzeTrajectoryClearance(states,obstacles,p){
   if(!Array.isArray(states)||states.length===0)throw new Error('Route states are required for per-part clearance analysis.');
   const check=createClearanceChecker(obstacles,p);
@@ -680,7 +680,7 @@
    const e=goalErrors(q,goal);
    return e.position+0.45*(e.headingError??0)+0.35*e.articulation;
   };
-  const startCheck=checkClearance(start);
+  const startCheck=checkClearance(start,0);
   const startClearance=startCheck.distance;
   const snapshot=(q,gear=1,steer=0)=>({
    x:q.x,y:q.y,psi:q.psi,psiT:q.psiT,gear,steer
@@ -749,6 +749,26 @@
     let q={...cur.q},valid=true,minD=Infinity,minClearanceDetail=null,samples=[];
     let currentClearance=cur.clearance,currentClearanceDetail=cur.clearanceDetail;
     let sweptLowerBound=cur.sweptLowerBound,sweptLowerBoundDetail=cur.sweptLowerBoundDetail,travelled=0;
+    // Steering can rotate the front tire envelopes before the tractor translates.
+    // Check that control-start pose explicitly instead of reusing the previous node's clearance.
+    const controlStartCheck=checkClearance(q,steer);
+    if(controlStartCheck.distance<requiredClearance-1e-9)continue;
+    currentClearance=controlStartCheck.distance;
+    currentClearanceDetail=Number.isFinite(controlStartCheck.distance)?
+     {...controlStartCheck,state:snapshot(q,gear,steer)}:null;
+    if(controlStartCheck.distance<minD){
+     minD=controlStartCheck.distance;
+     minClearanceDetail=currentClearanceDetail;
+    }
+    if(controlStartCheck.distance<sweptLowerBound-1e-12){
+     sweptLowerBound=controlStartCheck.distance;
+     sweptLowerBoundDetail={
+      kind:'control-start-pose',lowerBound:controlStartCheck.distance,
+      state:snapshot(q,gear,steer),
+      referenceVehiclePart:controlStartCheck.vehiclePart||null,
+      referenceObstacle:controlStartCheck.obstacle||null
+     };
+    }
     while(travelled<primitive-1e-9){
      const remaining=primitive-travelled;
      let travel=Math.min(ds,remaining),displacementRate=0;
@@ -763,7 +783,7 @@
      const next=options.integrate(q,gear*0.7,steer,travel/0.7,params);
      if(next.x<bounds.minX||next.x>bounds.maxX||next.y<bounds.minY||next.y>bounds.maxY||
         Math.abs(norm(next.psi-next.psiT))>Math.PI*0.92){valid=false;break;}
-     const c=checkClearance(next);
+     const c=checkClearance(next,steer);
      if(c.distance<requiredClearance-1e-9){valid=false;break;}
      const segmentLowerBound=Number.isFinite(currentClearance)?currentClearance-displacementRate*travel:Infinity;
      if(segmentLowerBound<sweptLowerBound-1e-12){
