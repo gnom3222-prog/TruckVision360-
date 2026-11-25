@@ -1227,11 +1227,13 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
      part.minimumSampledClearance.toFixed(2)+' м':'не определён';
     const detail=part.limitingDetail;
     const obstacle=detail?.obstacleAtReference||detail?.obstacle||'препятствие не выделено';
+    const obstacleText=detail?.kind==='segment-lower-bound'?
+     'препятствие у начала сегмента «'+obstacle+'»':'препятствие «'+obstacle+'»';
     const location=detail?.kind==='segment-lower-bound'?
      'сегмент около '+Number(detail.distanceAlongRoute).toFixed(1)+' м, '+(detail.gear<0?'задний ход':'вперёд'):
      detail?.kind==='sampled-pose'?'поза около '+Number(detail.distanceAlongRoute).toFixed(1)+' м пути':'положение не определено';
     return part.vehiclePart+': выборочный минимум '+sampled+', нижняя оценка '+lower+
-     ', '+obstacle+', '+location;
+     ', '+obstacleText+', '+location;
    }).join('; '):'персональная оценка частей маршрута отсутствует';
   const startActionText=ambiguousFields.includes('initialGear')?
    'Передача начала не выбрана: близкие варианты расходятся':
@@ -2055,10 +2057,12 @@ $('alternativeRouteSelect').onchange=()=>{
   const lower=Number.isFinite(part.minimumClearanceLowerBound)?part.minimumClearanceLowerBound.toFixed(2)+' м':'не определён';
   const detail=part.limitingDetail;
   const obstacle=detail?.obstacleAtReference||detail?.obstacle||'препятствие не выделено';
+  const obstacleText=detail?.kind==='segment-lower-bound'?
+   'препятствие у начала сегмента «'+obstacle+'»':'препятствие «'+obstacle+'»';
   const location=detail?.kind==='segment-lower-bound'?
    'сегмент '+Number(detail.distanceAlongRoute).toFixed(1)+' м, '+(detail.gear<0?'задний ход':'вперёд'):
    detail?.kind==='sampled-pose'?'поза '+Number(detail.distanceAlongRoute).toFixed(1)+' м':'положение не определено';
-  return part.vehiclePart+': '+lower+', '+obstacle+', '+location;
+  return part.vehiclePart+': '+lower+', '+obstacleText+', '+location;
  }).join('; ');
  $('difficultyAdvice').textContent='Сложность: '+routeAssessment.level+'. Длина '+routeAssessment.length.toFixed(1)+' м; пиковый угол сочленения '+routeAssessment.maxBeta.toFixed(1)+'°; минимальный эффективный зазор '+(Number.isFinite(routeAssessment.effectiveClearance)?routeAssessment.effectiveClearance.toFixed(2)+' м':'не определён')+'. Зазоры по частям вдоль маршрута: '+selectedPartClearanceText+'. '+(passed?'Автопроезд разрешён только в виртуальной модели.':'Автопроезд остаётся заблокирован.');
  const selectedRecommendation=planner.recommendStart(plannedRoute);
