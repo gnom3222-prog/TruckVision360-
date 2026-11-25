@@ -406,6 +406,8 @@ test('calibrated wheel footprints cover two tractor axles and all three trailer 
  };
  const q={x:4,y:-2,psi:Math.PI/2,psiT:Math.PI/2};
  const wheels=physics.wheelFootprints(q,p,0.18);
+ const wheelsFromState=physics.wheelFootprints({...q,steer:0.18},p);
+ assert.deepEqual(wheelsFromState,wheels);
  const steeringAngles=physics.frontWheelSteerAngles(0.18,p);
  assert.equal(wheels.length,10);
  assert.equal(wheels.filter(wheel=>wheel.vehiclePart==='тягач').length,4);
@@ -578,11 +580,13 @@ test('collision components use the calibrated steering angle for protruding fron
  );
  const straight=findLeftFront(physics.vehicleCollisionParts(q,p,0));
  const steered=findLeftFront(physics.vehicleCollisionParts(q,p,0.6));
+ const steeredFromState=findLeftFront(physics.vehicleCollisionParts({...q,steer:0.6},p));
  const expected=physics.wheelFootprints(q,p,0.6).find(wheel=>
   wheel.name==='левое переднее колесо тягача'
  );
  assert.ok(straight&&steered&&expected,'the outboard front tire must be a separate collision component');
  assert.notDeepEqual(steered.polygon,straight.polygon);
  assert.deepEqual(steered.polygon,expected.polygon);
+ assert.deepEqual(steeredFromState.polygon,expected.polygon);
  assert.throws(()=>physics.vehicleCollisionParts(q,p,Math.PI/2),/Угол поворота колёс/);
 });
