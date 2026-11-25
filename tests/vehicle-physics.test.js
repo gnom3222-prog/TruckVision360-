@@ -510,8 +510,11 @@ test('trailer wheel trajectory diagnostics rejects malformed and sparse route da
  assert.throws(()=>physics.trailerWheelTrajectoryDiagnostics([
   {x:0,y:0,psi:0,psiT:0,gear:0}
  ],p),/Передача/);
- assert.throws(()=>physics.trailerWheelTrajectoryDiagnostics([
+ assert.doesNotThrow(()=>physics.trailerWheelTrajectoryDiagnostics([
   {x:0,y:0,psi:0,psiT:0,stepDistance:0}
+ ],p));
+ assert.throws(()=>physics.trailerWheelTrajectoryDiagnostics([
+  {x:0,y:0,psi:0,psiT:0,stepDistance:0.01}
  ],p),/stepDistance/);
  assert.throws(()=>physics.trailerWheelTrajectoryDiagnostics([
   {x:0,y:0,psi:0,psiT:0},
