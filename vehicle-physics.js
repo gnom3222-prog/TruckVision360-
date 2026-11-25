@@ -22,7 +22,12 @@
   cabWidth:{min:1.8,max:2.55,optional:true},
   mirrorOutboard:{min:0,max:1,optional:true},
   mirrorLongitudinal:{min:-2,max:8,optional:true},
-  mirrorLength:{min:0.2,max:2,optional:true}
+  mirrorLength:{min:0.2,max:2,optional:true},
+  tractorFrontTrack:{min:1,max:3.5,optional:true},
+  tractorRearTrack:{min:1,max:3.5,optional:true},
+  trailerTrack:{min:1,max:4.5,optional:true},
+  tireLength:{min:0.2,max:1.5,optional:true},
+  tireWidth:{min:0.1,max:0.8,optional:true}
  });
 
  function validateVehicleParams(params){
@@ -91,6 +96,20 @@
    if(mirrorLongitudinal-mirrorLength/2<cabRearEdge-1e-9||
       mirrorLongitudinal+mirrorLength/2>cabFrontEdge+1e-9){
     errors.push('mirrorLongitudinal/mirrorLength: оболочка зеркал должна располагаться вдоль боковой поверхности кабины.');
+   }
+  }
+
+  // Wheel/track dimensions are calibration inputs, not Volvo factory specifications.
+  const frontTrack=params.tractorFrontTrack??2.05;
+  const rearTrack=params.tractorRearTrack??2.05;
+  const trailerTrack=params.trailerTrack??(Number.isFinite(params.trailerWidth)?params.trailerWidth+0.24:NaN);
+  const tireWidth=params.tireWidth??0.44;
+  if([frontTrack,rearTrack,trailerTrack,tireWidth].every(Number.isFinite)){
+   if(frontTrack+tireWidth>3.2+1e-9||rearTrack+tireWidth>3.2+1e-9){
+    errors.push('tractorTrack/tireWidth: наружная ширина колёс тягача выходит за допустимую калибровочную оболочку 3,20 м.');
+   }
+   if(Number.isFinite(params.trailerWidth)&&trailerTrack+tireWidth>params.trailerWidth+1.0+1e-9){
+    errors.push('trailerTrack/tireWidth: колёса выходят за допустимую калибровочную оболочку относительно ширины полуприцепа.');
    }
   }
   return errors;
@@ -215,13 +234,20 @@
  function vehicleCollisionParts(q,params){
   const bodies=vehiclePolygons(q,params);
   const mirrors=mirrorPolygons(q,params);
+  const wheels=wheelFootprints(q,params,0);
   return [
-   {vehiclePart:'тягач',bodyIndex:0,components:[{name:'основной контур тягача',polygon:bodies[0]}]},
+   {vehiclePart:'тягач',bodyIndex:0,components:[
+    {name:'основной контур тягача',polygon:bodies[0]},
+    ...wheels.filter(wheel=>wheel.vehiclePart==='тягач').map(wheel=>({name:wheel.name,polygon:wheel.polygon}))
+   ]},
    {vehiclePart:'кабина',bodyIndex:1,components:[
     {name:'кабина',polygon:bodies[1]},
     ...mirrors
    ]},
-   {vehiclePart:'полуприцеп',bodyIndex:2,components:[{name:'кузов полуприцепа',polygon:bodies[2]}]}
+   {vehiclePart:'полуприцеп',bodyIndex:2,components:[
+    {name:'кузов полуприцепа',polygon:bodies[2]},
+    ...wheels.filter(wheel=>wheel.vehiclePart==='полуприцеп').map(wheel=>({name:wheel.name,polygon:wheel.polygon}))
+   ]}
   ];
  }
 
@@ -234,6 +260,52 @@
  function trailerAxlePoints(q,params){
   const center=axlePoint(q,params);
   return trailerAxleOffsets(params).map(offset=>localPoint(center,q.psiT,offset));
+ }
+
+ // Returns calibrated rectangular tire footprints in the same local frame as the
+ // collision model. Track/tire defaults preserve the prior illustrative drawing only.
+ function wheelFootprints(q,params,steer=0){
+  const errors=validateVehicleParams(params);
+  if(errors.length)throw new Error('Некорректные параметры колёс: '+errors.join(' '));
+  if(!q||![q.x,q.y,q.psi,q.psiT].every(Number.isFinite)){
+   throw new Error('Положение автопоезда для геометрии колёс некорректно.');
+  }
+  if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2){
+   throw new Error('Угол поворота передних колёс некорректен.');
+  }
+  const frontTrack=params.tractorFrontTrack??2.05;
+  const rearTrack=params.tractorRearTrack??2.05;
+  const trailerTrack=params.trailerTrack??(params.trailerWidth+0.24);
+  const tireLength=params.tireLength??0.72;
+  const tireWidth=params.tireWidth??0.44;
+  const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
+  const wheels=[];
+  const add=(vehiclePart,axleIndex,side,center,heading,name)=>{
+   wheels.push({
+    vehiclePart,axleIndex,side,center,heading,name,
+    polygon:bodyCorners(center,heading,
+     tireLength/2+uncertainty,-tireLength/2-uncertainty,tireWidth+2*uncertainty)
+   });
+  };
+  const [frontAxle,rearAxle]=tractorAxlePoints(q,params);
+  for(const side of [1,-1]){
+   const sideName=side>0?'левое':'правое';
+   add('тягач',1,side>0?'left':'right',
+    localPoint(frontAxle,q.psi,0,side*frontTrack/2),q.psi+steer,
+    sideName+' переднее колесо тягача');
+   add('тягач',2,side>0?'left':'right',
+    localPoint(rearAxle,q.psi,0,side*rearTrack/2),q.psi,
+    sideName+' заднее колесо тягача');
+  }
+  trailerAxlePoints(q,params).forEach((axle,index)=>{
+   for(const side of [1,-1]){
+    const sideName=side>0?'левое':'правое';
+    add('полуприцеп',index+1,side>0?'left':'right',
+     localPoint(axle,q.psiT,0,side*trailerTrack/2),q.psiT,
+     sideName+' колесо '+(index+1)+'-й оси полуприцепа');
+   }
+  });
+  return wheels;
  }
 
  // Rigid-body lateral velocity relative to the equivalent axle-group center.
@@ -329,5 +401,5 @@
   };
  }
 
- return Object.freeze({norm,validateVehicleParams,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,trailerAxleDiagnostics,trailerAxleScrubExposure,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
+ return Object.freeze({norm,validateVehicleParams,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
 });
