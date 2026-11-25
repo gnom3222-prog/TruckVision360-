@@ -241,10 +241,13 @@
 
  // Collision components are grouped into the same three driver-facing parts.
  // Mirrors are separate cab components, so their nearest obstacle can be named.
- function vehicleCollisionParts(q,params){
+ function vehicleCollisionParts(q,params,steer=0){
+  if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2){
+   throw new Error('Угол поворота колёс для проверки столкновений некорректен.');
+  }
   const bodies=vehiclePolygons(q,params);
   const mirrors=mirrorPolygons(q,params);
-  const wheels=buildWheelFootprints(q,params,0);
+  const wheels=buildWheelFootprints(q,params,steer);
   const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
   const tractorWheelComponents=wheels.filter(wheel=>
    wheel.vehiclePart==='тягач'&&polygonOutsideEnvelope(

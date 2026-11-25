@@ -1280,3 +1280,26 @@ test('per-wheel trajectory clearance reports no limiting wheel when the obstacle
  assert.equal(result.limitingWheel,null);
  assert.equal(result.minimumClearanceLowerBound,Infinity);
 });
+
+
+test('clearance checker forwards steering to protruding front tire collision geometry',()=>{
+ const p={
+  ...params,
+  tractorFrontTrack:2.4,tractorRearTrack:2.05,trailerTrack:2.5,
+  tireLength:1.2,tireWidth:0.8
+ };
+ const state={x:0,y:0,psi:0,psiT:0,gear:1,steer:0.6};
+ const wheel=physics.wheelFootprints(state,p,state.steer).find(item=>
+  item.name==='левое переднее колесо тягача'
+ );
+ assert.ok(wheel);
+ const contact=wheel.polygon[0];
+ const obstacle={x:contact.x,y:contact.y,w:0.04,h:0.04,name:'steered wheel post'};
+ const result=planner.clearance(state,[obstacle],p);
+ assert.equal(result.vehiclePart,'тягач');
+ assert.equal(result.component,'левое переднее колесо тягача');
+ assert.equal(result.obstacle,'steered wheel post');
+ assert.ok(result.distance<=1e-9,'the steered tire corner should intersect the obstacle');
+ const unsteered=planner.clearance({...state,steer:0},[obstacle],p);
+ assert.ok(unsteered.distance>0.1,'the same obstacle must not intersect the unsteered tire envelope');
+});

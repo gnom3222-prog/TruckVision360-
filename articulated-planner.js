@@ -278,7 +278,8 @@
    return {poly,bounds:polygonBounds(poly),name:o.name||'препятствие'};
   });
   return function(q){
-   const groups=rootPhysics.vehicleCollisionParts(q,p);
+   const steer=q&&q.steer!==undefined?q.steer:0;
+   const groups=rootPhysics.vehicleCollisionParts(q,p,steer);
    const perPart=groups.map(group=>({
     distance:Infinity,obstacle:null,vehiclePart:group.vehiclePart,bodyIndex:group.bodyIndex,component:null
    }));

@@ -538,3 +538,27 @@ test('trailer wheel trajectory diagnostics marks gear changes without hiding sam
  assert.equal(result.segments[0].axles[0].turnDirection,'straight');
 });
 
+
+
+test('collision components use the calibrated steering angle for protruding front tires',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,
+  tractorFrontTrack:2.4,tractorRearTrack:2.05,trailerTrack:2.5,
+  tireLength:1.2,tireWidth:0.8
+ };
+ assert.deepEqual(physics.validateVehicleParams(p),[]);
+ const q={x:0,y:0,psi:0,psiT:0};
+ const findLeftFront=groups=>groups[0].components.find(component=>
+  component.name==='левое переднее колесо тягача'
+ );
+ const straight=findLeftFront(physics.vehicleCollisionParts(q,p,0));
+ const steered=findLeftFront(physics.vehicleCollisionParts(q,p,0.6));
+ const expected=physics.wheelFootprints(q,p,0.6).find(wheel=>
+  wheel.name==='левое переднее колесо тягача'
+ );
+ assert.ok(straight&&steered&&expected,'the outboard front tire must be a separate collision component');
+ assert.notDeepEqual(steered.polygon,straight.polygon);
+ assert.deepEqual(steered.polygon,expected.polygon);
+ assert.throws(()=>physics.vehicleCollisionParts(q,p,Math.PI/2),/Угол поворота колёс/);
+});
