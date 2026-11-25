@@ -1145,3 +1145,42 @@ test('ambiguous nominal gate route does not claim the uncertainty envelope was c
  assert.equal(result.geometrySensitivity.envelopeEvaluated,false);
  assert.equal(result.geometrySensitivity.gateGeometryUncertainty.enabled,true);
 });
+
+test('clearance checker attributes an outboard obstacle to the configured left mirror',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const obstacle={x:3,y:1.75,w:0.2,h:0.2,name:'mirror-side post'};
+ const withMirrors={
+  ...params,cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25,
+  mirrorOutboard:0.45,mirrorLongitudinal:3.0,mirrorLength:0.8
+ };
+ const result=planner.clearance(q,[obstacle],withMirrors);
+ assert.equal(result.vehiclePart,'кабина');
+ assert.equal(result.component,'левое зеркало');
+ assert.ok(Math.abs(result.distance-0.075)<1e-9);
+ const withoutMirrors=planner.clearance(q,[obstacle],params);
+ assert.ok(withoutMirrors.distance>result.distance);
+});
+
+test('trajectory clearance keeps the mirror component in the limiting cab detail',()=>{
+ const q={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
+ const p={
+  ...params,cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25,
+  mirrorOutboard:0.45,mirrorLongitudinal:3.0,mirrorLength:0.8
+ };
+ const result=planner.analyzeTrajectoryClearance([q],[
+  {x:3,y:1.75,w:0.2,h:0.2,name:'mirror-side post'}
+ ],p);
+ assert.equal(result.parts[1].minimumSampledDetail.component,'левое зеркало');
+ assert.equal(result.parts[1].minimumSampledDetail.obstacle,'mirror-side post');
+});
+
+test('swept displacement bound grows to include configured mirror corners',()=>{
+ const base=planner.sweptDisplacementRatesPerMeter(0.25,params);
+ const withMirrors=planner.sweptDisplacementRatesPerMeter(0.25,{
+  ...params,cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25,
+  mirrorOutboard:0.45,mirrorLongitudinal:3.0,mirrorLength:0.8
+ });
+ assert.ok(withMirrors.cab>base.cab);
+ assert.equal(withMirrors.tractor,base.tractor);
+ assert.equal(withMirrors.trailer,base.trailer);
+});
