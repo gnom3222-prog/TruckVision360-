@@ -1369,7 +1369,7 @@ function planAlternativesWithGeometryUncertainty(options={}){
  }
  const gateGeometry=options.gateGeometry??null;
  const nominalizedObstacles=options.obstacles.map(obstacle=>{
-  if(!Array.isArray(obstacle?.nominalPolygon))return obstacle;
+  if(!Array.isArray(obstacle?.nominalPolygon)||!Array.isArray(obstacle?.polygon))return obstacle;
   return {
    ...obstacle,
    polygon:obstacle.nominalPolygon.map(point=>({x:point.x,y:point.y}))
