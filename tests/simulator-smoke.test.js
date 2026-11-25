@@ -454,6 +454,7 @@ test('selected alternative displays per-part swept clearance, limiting obstacles
  elements.alternativeRouteSelect.onchange();
  assert.match(elements.difficultyAdvice.textContent,/Зазоры по частям вдоль маршрута/);
  assert.match(elements.difficultyAdvice.textContent,/Ограничивающее колесо:/);
+ assert.match(elements.difficultyAdvice.textContent,/промежуточная выборка/);
  assert.match(elements.difficultyAdvice.textContent,/тягач: 0\.70 м, препятствие у начала сегмента «front pallet»/);
  assert.match(elements.difficultyAdvice.textContent,/кабина: 0\.80 м, препятствие у начала сегмента «cab-side pallet»/);
  assert.match(elements.difficultyAdvice.textContent,/полуприцеп: 0\.50 м, препятствие у начала сегмента «rear trailer pallet»/);
