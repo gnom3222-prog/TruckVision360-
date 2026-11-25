@@ -57,7 +57,12 @@ const cfg={
  trailerLengthUncertainty:0,
  trailerWidthUncertainty:0,
  trailerAxleSpacingUncertainty:0,
- tractorSteeringTrackUncertainty:0
+ tractorSteeringTrackUncertainty:0,
+ tractorFrontTrackUncertainty:0,
+ tractorRearTrackUncertainty:0,
+ trailerTrackUncertainty:0,
+ tireLengthUncertainty:0,
+ tireWidthUncertainty:0
 };
 
 let state,steer=0,targetSpeed=2,speed=0,drive=0;
@@ -188,7 +193,12 @@ function readSettings(){
   trailerLengthUncertainty:[0,5],
   trailerWidthUncertainty:[0,1.5],
   trailerAxleSpacingUncertainty:[0,2],
-  tractorSteeringTrackUncertainty:[0,1.25]
+  tractorSteeringTrackUncertainty:[0,1.25],
+  tractorFrontTrackUncertainty:[0,1.25],
+  tractorRearTrackUncertainty:[0,1.25],
+  trailerTrackUncertainty:[0,1.5],
+  tireLengthUncertainty:[0,0.5],
+  tireWidthUncertainty:[0,0.3]
  };
  for(const [key,range] of Object.entries(limits)){
   const value=candidate[key];
@@ -207,7 +217,12 @@ function readSettings(){
   trailerLengthUncertainty:'trailerLength',
   trailerWidthUncertainty:'trailerWidth',
   trailerAxleSpacingUncertainty:'trailerAxleSpacing',
-  tractorSteeringTrackUncertainty:'tractorSteeringTrack'
+  tractorSteeringTrackUncertainty:'tractorSteeringTrack',
+  tractorFrontTrackUncertainty:'tractorFrontTrack',
+  tractorRearTrackUncertainty:'tractorRearTrack',
+  trailerTrackUncertainty:'trailerTrack',
+  tireLengthUncertainty:'tireLength',
+  tireWidthUncertainty:'tireWidth'
  };
  for(const [uncertaintyKey,parameterKey] of Object.entries(parameterUncertaintyMap)){
   const uncertainty=candidate[uncertaintyKey];
@@ -232,7 +247,12 @@ function vehicleParameterBoundsFromSettings(){
   trailerLengthUncertainty:'trailerLength',
   trailerWidthUncertainty:'trailerWidth',
   trailerAxleSpacingUncertainty:'trailerAxleSpacing',
-  tractorSteeringTrackUncertainty:'tractorSteeringTrack'
+  tractorSteeringTrackUncertainty:'tractorSteeringTrack',
+  tractorFrontTrackUncertainty:'tractorFrontTrack',
+  tractorRearTrackUncertainty:'tractorRearTrack',
+  trailerTrackUncertainty:'trailerTrack',
+  tireLengthUncertainty:'tireLength',
+  tireWidthUncertainty:'tireWidth'
  };
  const bounds={};
  for(const [uncertaintyKey,parameterKey] of Object.entries(mapping)){
