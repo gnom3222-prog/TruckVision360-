@@ -1490,6 +1490,35 @@ function planAlternativesWithGeometryUncertainty(options={}){
 }
 
 
+function parameterEndpointVectors(count){
+ if(!Number.isInteger(count)||count<0||count>15){
+  throw new Error('Число активных параметров должно быть целым числом от 0 до 15.');
+ }
+ if(count<=3){
+  return Array.from({length:1<<count},(_,mask)=>
+   Array.from({length:count},(_,index)=>(mask>>index)&1)
+  );
+ }
+ // Distinct non-zero vectors over GF(2)^k are pairwise independent.
+ // Use 8 rows for 4–7 dimensions and 16 rows for 8–15 dimensions.
+ const width=count<=7?3:4;
+ const rowCount=1<<width;
+ const columnMasks=Array.from({length:rowCount-1},(_,index)=>index+1).slice(0,count);
+ const rows=[];
+ const parity=value=>{
+  let result=0;
+  for(let n=value;n;n>>=1)result^=n&1;
+  return result;
+ };
+ for(let row=0;row<rowCount;row++){
+  rows.push(columnMasks.map(mask=>parity(row&mask)));
+ }
+ // Add a joint all-high endpoint in addition to pairwise coverage.
+ const allHigh=Array(count).fill(1);
+ if(!rows.some(row=>row.every((value,index)=>value===allHigh[index])))rows.push(allHigh);
+ return rows;
+}
+
 function planAlternativesWithVehicleParameterBounds(options={}){
  const inputErrors=validatePlanOptions(options);
  if(inputErrors.length)return {ok:false,reason:'invalid-input',errors:inputErrors,expanded:0};
@@ -1546,36 +1575,10 @@ function planAlternativesWithVehicleParameterBounds(options={}){
   gateBounds.headingUncertaintyDeg??0
  ].some(value=>Number.isFinite(value)&&value>0);
  const geometryScenarioCount=hasGeometryBounds||hasGateBounds?2:1;
- function endpointVectors(count){
-  if(count<=3){
-   return Array.from({length:1<<count},(_,mask)=>
-    Array.from({length:count},(_,index)=>(mask>>index)&1)
-   );
-  }
-  if(count>15)throw new Error('Парное покрытие поддерживает не более 15 активных бинарных параметров.');
-  // Distinct non-zero vectors over GF(2)^k are pairwise independent.
-  // Use 8 rows for 4–7 dimensions and 16 rows for 8–15 dimensions.
-  const width=count<=7?3:4;
-  const rowCount=1<<width;
-  const columnMasks=Array.from({length:rowCount-1},(_,index)=>index+1).slice(0,count);
-  const rows=[];
-  const parity=value=>{
-   let result=0;
-   for(let n=value;n;n>>=1)result^=n&1;
-   return result;
-  };
-  for(let row=0;row<rowCount;row++){
-   rows.push(columnMasks.map(mask=>parity(row&mask)));
-  }
-  // Add a joint all-high endpoint in addition to pairwise coverage.
-  const allHigh=Array(count).fill(1);
-  if(!rows.some(row=>row.every((value,index)=>value===allHigh[index])))rows.push(allHigh);
-  return rows;
- }
  if(activeDimensions.length>15){
   return {ok:false,reason:'invalid-input',errors:['Поддерживается не более 15 активных параметров неопределённости.'],expanded:0};
  }
- const endpointRows=endpointVectors(activeDimensions.length);
+ const endpointRows=parameterEndpointVectors(activeDimensions.length);
  const endpointScenarios=endpointRows.map((row,index)=>{
   const parameterValues={},endpointSides={},failedParameters=[];
   for(let dimensionIndex=0;dimensionIndex<activeDimensions.length;dimensionIndex++){
@@ -1751,5 +1754,5 @@ function planAlternativesWithVehicleParameterBounds(options={}){
  };
 }
 
-return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon});
+return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,parameterEndpointVectors,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon});
 });
