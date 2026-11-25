@@ -1433,3 +1433,71 @@ test('clearance checker applies the requested Ackermann wheel angle before measu
  const stateSteered=planner.clearance({...q,steer:0.6},[obstacle],p);
  assert.equal(stateSteered.distance,0);
 });
+
+
+test('obstacle pose uncertainty envelope contains bounded X/Y translation and heading rotation',()=>{
+ const anchor={x:3,y:-2};
+ const polygon=[
+  {x:2.5,y:-2.2},{x:3.5,y:-2.2},
+  {x:3.5,y:-1.8},{x:2.5,y:-1.8}
+ ];
+ const original=polygon.map(point=>({...point}));
+ const bounds={positionX:0.12,positionY:0.08,headingDeg:5};
+ const result=planner.inflateObstaclePoseUncertainty(polygon,anchor,bounds);
+ assert.ok(Math.abs(result.positionInflation-Math.hypot(0.12,0.08))<1e-12);
+ assert.ok(result.headingInflation>0);
+ assert.ok(Math.abs(result.totalInflation-result.positionInflation-result.headingInflation)<1e-12);
+ const inside=(point,poly)=>{
+  let sign=0;
+  for(let i=0;i<poly.length;i++){
+   const a=poly[i],b=poly[(i+1)%poly.length];
+   const cross=(b.x-a.x)*(point.y-a.y)-(b.y-a.y)*(point.x-a.x);
+   if(Math.abs(cross)<1e-8)continue;
+   const current=Math.sign(cross);
+   if(sign&&current!==sign)return false;
+   sign=current;
+  }
+  return true;
+ };
+ for(const tx of [-bounds.positionX,bounds.positionX]){
+  for(const ty of [-bounds.positionY,bounds.positionY]){
+   for(const angle of [-5,5]){
+    const radians=angle*Math.PI/180,cos=Math.cos(radians),sin=Math.sin(radians);
+    for(const point of polygon){
+     const dx=point.x-anchor.x,dy=point.y-anchor.y;
+     const moved={x:anchor.x+dx*cos-dy*sin+tx,y:anchor.y+dx*sin+dy*cos+ty};
+     assert.ok(inside(moved,result.polygon),JSON.stringify({moved,envelope:result.polygon}));
+    }
+   }
+  }
+ }
+ assert.deepEqual(polygon,original,'the source polygon must not be mutated');
+ assert.throws(()=>planner.inflateObstaclePoseUncertainty(polygon,anchor,{positionX:-0.01,positionY:0,headingDeg:0}),/Допуски положения/);
+ assert.throws(()=>planner.inflateObstaclePoseUncertainty(polygon,anchor,{positionX:0,positionY:0,headingDeg:46}),/Допуски положения/);
+});
+
+test('bounded obstacle map pose uncertainty lowers individual clearances for the ten wheels',()=>{
+ const p={...params,tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.79,tireLength:0.72,tireWidth:0.44};
+ const q={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
+ const wheel=physics.wheelFootprints(q,p,0).find(item=>item.name==='левое переднее колесо тягача');
+ assert.ok(wheel);
+ const center=wheel.polygon.reduce((sum,point)=>({x:sum.x+point.x/wheel.polygon.length,y:sum.y+point.y/wheel.polygon.length}),{x:0,y:0});
+ const outerY=Math.max(...wheel.polygon.map(point=>point.y));
+ const anchor={x:center.x,y:outerY+0.21};
+ const obstaclePolygon=[
+  {x:anchor.x-0.06,y:anchor.y-0.06},
+  {x:anchor.x+0.06,y:anchor.y-0.06},
+  {x:anchor.x+0.06,y:anchor.y+0.06},
+  {x:anchor.x-0.06,y:anchor.y+0.06}
+ ];
+ const nominal=planner.analyzeWheelTrajectoryClearance([q],[{name:'manual post',polygon:obstaclePolygon}],p);
+ const envelope=planner.inflateObstaclePoseUncertainty(obstaclePolygon,anchor,{positionX:0.12,positionY:0.08,headingDeg:4});
+ const bounded=planner.analyzeWheelTrajectoryClearance([q],[{name:'manual post',polygon:envelope.polygon}],p);
+ assert.equal(nominal.wheels.length,10);
+ assert.equal(bounded.wheels.length,10);
+ const nominalWheel=nominal.wheels.find(item=>item.name==='левое переднее колесо тягача');
+ const boundedWheel=bounded.wheels.find(item=>item.name==='левое переднее колесо тягача');
+ assert.ok(nominalWheel&&boundedWheel);
+ assert.ok(nominalWheel.minimumSampledPolygonClearance>0,JSON.stringify(nominalWheel));
+ assert.ok(boundedWheel.minimumSampledPolygonClearance<nominalWheel.minimumSampledPolygonClearance,JSON.stringify({nominalWheel,boundedWheel}));
+});
