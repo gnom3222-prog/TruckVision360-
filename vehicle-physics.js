@@ -92,11 +92,14 @@
      Number.isFinite(mirrorLongitudinal)&&Number.isFinite(mirrorLength)&&
      mirrorOutboard<=1&&mirrorLongitudinal>=-2&&mirrorLongitudinal<=8&&
      mirrorLength>=0.2&&mirrorLength<=2){
-   const cabRearEdge=cabOffset-cabRear;
-   const cabFrontEdge=cabOffset+cabFront;
-   if(mirrorLongitudinal-mirrorLength/2<cabRearEdge-1e-9||
-      mirrorLongitudinal+mirrorLength/2>cabFrontEdge+1e-9){
-    errors.push('mirrorLongitudinal/mirrorLength: оболочка зеркал должна располагаться вдоль боковой поверхности кабины.');
+   // Mirror housings may extend beyond the cab's front/rear edges, but
+   // they must remain within the tractor's outer longitudinal envelope.
+   // This is a packaging bound, not a measured Volvo mirror-bracket model.
+   const tractorRearEdge=-1.2;
+   const tractorFrontEdge=5.0;
+   if(mirrorLongitudinal-mirrorLength/2<tractorRearEdge-1e-9||
+      mirrorLongitudinal+mirrorLength/2>tractorFrontEdge+1e-9){
+    errors.push('mirrorLongitudinal/mirrorLength: оболочка зеркал должна оставаться внутри продольного контура тягача (-1,20…5,00 м).');
    }
   }
 
@@ -583,5 +586,5 @@
   };
  }
 
- return Object.freeze({norm,validateVehicleParams,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
+ return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,validateVehicleParams,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
 });
