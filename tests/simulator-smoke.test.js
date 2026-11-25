@@ -566,6 +566,7 @@ test('simulator collision diagnostics use the current Ackermann steering angle f
  elements.tractorSteeringTrack.value='2.4';
  elements.tireLength.value='1.2';
  elements.tireWidth.value='0.8';
+ elements.trailerTrack.value='2.5';
  elements.apply.onclick();
  elements.steer.value='35';
  elements.steer.oninput();
@@ -573,7 +574,7 @@ test('simulator collision diagnostics use the current Ackermann steering angle f
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
   trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
   tractorFrontTrack:2.4,tractorSteeringTrack:2.4,tractorRearTrack:2.05,
-  trailerTrack:2.79,tireLength:1.2,tireWidth:0.8,footprintUncertainty:0.03
+  trailerTrack:2.5,tireLength:1.2,tireWidth:0.8,footprintUncertainty:0.03
  };
  const wheel=physics.wheelFootprints({x:0,y:0,psi:0,psiT:0},p,35*Math.PI/180).find(item=>
   item.name==='левое переднее колесо тягача'
