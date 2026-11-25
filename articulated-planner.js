@@ -314,7 +314,20 @@
   if(!Number.isFinite(maxDistance)||maxDistance<=0)throw new Error('Swept-check distance must be positive.');
   const tractorYawPerMeter=Math.abs(Math.tan(steer)/wheelbase);
   const footprintUncertainty=Number.isFinite(p.footprintUncertainty)?p.footprintUncertainty:0;
-  const tractorRadius=Math.hypot(5+footprintUncertainty,(2.55+2*footprintUncertainty)/2);
+  const tractorFrontTrack=p.tractorFrontTrack??2.05;
+  const tractorRearTrack=p.tractorRearTrack??2.05;
+  const tireLength=p.tireLength??0.72;
+  const tireWidth=p.tireWidth??0.44;
+  const tractorHalfWidth=Math.max(
+   (2.55+2*footprintUncertainty)/2,
+   (Math.max(tractorFrontTrack,tractorRearTrack)+tireWidth+2*footprintUncertainty)/2
+  );
+  const tractorWheelHalfLength=tireLength/2+footprintUncertainty;
+  const tractorRadius=Math.max(
+   Math.hypot(5+footprintUncertainty,tractorHalfWidth),
+   Math.hypot(wheelbase+tractorWheelHalfLength,tractorHalfWidth),
+   Math.hypot(1.2+footprintUncertainty,tractorHalfWidth)
+  );
   const cabOffset=p.cabOffset??2.1;
   const cabFront=p.cabFront??1.35;
   const cabWidth=p.cabWidth??2.25;
@@ -334,6 +347,10 @@
   }
   const trailerFrontFromAxle=kingpinAxles+1.5+footprintUncertainty;
   const trailerRearFromAxle=kingpinAxles-(trailerLength-1.5+footprintUncertainty);
+  const trailerAxleSpacing=p.trailerAxleSpacing??1.3;
+  const trailerWheelHalfLength=tireLength/2+footprintUncertainty;
+  const trailerWheelLongitudinals=[trailerAxleSpacing,0,-trailerAxleSpacing]
+   .flatMap(offset=>[offset-trailerWheelHalfLength,offset+trailerWheelHalfLength]);
   if(q&&(!Number.isFinite(q.psi)||!Number.isFinite(q.psiT))){
    throw new Error('Articulation state is invalid for swept-clearance checking.');
   }
@@ -346,7 +363,7 @@
    trailerWidth+2*footprintUncertainty,
    trailerTrack+tireWidth+2*footprintUncertainty
   );
-  const trailerLongitudinalOffsets=[trailerFrontFromAxle,trailerRearFromAxle];
+  const trailerLongitudinalOffsets=[trailerFrontFromAxle,trailerRearFromAxle,...trailerWheelLongitudinals];
   let trailerPointRate=0;
   for(const coupling of [-hitchYawCoupling,hitchYawCoupling]){
    for(const longitudinal of trailerLongitudinalOffsets){
