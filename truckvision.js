@@ -964,6 +964,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
  if(gearChanges)reasons.push('переключений передачи: '+gearChanges);
  if(steeringChanges)reasons.push('изменений рулевого режима: '+steeringChanges);
  if(collision)reasons.push('пересечение с препятствием');
+ if(intermediateWheelContact)reasons.push('промежуточная RK4-выборка контура шины пересекает препятствие; виртуальный автопроезд заблокирован');
  if(!reached)reasons.push('конечное положение не достигнуто в заданных допусках');
  if(terminalHeadingMismatch)reasons.push('конечный курс тягача вне допуска');
  if(terminalArticulationMismatch)reasons.push('полуприцеп не выровнен в заданном допуске');
