@@ -181,6 +181,30 @@ test('three-axle scrub exposure reports peak lateral speed separately for each a
  assert.equal(result.integration,'composite-simpson-4-subintervals');
 });
 
+test('three-axle scrub exposure uses planner stepDistance instead of endpoint chord',()=>{
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3};
+ const start={x:0,y:0,psi:0,psiT:0,gear:1,steer:0.18};
+ const end={x:0.5,y:0.2,psi:0.4,psiT:0.25,gear:1,steer:0.18};
+ const chord=Math.hypot(end.x-start.x,end.y-start.y);
+ const fallback=physics.trailerAxleScrubExposure([start,end],p,0.7);
+ const plannerPath=physics.trailerAxleScrubExposure([start,{...end,stepDistance:1.0}],p,0.7);
+ assert.equal(fallback.distanceMethod,'chord-fallback');
+ assert.equal(fallback.segmentsUsingChordFallback,1);
+ assert.equal(plannerPath.distanceMethod,'planner-step-distance');
+ assert.equal(plannerPath.segmentsUsingStepDistance,1);
+ assert.equal(plannerPath.segmentsUsingChordFallback,0);
+ near(plannerPath.totalAbsoluteLateralTravel,fallback.totalAbsoluteLateralTravel/chord,1e-10);
+ assert.ok(plannerPath.totalAbsoluteLateralTravel>fallback.totalAbsoluteLateralTravel);
+});
+
+test('three-axle scrub exposure rejects inconsistent planner step distances',()=>{
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3};
+ const start={x:0,y:0,psi:0,psiT:0,gear:1,steer:0.18};
+ const end={x:0.5,y:0.2,psi:0.4,psiT:0.25,gear:1,steer:0.18};
+ assert.throws(()=>physics.trailerAxleScrubExposure([{...start,stepDistance:0.1}],p),/stepDistance/);
+ assert.throws(()=>physics.trailerAxleScrubExposure([start,{...end,stepDistance:0.5}],p),/превышает stepDistance/);
+});
+
 test('Simpson axle exposure converges on a coarse curved path against a fine reference',()=>{
  const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3};
  const makePath=dt=>{
