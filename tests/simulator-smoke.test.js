@@ -473,4 +473,19 @@ test('simulator applies measured mirror geometry and reports a mirror-side obsta
  assert.equal(diagnostics.uncertainty.mirror.enabled,true);
  assert.equal(diagnostics.parts[1].component,'левое зеркало');
  assert.match(elements.assistantAdvice.textContent,/левое зеркало/);
+ const collisionFrame=windowObject.TruckVisionSetPerceptionFrame({
+  frameId:'mirror-collision-smoke',
+  timestamp:Date.now(),
+  coordinateFrame:'vehicle-local',
+  vehiclePose:{x:0,y:0,heading:0},
+  objects:[{
+   id:'left-mirror-contact',type:'post',
+   pose:{x:3,y:1.45,heading:0},
+   dimensions:{length:0.2,width:0.2,height:1.0},
+   confidence:0.99,source:'fused'
+  }]
+ });
+ assert.equal(collisionFrame.ok,true);
+ assert.match(elements.assistantAdvice.textContent,/левое зеркало/);
+ assert.match(elements.assistantAdvice.textContent,/пересекаются с препятствием/);
 });
