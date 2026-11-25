@@ -338,7 +338,14 @@
    throw new Error('Articulation state is invalid for swept-clearance checking.');
   }
   const hitchYawCoupling=hitchOffset*tractorYawPerMeter;
-  const trailerWidthWithUncertainty=trailerWidth+2*footprintUncertainty;
+  const trailerTrack=p.trailerTrack??(trailerWidth+0.24);
+  const tireWidth=p.tireWidth??0.44;
+  // The tire outer track can extend beyond the cargo-body width and therefore
+  // must be included in the trailer point-motion bound.
+  const trailerWidthWithUncertainty=Math.max(
+   trailerWidth+2*footprintUncertainty,
+   trailerTrack+tireWidth+2*footprintUncertainty
+  );
   const trailerLongitudinalOffsets=[trailerFrontFromAxle,trailerRearFromAxle];
   let trailerPointRate=0;
   for(const coupling of [-hitchYawCoupling,hitchYawCoupling]){
