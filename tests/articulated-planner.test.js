@@ -1556,3 +1556,51 @@ test('multiple independently uncertain obstacles constrain all ten wheels along 
  assert.ok(boundedFront.minimumClearanceLowerBound<=nominalFront.minimumClearanceLowerBound+1e-9);
  assert.ok(boundedTrailer.minimumClearanceLowerBound<=nominalTrailer.minimumClearanceLowerBound+1e-9);
 });
+
+
+test('camera obstacle uncertainty compares raw nominal polygon with its conservative envelope',()=>{
+ const start={x:0,y:0,psi:0,psiT:0};
+ let target={...start};
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ const cameraObstacle={
+  kind:'camera-obstacle',
+  name:'camera post with uncertain map pose',
+  nominalPolygon:[
+   {x:20,y:20},{x:21,y:20},{x:21,y:21},{x:20,y:21}
+  ],
+  polygon:[
+   {x:-1,y:-1},{x:1,y:-1},{x:1,y:1},{x:-1,y:1}
+  ]
+ };
+ const result=planner.planAlternativesWithGeometryUncertainty({
+  start,goal:{x:target.x,y:target.y,heading:target.psi},
+  params,obstacles:[cameraObstacle],integrate,
+  maxExpansions:1200,alternativeMaxExpansions:1200,
+  positionTolerance:0.02,headingTolerance:0.01,
+  maxTerminalArticulation:0.5,minClearance:0.30,
+  measurementUncertainty:0,costTolerance:0.001
+ });
+ assert.equal(result.ok,false,JSON.stringify(result));
+ assert.equal(result.reason,'geometry-envelope-no-route');
+ assert.ok(result.nominalCandidateSummaries.length>0,
+  'the raw nominal obstacle polygon must allow the nominal candidate search');
+ assert.equal(result.geometrySensitivity.perObstaclePoseEnvelopeCount,1);
+ assert.equal(result.geometrySensitivity.status,'no-route-under-envelope');
+ assert.equal(result.envelopeFailure.reason,'start-collision');
+});
+
+
+test('invalid nominal camera obstacle polygon is rejected before planning',()=>{
+ const result=planner.planAlternativesWithGeometryUncertainty({
+  start:{x:0,y:0,psi:0,psiT:0},goal:{x:2,y:0},
+  params,obstacles:[{
+   name:'invalid camera obstacle',
+   polygon:[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}],
+   nominalPolygon:[{x:0,y:0},{x:1,y:1},{x:1,y:0},{x:0,y:1}]
+  }],
+  integrate,maxExpansions:100,alternativeMaxExpansions:100
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'invalid-input');
+ assert.match(result.errors.join(' '),/Номинальный контур препятствия/);
+});
