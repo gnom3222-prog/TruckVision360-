@@ -953,7 +953,8 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   !terminalHeadingMismatch&&!terminalArticulationMismatch;
  const finalHeadingErrorDeg=(finalErrors.headingError??0)*180/Math.PI;
  const finalArticulationDeg=finalErrors.articulation*180/Math.PI;
- const clearanceInsufficient=!!wheelClearanceError||
+ const wheelClearanceIncomplete=!!wheelClearance&&wheelClearance.segmentsWithoutIntermediateKinematicSamples>0;
+ const clearanceInsufficient=!!wheelClearanceError||wheelClearanceIncomplete||
   (Number.isFinite(effectiveClearance)&&effectiveClearance<0.35);
  const articulationWarning=maxBeta>=ARTICULATION_WARNING_DEG;
  const articulationBlocked=maxBeta>=ARTICULATION_STOP_DEMO_DEG;
@@ -976,6 +977,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
    articulationPeak.distanceAlongRoute.toFixed(1)+' м пути');
  }
  if(clearanceInsufficient)reasons.push('недостаточный зазор после резерва погрешности');
+ if(wheelClearanceIncomplete)reasons.push('промежуточная кинематическая проверка колёс не завершена для '+wheelClearance.segmentsWithoutIntermediateKinematicSamples+' сегментов; виртуальный автопроезд заблокирован');
  if(wheelClearanceError)reasons.push('индивидуальная проверка колёс не подтверждена: '+wheelClearanceError);
  if(limitingWheelClearance&&Number.isFinite(limitingWheelClearance.minimumClearanceLowerBound)){
   const wheelDetail=limitingWheelClearance.limitingDetail||{};
@@ -1004,7 +1006,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   maxBeta,articulationPeak,articulationWarning,clearance:minClearance,clearanceDetail:minClearanceDetail,
   clearanceLowerBound:clearanceForAssessment,effectiveClearance,
   clearanceByPart,limitingPartClearance,trajectoryClearance,sweptClearanceDetail,
-  wheelClearance,limitingWheelClearance,wheelClearanceError,intermediateWheelContact,
+  wheelClearance,limitingWheelClearance,wheelClearanceError,intermediateWheelContact,wheelClearanceIncomplete,
   collision,reached,finalHeadingErrorDeg,finalArticulationDeg,clearanceInsufficient,articulationBlocked,reasons};
 }
 
@@ -1013,7 +1015,19 @@ function wheelClearanceSummaryText(metrics){
  if(metrics?.wheelClearanceError){
   return 'Проверка отдельных колёс не подтверждена: '+metrics.wheelClearanceError;
  }
- const wheelItems=Array.isArray(metrics?.wheelClearance?.wheels)?metrics.wheelClearance.wheels:[];
+ const wheelClearance=metrics?.wheelClearance||null;
+ const adaptive=wheelClearance?
+  ' Адаптивная проверка: '+wheelClearance.intermediateSamplesAnalyzed+
+  ' промежуточных поз на '+wheelClearance.segmentsWithIntermediateKinematicSamples+
+  ' сегментах; максимальная модельная граница перемещения центра колеса между выборками '+
+  Number(wheelClearance.maximumWheelCenterDisplacementBound||0).toFixed(3)+' м.':'';
+ const cap=wheelClearance?.segmentsAtAdaptiveSamplingCap>0?
+  ' На '+wheelClearance.segmentsAtAdaptiveSamplingCap+' сегментах достигнут предел '+
+  wheelClearance.maxAdaptiveIntervals+' интервалов; плотность выборки ограничена.':'';
+ const incomplete=wheelClearance?.segmentsWithoutIntermediateKinematicSamples>0?
+  ' Промежуточная проверка не завершена на '+wheelClearance.segmentsWithoutIntermediateKinematicSamples+
+  ' сегментах; виртуальный автопроезд заблокирован.':'';
+ const wheelItems=Array.isArray(wheelClearance?.wheels)?wheelClearance.wheels:[];
  const perWheel=wheelItems.length===10?
   ' Нижние оценки по каждому из 10 колёс: '+wheelItems.map(item=>
    item.name+' — '+(Number.isFinite(item.minimumClearanceLowerBound)?item.minimumClearanceLowerBound.toFixed(2)+' м':'не ограничен')+
@@ -1022,19 +1036,19 @@ function wheelClearanceSummaryText(metrics){
   ).join('; ')+'.':'';
  const wheel=metrics?.limitingWheelClearance;
  if(!wheel||!Number.isFinite(wheel.minimumClearanceLowerBound)){
-  return 'Индивидуальный зазор колёс не определён.'+perWheel;
+  return 'Индивидуальный зазор колёс не определён.'+perWheel+adaptive+cap+incomplete;
  }
  const detail=wheel.limitingDetail||{};
  const obstacle=detail.obstacleAtReference||detail.obstacle||'не выделено';
- const location=detail.kind==='segment-circumscribed-envelope-lower-bound'?
+ const location=detail.kind==='segment-circumscribed-envelope-lower-bound'||
+  detail.kind==='adaptive-segment-circumscribed-envelope-lower-bound'?
   ' на сегменте от '+Number(detail.distanceAlongRoute).toFixed(1)+' м, '+(detail.gear<0?'задний ход':'вперёд'):
   detail.kind==='sampled-circumscribed-envelope'?
    ' в позе около '+Number(detail.distanceAlongRoute).toFixed(1)+' м пути':'';
  return 'Ограничивающее колесо: '+wheel.name+'; нижняя оценка по описанной оболочке '+
   wheel.minimumClearanceLowerBound.toFixed(2)+' м; препятствие «'+obstacle+'»'+location+
-  ' (консервативная геометрическая оценка).'+perWheel;
+  ' (консервативная геометрическая оценка).'+perWheel+adaptive+cap+incomplete;
 }
-
 
 function wheelTrackSummaryText(metrics){
  const items=Array.isArray(metrics?.wheelTrackSummary)?metrics.wheelTrackSummary:[];
