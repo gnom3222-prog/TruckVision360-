@@ -3,7 +3,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const physics=require('../vehicle-physics.js');
 const planner=require('../articulated-planner.js');
-const params={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55};
+const params={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerTrack:2.11,tireLength:0.72,tireWidth:0.44};
 const integrate=(q,v,steer,dt,p)=>physics.rk4(q,v,steer,dt,p);
 test('articulated planner reaches a clear goal in open space',()=>{
  const result=planner.plan({start:{x:0,y:0,psi:0,psiT:0},goal:{x:7,y:0},params,obstacles:[],integrate,maxExpansions:5000});
@@ -543,10 +543,17 @@ test('swept bound uses the exact axle-centered trailer corner radius across long
    const a=p.hitchOffset*yaw;
    const front=p.kingpinAxles+1.5;
    const rear=p.kingpinAxles-(p.trailerLength-1.5);
+   const trailerTrack=p.trailerTrack??(p.trailerWidth+0.24);
+   const tireWidth=p.tireWidth??0.44;
+   const tireHalfLength=(p.tireLength??0.72)/2;
+   const axleSpacing=p.trailerAxleSpacing??1.3;
+   const wheelLongitudinals=[axleSpacing,0,-axleSpacing]
+    .flatMap(offset=>[offset-tireHalfLength,offset+tireHalfLength]);
+   const halfWidth=Math.max(p.trailerWidth/2,(trailerTrack+tireWidth)/2);
    let trailerRate=0;
    for(const coupling of [-a,a]){
-    for(const longitudinal of [front,rear]){
-     for(const lateral of [-p.trailerWidth/2,p.trailerWidth/2]){
+    for(const longitudinal of [front,rear,...wheelLongitudinals]){
+     for(const lateral of [-halfWidth,halfWidth]){
       const m11=1+coupling*lateral/p.kingpinAxles;
       const m12=coupling-lateral/p.kingpinAxles;
       const m21=-coupling*longitudinal/p.kingpinAxles;
