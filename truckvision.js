@@ -909,6 +909,10 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
    centerDistance:axle.center.sampledTravel,
    leftWheelDistance:axle.left.sampledTravel,
    rightWheelDistance:axle.right.sampledTravel,
+   integratedCenterDistance:axle.center.integratedTravelEstimate,
+   integratedLeftWheelDistance:axle.left.integratedTravelEstimate,
+   integratedRightWheelDistance:axle.right.integratedTravelEstimate,
+   integratedCoveredDistance:axle.center.integratedTravelCoveredDistance,
    innerSideSummary,
    maxOuterMinusInnerPerSample:differences.length?Math.max(0,...differences):0
   };
@@ -985,6 +989,9 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   axleScrubDistanceMethod:scrubExposure.distanceMethod,
   axleScrubSegmentsUsingStepDistance:scrubExposure.segmentsUsingStepDistance,
   axleScrubSegmentsUsingChordFallback:scrubExposure.segmentsUsingChordFallback,
+  wheelTrackTravelMethod:wheelTrajectory.wheelTravelMethod,
+  wheelTrackSegmentsWithKinematicEstimate:wheelTrajectory.segmentsWithKinematicEstimate,
+  wheelTrackSegmentsWithoutKinematicEstimate:wheelTrajectory.segmentsWithoutKinematicEstimate,
   wheelTrackSummary,
   level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',
   maxBeta,articulationPeak,articulationWarning,clearance:minClearance,clearanceDetail:minClearanceDetail,
@@ -1023,13 +1030,25 @@ function wheelClearanceSummaryText(metrics){
 function wheelTrackSummaryText(metrics){
  const items=Array.isArray(metrics?.wheelTrackSummary)?metrics.wheelTrackSummary:[];
  if(!items.length)return 'выборочные траектории колёс трёх осей не определены';
- return 'выборочные траектории колёс трёх осей (центр/левое/правое, м): '+
+ const sampled='выборочные длины траекторий (центр/левое/правое, м): '+
   items.map(item=>'ось '+item.axleIndex+' '+
    item.centerDistance.toFixed(2)+'/'+item.leftWheelDistance.toFixed(2)+'/'+item.rightWheelDistance.toFixed(2)+
    '; внутренняя сторона '+item.innerSideSummary+
-   '; максимальная разница внешнего и внутреннего колеса на сегменте '+
-   item.maxOuterMinusInnerPerSample.toFixed(3)).join('; ')+
-  '; длины — хорды между узлами маршрута, не непрерывная оценка';
+   '; максимальная разница внешнего и внутреннего колеса по хордам на сегменте '+
+   item.maxOuterMinusInnerPerSample.toFixed(3)).join('; ');
+ const integratedAvailable=items.every(item=>
+  [item.integratedCenterDistance,item.integratedLeftWheelDistance,item.integratedRightWheelDistance].every(Number.isFinite)
+ );
+ if(!integratedAvailable){
+  const reason=metrics.wheelTrackTravelMethod==='sampled-chords-only'?
+   'stepDistance отсутствует':
+   'не все сегменты прошли проверку реконструкции RK4';
+  return sampled+'; интегрированная оценка длины пути не выдана ('+reason+').';
+ }
+ const integrated='оценка длины пути по RK4 и Симпсону (центр/левое/правое, м): '+
+  items.map(item=>'ось '+item.axleIndex+' '+
+   item.integratedCenterDistance.toFixed(2)+'/'+item.integratedLeftWheelDistance.toFixed(2)+'/'+item.integratedRightWheelDistance.toFixed(2)).join('; ');
+ return sampled+'; '+integrated+'; численная оценка внутри кинематической модели, не измерение шин.';
 }
 
 function updateRecommendationCard(data={}){
