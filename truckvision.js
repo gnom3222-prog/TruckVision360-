@@ -744,7 +744,7 @@ function planAStar(start,goal){
  return compact;
 }
 
-function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDetail=null){
+function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDetail=null,trajectoryClearance=null){
  let length=0,gearChanges=0,steeringChanges=0,reverseDistance=0,reverseSegments=0;
  let minClearance=Infinity,minClearanceDetail=null,maxBeta=0,collision=false;
  const checkClearance=showObstacles?planner.createClearanceChecker(sceneObstacles(),cfg):null;
@@ -780,7 +780,11 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
  maxBeta=articulationPeak.maxAngleDegrees;
  const scrubExposure=physics.trailerAxleScrubExposure(path,cfg,0.7);
  const turns=gearChanges+steeringChanges;
- const clearanceForAssessment=Math.min(minClearance,minimumClearanceLowerBound);
+ const clearanceByPart=Array.isArray(trajectoryClearance?.parts)?trajectoryClearance.parts:[];
+ const partLowerBounds=clearanceByPart.map(part=>part.minimumClearanceLowerBound).filter(Number.isFinite);
+ const clearanceForAssessment=Math.min(minClearance,minimumClearanceLowerBound,...partLowerBounds);
+ const limitingPartClearance=clearanceByPart.reduce((best,part)=>
+  !best||part.minimumClearanceLowerBound<best.minimumClearanceLowerBound?part:best,null);
  const effectiveClearance=clearanceForAssessment-2*Math.max(0,cfg.measurementUncertainty);
  const finalErrors=planner.goalErrors(path[path.length-1],routeGoal);
  const terminalHeadingMismatch=finalErrors.headingError!==null&&finalErrors.headingError>routeGoal.headingTolerance;
@@ -822,7 +826,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',
   maxBeta,articulationPeak,articulationWarning,clearance:minClearance,clearanceDetail:minClearanceDetail,
   clearanceLowerBound:clearanceForAssessment,effectiveClearance,
-  sweptClearanceDetail,
+  clearanceByPart,limitingPartClearance,trajectoryClearance,sweptClearanceDetail,
   collision,reached,finalHeadingErrorDeg,finalArticulationDeg,clearanceInsufficient,articulationBlocked,reasons};
 }
 
@@ -1132,7 +1136,7 @@ if(result.reason==='uncertainty-sensitive-start'){
    return;
   }
 
-  const m=routeMetrics(plannedRoute,result.minimumClearanceLowerBound,result.sweptClearanceDetail);
+  const m=routeMetrics(plannedRoute,result.minimumClearanceLowerBound,result.sweptClearanceDetail,result.trajectoryClearance);
   routeAssessment=m;
   const recommendationComparison=result.recommendationComparison||
    planner.compareStartCandidates([{states:plannedRoute,cost:result.length,label:'одиночный маршрут'}],{costTolerance:0.25});
@@ -1215,6 +1219,20 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
    'сегмент X '+m.sweptClearanceDetail.from.x.toFixed(1)+', Y '+m.sweptClearanceDetail.from.y.toFixed(1)+
    ' → X '+m.sweptClearanceDetail.to.x.toFixed(1)+', Y '+m.sweptClearanceDetail.to.y.toFixed(1):
    'отдельный ограничивающий сегмент не выделен';
+  const routePartClearanceText=m.clearanceByPart.length?
+   m.clearanceByPart.map(part=>{
+    const lower=Number.isFinite(part.minimumClearanceLowerBound)?
+     part.minimumClearanceLowerBound.toFixed(2)+' м':'не определён';
+    const sampled=Number.isFinite(part.minimumSampledClearance)?
+     part.minimumSampledClearance.toFixed(2)+' м':'не определён';
+    const detail=part.limitingDetail;
+    const obstacle=detail?.obstacleAtReference||detail?.obstacle||'препятствие не выделено';
+    const location=detail?.kind==='segment-lower-bound'?
+     'сегмент около '+Number(detail.distanceAlongRoute).toFixed(1)+' м, '+(detail.gear<0?'задний ход':'вперёд'):
+     detail?.kind==='sampled-pose'?'поза около '+Number(detail.distanceAlongRoute).toFixed(1)+' м пути':'положение не определено';
+    return part.vehiclePart+': выборочный минимум '+sampled+', нижняя оценка '+lower+
+     ', '+obstacle+', '+location;
+   }).join('; '):'персональная оценка частей маршрута отсутствует';
   const startActionText=ambiguousFields.includes('initialGear')?
    'Передача начала не выбрана: близкие варианты расходятся':
    firstGear<0?'Начать задним ходом':'Начать движением вперёд';
@@ -1243,6 +1261,7 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
    '; ближайшая проверенная часть автопоезда: '+closestLocationText+
    '; нижняя оценка между узлами '+(Number.isFinite(m.clearanceLowerBound)?m.clearanceLowerBound.toFixed(2)+' м':'не ограничена')+
    ' на '+sweptLocationText+' (общая оценка движения контура; точная часть в середине сегмента не атрибутируется)'+
+   '; оценки частей вдоль маршрута: '+routePartClearanceText+
    '; после резерва погрешности: '+(Number.isFinite(m.effectiveClearance)?m.effectiveClearance.toFixed(2)+' м':'не определено')+
    '; устойчивость стартового действия: '+(sensitivity.status==='stable-start-action'?'сохранилось при повторном поиске с увеличенным требуемым зазором':sensitivity.status==='zero-reserve'?'не проверялась из-за нулевого резерва':'не подтверждена')+
    '; столкновение: '+(m.collision?'да':'не выявлено')+
