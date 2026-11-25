@@ -116,7 +116,7 @@ function sceneObstacles(){
  }
  const result=perceptionFrameTimestamp?[]:obstacles.map(obstacle=>({...obstacle}));
  // User-registered camera obstacles remain part of the map while live perception is active.
- result.push(...cameraObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point}))})));
+ result.push(...cameraObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point})),nominalPolygon:obstacle.nominalPolygon.map(point=>({...point})),anchor:{...obstacle.anchor},mapPoseUncertainty:{...obstacle.mapPoseUncertainty}})));
  result.push(...perceptionObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point}))})));
  const gateGeometry=gateGeometryForPlanner();
  if(gateGeometry)result.push(...planner.createGateObstacles(gateGeometry));
@@ -406,6 +406,7 @@ function vehicleCollisionParts(q,uncertainty=cfg.vehicleFootprintUncertainty,
 }
 
 function obstaclePolygon(o){
+ if(Array.isArray(o.nominalPolygon))return o.nominalPolygon.map(point=>({x:point.x,y:point.y}));
  if(Array.isArray(o.polygon))return o.polygon.map(point=>({x:point.x,y:point.y}));
  return[
   {x:o.x-o.w/2,y:o.y-o.h/2},
@@ -459,6 +460,11 @@ function polygonDistance(a,b){
 function obstacleEnvelopePolygon(obstacle){
  const nominal=obstaclePolygon(obstacle);
  const expansion=Math.max(0,cfg.obstaclePositionUncertainty)+Math.max(0,cfg.obstacleSizeUncertainty)/2;
+ if(obstacle.kind==='camera-obstacle'&&Array.isArray(obstacle.nominalPolygon)){
+  const pose=planner.inflateObstaclePoseUncertainty(nominal,obstacle.anchor,obstacle.mapPoseUncertainty||{});
+  const totalInflation=Math.max(0,obstacle.measurementInflation||0)+pose.totalInflation+Math.SQRT2*expansion;
+  return planner.inflateConvexPolygon(nominal,totalInflation);
+ }
  if(expansion<=0)return nominal;
  return Array.isArray(obstacle.polygon)?
   planner.inflateConvexPolygon(nominal,Math.SQRT2*expansion):
@@ -629,6 +635,14 @@ window.TruckVisionGetClearanceDiagnostics=()=>({
  obstacleChecksEnabled:showObstacles,
  parts:clearanceForVehicleParts(state),
  scene:assessScene(state),
+ cameraObstacles:cameraObstacles.map(obstacle=>({
+  name:obstacle.name,
+  measuredWidth:obstacle.measuredWidth,
+  measuredDepth:obstacle.measuredDepth,
+  sizeUncertainty:{sigmaWidth:obstacle.sigmaWidth,sigmaDepth:obstacle.sigmaDepth,radial2Sigma:obstacle.measurementInflation},
+  mapPoseUncertainty:{positionX:obstacle.positionUncertaintyX,positionY:obstacle.positionUncertaintyY,headingDeg:obstacle.headingUncertaintyDeg},
+  envelopeInflation:{position:obstacle.positionInflation,heading:obstacle.headingInflation,totalPose:obstacle.poseInflation,measurement:obstacle.measurementInflation}
+ })),
  uncertainty:{
   measurement:cfg.measurementUncertainty,
   obstaclePosition:cfg.obstaclePositionUncertainty,
@@ -982,9 +996,14 @@ function wheelClearanceSummaryText(metrics){
  if(metrics?.wheelClearanceError){
   return 'Проверка отдельных колёс не подтверждена: '+metrics.wheelClearanceError;
  }
+ const wheelItems=Array.isArray(metrics?.wheelClearance?.wheels)?metrics.wheelClearance.wheels:[];
+ const perWheel=wheelItems.length===10?
+  ' Нижние оценки по каждому из 10 колёс: '+wheelItems.map(item=>
+   item.name+' — '+(Number.isFinite(item.minimumClearanceLowerBound)?item.minimumClearanceLowerBound.toFixed(2)+' м':'не ограничен')
+  ).join('; ')+'.':'';
  const wheel=metrics?.limitingWheelClearance;
  if(!wheel||!Number.isFinite(wheel.minimumClearanceLowerBound)){
-  return 'Индивидуальный зазор колёс не определён';
+  return 'Индивидуальный зазор колёс не определён.'+perWheel;
  }
  const detail=wheel.limitingDetail||{};
  const obstacle=detail.obstacleAtReference||detail.obstacle||'не выделено';
@@ -994,7 +1013,7 @@ function wheelClearanceSummaryText(metrics){
    ' в позе около '+Number(detail.distanceAlongRoute).toFixed(1)+' м пути':'';
  return 'Ограничивающее колесо: '+wheel.name+'; нижняя оценка по описанной оболочке '+
   wheel.minimumClearanceLowerBound.toFixed(2)+' м; препятствие «'+obstacle+'»'+location+
-  ' (консервативная геометрическая оценка)';
+  ' (консервативная геометрическая оценка).'+perWheel;
 }
 
 
@@ -2004,9 +2023,14 @@ function applyCameraGateRegistration(registration){
 
 window.TruckVisionApplyGateRegistration=applyCameraGateRegistration;
 
-function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name){
+function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,poseUncertainty){
  const sigmaWidth=Number(measurement?.sigmaWidth)||0;
  const sigmaDepth=Number(measurement?.sigmaHeight)||0;
+ const mapPoseUncertainty={
+  positionX:poseUncertainty?.positionX,
+  positionY:poseUncertainty?.positionY,
+  headingDeg:poseUncertainty?.headingDeg
+ };
  if(!measurement||!Number.isFinite(measurement.width)||!Number.isFinite(measurement.height)||
     !Number.isFinite(sigmaWidth)||!Number.isFinite(sigmaDepth)||sigmaWidth<0||sigmaDepth<0||
     sigmaWidth>2||sigmaDepth>2||
@@ -2015,6 +2039,10 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name)
     !anchor||![anchor.x,anchor.y,headingRadians].every(Number.isFinite)||
     Math.abs(anchor.x)>100||Math.abs(anchor.y)>100||
     Math.abs(headingRadians)>Math.PI+1e-9||
+    ![mapPoseUncertainty.positionX,mapPoseUncertainty.positionY,mapPoseUncertainty.headingDeg].every(Number.isFinite)||
+    mapPoseUncertainty.positionX<0||mapPoseUncertainty.positionX>2||
+    mapPoseUncertainty.positionY<0||mapPoseUncertainty.positionY>2||
+    mapPoseUncertainty.headingDeg<0||mapPoseUncertainty.headingDeg>45||
     measurement.conditioningWarning===true||measurement.shapeWarning===true||
     cameraObstacles.length>=30)return false;
  const ux=Math.cos(headingRadians),uy=Math.sin(headingRadians);
@@ -2026,12 +2054,22 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name)
   {x:anchor.x-hw*ux+hh*nx,y:anchor.y-hw*uy+hh*ny}
  ];
  const measurementInflation=2*Math.max(sigmaWidth,sigmaDepth);
- let conservativePolygon=polygon;
- try{if(measurementInflation>0)conservativePolygon=planner.inflateConvexPolygon(polygon,measurementInflation);}catch(_){return false;}
+ let poseEnvelope,conservativePolygon;
+ try{
+  poseEnvelope=planner.inflateObstaclePoseUncertainty(polygon,anchor,mapPoseUncertainty);
+  conservativePolygon=planner.inflateConvexPolygon(poseEnvelope.polygon,measurementInflation);
+ }catch(_){return false;}
  const obstacle={kind:'camera-obstacle',name:String(name||'Препятствие камеры').trim().slice(0,48)||'Препятствие камеры',
-  polygon:conservativePolygon,nominalPolygon:polygon,
+  polygon:conservativePolygon,nominalPolygon:polygon,anchor:{x:anchor.x,y:anchor.y},
+  mapPoseUncertainty,
+  positionUncertaintyX:mapPoseUncertainty.positionX,
+  positionUncertaintyY:mapPoseUncertainty.positionY,
+  headingUncertaintyDeg:mapPoseUncertainty.headingDeg,
+  positionInflation:poseEnvelope.positionInflation,
+  headingInflation:poseEnvelope.headingInflation,
+  poseInflation:poseEnvelope.totalInflation,
   measuredWidth:measurement.width,measuredDepth:measurement.height,
-  sigmaWidth,sigmaDepth,measurementInflation,uncertaintyModel:'2-sigma-isotropic-envelope'};
+  sigmaWidth,sigmaDepth,measurementInflation,uncertaintyModel:'2-sigma-size-plus-bounded-map-pose'};
  try{if(planner.validateObstacles([obstacle]).length)return false;}catch(_){return false;}
  cameraObstacles.push(obstacle);
  invalidateRouteForSettingsChange();
