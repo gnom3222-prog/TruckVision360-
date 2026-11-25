@@ -1201,16 +1201,58 @@
   }
   const nominalAction=recommendationAction(nominal);
   const reserveAction=recommendationAction(reserve);
+  const clearanceEvidenceFor=result=>{
+   const sampled=result.minimumClearanceDetail&&typeof result.minimumClearanceDetail==='object'?
+    result.minimumClearanceDetail:null;
+   const swept=result.sweptClearanceDetail&&typeof result.sweptClearanceDetail==='object'?
+    result.sweptClearanceDetail:null;
+   const sampledDistance=Number.isFinite(sampled?.distance)?sampled.distance:null;
+   const lowerBound=Number.isFinite(result.minimumClearanceLowerBound)?
+    result.minimumClearanceLowerBound:null;
+   const obstacle=typeof swept?.referenceObstacle==='string'&&swept.referenceObstacle?
+    swept.referenceObstacle:
+    typeof sampled?.obstacle==='string'&&sampled.obstacle?sampled.obstacle:null;
+   const vehiclePart=typeof swept?.referenceVehiclePart==='string'&&swept.referenceVehiclePart?
+    swept.referenceVehiclePart:
+    typeof sampled?.vehiclePart==='string'&&sampled.vehiclePart?sampled.vehiclePart:null;
+   return {
+    minimumClearanceLowerBound:lowerBound,
+    limitingObstacle:obstacle,
+    limitingVehiclePart:vehiclePart,
+    sampled:sampled?{
+     distance:sampledDistance,
+     obstacle:typeof sampled.obstacle==='string'?sampled.obstacle:null,
+     vehiclePart:typeof sampled.vehiclePart==='string'?sampled.vehiclePart:null,
+     component:typeof sampled.component==='string'?sampled.component:null
+    }:null,
+    swept:swept?{
+     kind:typeof swept.kind==='string'?swept.kind:null,
+     lowerBound:Number.isFinite(swept.lowerBound)?swept.lowerBound:null,
+     obstacle:typeof swept.referenceObstacle==='string'?swept.referenceObstacle:null,
+     vehiclePart:typeof swept.referenceVehiclePart==='string'?swept.referenceVehiclePart:null
+    }:null
+   };
+  };
+  const nominalClearance=clearanceEvidenceFor(nominal);
+  const reserveClearance=clearanceEvidenceFor(reserve);
+  const clearanceEvidence={
+   nominal:nominalClearance,
+   reserve:reserveClearance,
+   limitingObstacleChanged:nominalClearance.limitingObstacle!==reserveClearance.limitingObstacle,
+   limitingVehiclePartChanged:nominalClearance.limitingVehiclePart!==reserveClearance.limitingVehiclePart
+  };
   if(!nominalAction&&!reserveAction){
    return {
     ok:true,status:'ambiguous',stable:false,
-    changedFields:['recommendation'],nominalAction:null,reserveAction:null
+    changedFields:['recommendation'],nominalAction:null,reserveAction:null,
+    clearanceEvidence
    };
   }
   if(!nominalAction||!reserveAction){
    return {
     ok:true,status:'changed',stable:false,
-    changedFields:['recommendation'],nominalAction,reserveAction
+    changedFields:['recommendation'],nominalAction,reserveAction,
+    clearanceEvidence
    };
   }
   const fields=['initialGear','firstTurn','firstTurnGear','tractorYawDirection','firstTurnAfterGearChange'];
@@ -1224,7 +1266,7 @@
   return {
    ok:true,status:changedFields.length?'changed':'stable',
    stable:changedFields.length===0,changedFields,nominalAction,reserveAction,
-   firstTurnDistanceTolerance
+   firstTurnDistanceTolerance,clearanceEvidence
   };
  }
  function planAlternativesWithReserve(options={}){
