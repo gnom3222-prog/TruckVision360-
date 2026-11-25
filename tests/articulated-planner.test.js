@@ -30,7 +30,7 @@ test('articulated planner satisfies the requested terminal tractor heading and t
  assert.ok(result.terminalErrors.articulation<=5*Math.PI/180);
 });
 
-test('articulated planner does not accept a position-only match with the wrong final heading',()=>{
+test('articulated planner reports an expansion limit instead of claiming no route before search exhaustion',()=>{
  const result=planner.plan({
   start:{x:0,y:0,psi:0,psiT:0},
   goal:{x:0.5,y:0,heading:Math.PI},
@@ -40,7 +40,9 @@ test('articulated planner does not accept a position-only match with the wrong f
   maxTerminalArticulation:5*Math.PI/180
  });
  assert.equal(result.ok,false);
- assert.equal(result.reason,'no-path');
+ assert.equal(result.reason,'search-limit');
+ assert.equal(result.searchLimitReached,true);
+ assert.equal(result.searchExhausted,false);
  assert.ok(result.headingError>Math.PI-1e-9);
 });
 
@@ -1703,4 +1705,49 @@ test('invalid nominal camera obstacle polygon is rejected before planning',()=>{
  assert.equal(result.ok,false);
  assert.equal(result.reason,'invalid-input');
  assert.match(result.errors.join(' '),/Номинальный контур препятствия/);
+});
+
+
+test('multi-start planner blocks a recommendation while any constrained initial action is still unexplored',()=>{
+ const result=planner.planAlternatives({
+  start:{x:0,y:0,psi:0,psiT:0},
+  goal:{x:2,y:0},
+  params,obstacles:[],integrate,
+  maxExpansions:3,alternativeMaxExpansions:3,
+  positionTolerance:0.9,headingTolerance:0.25,
+  maxTerminalArticulation:0.35,minClearance:0.30,costTolerance:0.1
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'search-incomplete');
+ assert.ok(result.candidatesFound>0,'some candidate routes should be found before the budget is reached');
+ assert.equal(result.candidatesAttempted,5);
+ assert.equal(result.recommendation,null);
+ assert.ok(result.incompleteActions.length>0);
+ assert.ok(result.incompleteActions.every(item=>item.candidateIndex>1&&item.reason==='search-limit'));
+});
+
+test('reserve planning preserves an incomplete nominal search instead of reporting no route',()=>{
+ const result=planner.planAlternativesWithReserve({
+  start:{x:0,y:0,psi:0,psiT:0},goal:{x:2,y:0},
+  params,obstacles:[],integrate,
+  maxExpansions:3,alternativeMaxExpansions:3,
+  measurementUncertainty:0.10
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'search-incomplete');
+ assert.equal(result.sensitivity.status,'nominal-search-incomplete');
+ assert.equal(result.recommendation,null);
+});
+
+test('geometry uncertainty planning preserves an incomplete nominal search',()=>{
+ const result=planner.planAlternativesWithGeometryUncertainty({
+  start:{x:0,y:0,psi:0,psiT:0},goal:{x:2,y:0},
+  params,obstacles:[],integrate,
+  maxExpansions:3,alternativeMaxExpansions:3,
+  obstaclePositionUncertainty:0.05
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'search-incomplete');
+ assert.equal(result.geometrySensitivity.status,'nominal-search-incomplete');
+ assert.equal(result.recommendation,null);
 });
