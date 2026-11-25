@@ -510,25 +510,58 @@
   const track=params.trailerTrack??(params.trailerWidth+0.24);
   if(!Number.isFinite(track)||track<=0)throw new Error('Колея полуприцепа для траектории колёс некорректна.');
   const offsets=trailerAxleOffsets(params);
+  const makeTrack=side=>({
+   side,
+   name:side==='center'?'центр оси':(side==='left'?'левое колесо':'правое колесо'),
+   points:[],
+   sampledTravel:0,
+   integratedTravelAccumulator:0,
+   integratedTravelCoveredDistance:0
+  });
   const axles=offsets.map((offset,index)=>({
    axleIndex:index+1,offsetFromGroupCenter:offset,
-   center:{points:[],sampledTravel:0},
-   left:{side:'left',name:'левое колесо '+(index+1)+'-й оси полуприцепа',points:[],sampledTravel:0},
-   right:{side:'right',name:'правое колесо '+(index+1)+'-й оси полуприцепа',points:[],sampledTravel:0}
+   center:makeTrack('center'),
+   left:makeTrack('left'),
+   right:makeTrack('right')
   }));
   const segments=[];
+  const sampleFractions=[0,0.25,0.5,0.75,1];
+  const endpointTolerance={position:1e-5,heading:1e-6};
   let routeDistance=0;
   let previousTracks=null;
   let previousState=null;
+  let segmentsUsingStepDistance=0,segmentsUsingChordFallback=0;
+  let segmentsWithKinematicEstimate=0,segmentsWithoutKinematicEstimate=0;
+
+  // Speed of a trailer wheel center per metre travelled by the tractor rear axle.
+  // The state derivative is evaluated at unit signed reference speed (+/-1 m/s).
+  const wheelSpeedPerReferenceMetre=(q,gear,steer,axleOffset,lateralOffset)=>{
+   const motion=derivative(q,gear,steer,params);
+   const hitchX=-params.hitchOffset*Math.cos(q.psi);
+   const hitchY=-params.hitchOffset*Math.sin(q.psi);
+   const hitchVx=motion.x-motion.psi*hitchY;
+   const hitchVy=motion.y+motion.psi*hitchX;
+   const longitudinal=-params.kingpinAxles+axleOffset;
+   const wheelX=longitudinal*Math.cos(q.psiT)-lateralOffset*Math.sin(q.psiT);
+   const wheelY=longitudinal*Math.sin(q.psiT)+lateralOffset*Math.cos(q.psiT);
+   const vx=hitchVx-motion.psiT*wheelY;
+   const vy=hitchVy+motion.psiT*wheelX;
+   return Math.hypot(vx,vy);
+  };
+  const simpsonDistance=(distance,values)=>
+   distance*(values[0]+4*values[1]+2*values[2]+4*values[3]+values[4])/12;
+
   for(let index=0;index<states.length;index++){
    const state=states[index];
    if(index===0&&state.q.stepDistance!==undefined&&
       (!Number.isFinite(state.q.stepDistance)||state.q.stepDistance!==0)){
     throw new Error('Начальное состояние траектории колёс должно иметь stepDistance равный нулю.');
    }
+   let segmentDistance=0;
+   let usesStepDistance=false;
    if(index>0){
     const chord=Math.hypot(state.q.x-previousState.q.x,state.q.y-previousState.q.y);
-    let segmentDistance=chord;
+    segmentDistance=chord;
     if(state.q.stepDistance!==undefined){
      if(!Number.isFinite(state.q.stepDistance)||state.q.stepDistance<=0){
       throw new Error('Состояние траектории колёс '+(index+1)+' содержит некорректный stepDistance.');
@@ -537,11 +570,15 @@
       throw new Error('Хорда траектории колёс превышает stepDistance на сегменте '+index+'.');
      }
      segmentDistance=state.q.stepDistance;
+     usesStepDistance=true;
+     segmentsUsingStepDistance++;
+    }else{
+     segmentsUsingChordFallback++;
     }
     routeDistance+=segmentDistance;
    }
    const axleCenters=trailerAxlePoints(state.q,params);
-   const currentTracks=axleCenters.map((center,axleIndex)=>({
+   const currentTracks=axleCenters.map(center=>({
     center,
     left:localPoint(center,state.q.psiT,0,track/2),
     right:localPoint(center,state.q.psiT,0,-track/2)
@@ -561,8 +598,56 @@
     append(axle.left,sample.left);
     append(axle.right,sample.right);
    });
+
    if(previousTracks){
     const deltaHeading=norm(state.q.psiT-previousState.q.psiT);
+    let integratedByAxle=null;
+    let integrationStatus=usesStepDistance?'kinematic-endpoint-mismatch':'step-distance-missing';
+    let endpointResidual=null;
+    if(usesStepDistance){
+     // Parameterize the same RK4 bicycle-model segment by travelled distance.
+     // With signed reference speed +/-1 m/s, dt numerically equals metres travelled.
+     const reconstructed=sampleFractions.map(fraction=>
+      rk4(previousState.q,state.gear,state.steer,segmentDistance*fraction,params)
+     );
+     const predictedEnd=reconstructed[reconstructed.length-1];
+     endpointResidual={
+      position:Math.hypot(predictedEnd.x-state.q.x,predictedEnd.y-state.q.y),
+      tractorHeading:Math.abs(norm(predictedEnd.psi-state.q.psi)),
+      trailerHeading:Math.abs(norm(predictedEnd.psiT-state.q.psiT))
+     };
+     const matchesPlannerState=
+      endpointResidual.position<=endpointTolerance.position&&
+      endpointResidual.tractorHeading<=endpointTolerance.heading&&
+      endpointResidual.trailerHeading<=endpointTolerance.heading;
+     if(matchesPlannerState){
+      integratedByAxle=offsets.map(offset=>{
+       const speeds=reconstructed.map(q=>({
+        center:wheelSpeedPerReferenceMetre(q,state.gear,state.steer,offset,0),
+        left:wheelSpeedPerReferenceMetre(q,state.gear,state.steer,offset,track/2),
+        right:wheelSpeedPerReferenceMetre(q,state.gear,state.steer,offset,-track/2)
+       }));
+       return {
+        center:simpsonDistance(segmentDistance,speeds.map(sample=>sample.center)),
+        left:simpsonDistance(segmentDistance,speeds.map(sample=>sample.left)),
+        right:simpsonDistance(segmentDistance,speeds.map(sample=>sample.right))
+       };
+      });
+      integrationStatus='rk4-simpson-estimate';
+      segmentsWithKinematicEstimate++;
+      integratedByAxle.forEach((integrated,axleIndex)=>{
+       for(const key of ['center','left','right']){
+        axles[axleIndex][key].integratedTravelAccumulator+=integrated[key];
+        axles[axleIndex][key].integratedTravelCoveredDistance+=segmentDistance;
+       }
+      });
+     }else{
+      segmentsWithoutKinematicEstimate++;
+     }
+    }else{
+     segmentsWithoutKinematicEstimate++;
+    }
+
     const axleSegments=currentTracks.map((sample,axleIndex)=>{
      const previous=previousTracks[axleIndex];
      const leftWheelDistance=Math.hypot(sample.left.x-previous.left.x,sample.left.y-previous.left.y);
@@ -579,30 +664,68 @@
       (innerSide==='right'?rightWheelDistance:null);
      const outerWheelDistance=outerSide==='left'?leftWheelDistance:
       (outerSide==='right'?rightWheelDistance:null);
+     const integrated=integratedByAxle?.[axleIndex]||null;
+     const integratedInner=innerSide?integrated?.[innerSide]:null;
+     const integratedOuter=outerSide?integrated?.[outerSide]:null;
      return {
       axleIndex:axleIndex+1,centerDistance,leftWheelDistance,rightWheelDistance,
       turnDirection,innerSide,outerSide,innerWheelDistance,outerWheelDistance,
-      outerMinusInner:innerWheelDistance===null?null:outerWheelDistance-innerWheelDistance
+      outerMinusInner:innerWheelDistance===null?null:outerWheelDistance-innerWheelDistance,
+      integratedCenterDistance:integrated?.center??null,
+      integratedLeftWheelDistance:integrated?.left??null,
+      integratedRightWheelDistance:integrated?.right??null,
+      integratedOuterMinusInner:integratedInner===null||integratedOuter===null?
+       null:integratedOuter-integratedInner
      };
     });
     segments.push({
      fromSample:index-1,toSample:index,gear:state.gear,gearChanged:state.gear!==previousState.gear,
      tractorReferenceDistance:routeDistance,
+     stepDistance:usesStepDistance?segmentDistance:null,
      trailerHeadingChange:deltaHeading,
+     integrationStatus,endpointResidual,
      axles:axleSegments
     });
    }
    previousTracks=currentTracks;
    previousState=state;
   }
+
+  const finalizeTrack=trackData=>{
+   const complete=segmentsWithoutKinematicEstimate===0;
+   const result={
+    side:trackData.side,name:trackData.name,points:trackData.points,
+    sampledTravel:trackData.sampledTravel,
+    integratedTravelEstimate:complete?trackData.integratedTravelAccumulator:null,
+    integratedTravelCoveredDistance:trackData.integratedTravelCoveredDistance
+   };
+   return result;
+  };
+  const finalizedAxles=axles.map(axle=>({
+   axleIndex:axle.axleIndex,offsetFromGroupCenter:axle.offsetFromGroupCenter,
+   center:finalizeTrack(axle.center),
+   left:finalizeTrack(axle.left),
+   right:finalizeTrack(axle.right)
+  }));
   return {
    samples:states.length,segments:segments.length,totalRouteDistance:routeDistance,
-   axles,
+   axles:finalizedAxles,
    segments,
-   distanceMethod:'sampled-centerline-chords-between-route-states',
+   distanceMethod:segmentsUsingStepDistance&&segmentsUsingChordFallback?
+    'step-distance-when-available-otherwise-chord':
+    (segmentsUsingStepDistance?'planner-step-distance':'chord-fallback'),
+   segmentsUsingStepDistance,segmentsUsingChordFallback,
+   segmentsWithKinematicEstimate,segmentsWithoutKinematicEstimate,
+   wheelTravelMethod:segmentsWithKinematicEstimate===0?'sampled-chords-only':
+    (segmentsWithoutKinematicEstimate===0?
+     'rk4-reconstructed-composite-simpson-4-subintervals':
+     'mixed-rk4-estimates-and-sampled-chords'),
+   kinematicEndpointTolerance:endpointTolerance,
    model:'single-equivalent-trailer-axle-group',
    limitations:[
-    'Траектории колёс — выборки в узлах переданного маршрута; длина между ними измеряется хордами и не является точной непрерывной длиной.',
+    'sampledTravel — сумма хорд между узлами маршрута; это выборочная оценка и она может быть ниже длины кривой.',
+    'integratedTravelEstimate доступна только для сегментов с stepDistance, чьи конечные состояния совпадают с реконструкцией той же кинематической RK4-модели в заданном допуске.',
+    'Длина пути колёс оценивается производной жёсткого тела и составной формулой Симпсона с четырьмя подынтервалами; это численная оценка, не сертифицированная граница ошибки интегрирования.',
     'Все три оси жёстко привязаны к одному эквивалентному курсу полуприцепа; независимое руление, подвеска и деформация шин не моделируются.',
     'Внутренняя и внешняя стороны классифицируются по знаку изменения курса между соседними узлами и передаче; это геометрический индикатор среза, не измерение бокового скольжения.'
    ]
