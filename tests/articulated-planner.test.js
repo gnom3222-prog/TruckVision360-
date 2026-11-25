@@ -1475,7 +1475,7 @@ test('per-wheel trajectory clearance applies a segment lower bound between sampl
  assert.equal(wheel.limitingDetail.obstacleAtReference,'front wheel post');
 });
 
-test('per-wheel clearance samples intermediate RK4 poses and detects an obstacle between route nodes',()=>{
+test('per-wheel clearance adaptively samples long RK4 segments and tightens interval lower bounds',()=>{
  const p={...params,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
   trailerTrack:2.79,tireLength:0.72,tireWidth:0.44};
  const stepDistance=2;
@@ -1492,16 +1492,47 @@ test('per-wheel clearance samples intermediate RK4 poses and detects an obstacle
   start,{...end,gear:1,steer,stepDistance}
  ],[obstacle],p);
  const wheel=result.wheels.find(item=>item.name===target.name);
+ const segment=result.segmentDiagnostics[0];
  assert.equal(result.segmentsWithIntermediateKinematicSamples,1);
  assert.equal(result.segmentsWithoutIntermediateKinematicSamples,0);
- assert.equal(result.intermediateSamplesAnalyzed,3);
- assert.equal(result.segmentDiagnostics[0].status,'rk4-intermediate-samples');
+ assert.ok(segment.intervalCount>4);
+ assert.equal(result.intermediateSamplesAnalyzed,segment.intervalCount-1);
+ assert.equal(segment.sampleFractions.length,segment.intervalCount-1);
+ assert.ok(segment.sampleFractions.includes(0.5));
+ assert.equal(segment.status,'rk4-adaptive-intermediate-samples');
+ assert.ok(segment.maxWheelCenterDisplacementPerInterval<=
+  result.targetMaxWheelCenterDisplacementPerInterval+1e-9||segment.adaptiveCapReached);
  assert.equal(wheel.minimumIntermediatePolygonDetail.obstacle,'mid-segment tire post');
  assert.ok(wheel.minimumIntermediatePolygonClearance<=1e-9);
  assert.ok(wheel.minimumIntermediateEnvelopeClearance<wheel.minimumSampledEnvelopeClearance);
  assert.ok(result.minimumClearanceLowerBound<=wheel.minimumIntermediateEnvelopeClearance+1e-9);
+ const detail=wheel.limitingDetail;
+ assert.equal(detail.kind,'adaptive-segment-circumscribed-envelope-lower-bound');
+ const expected=detail.referenceDistance-
+  detail.displacementRate*detail.stepDistance/(2*detail.intervalCount);
+ assert.ok(Math.abs(detail.lowerBound-expected)<1e-9);
+ assert.ok(detail.lowerBound>
+  detail.referenceDistance-detail.displacementRate*detail.stepDistance);
 });
 
+test('per-wheel clearance reports when adaptive RK4 sampling reaches its interval cap',()=>{
+ const p={...params,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerTrack:2.79,tireLength:0.72,tireWidth:0.44};
+ const stepDistance=10;
+ const start={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
+ const end=physics.rk4(start,0.7,0,stepDistance/0.7,p);
+ const obstacle={x:30,y:30,w:0.1,h:0.1,name:'distant cap-test obstacle'};
+ const result=planner.analyzeWheelTrajectoryClearance([
+  start,{...end,gear:1,steer:0,stepDistance}
+ ],[obstacle],p);
+ const segment=result.segmentDiagnostics[0];
+ assert.equal(segment.intervalCount,result.maxAdaptiveIntervals);
+ assert.equal(segment.adaptiveCapReached,true);
+ assert.equal(result.segmentsAtAdaptiveSamplingCap,1);
+ assert.equal(result.intermediateSamplesAnalyzed,segment.intervalCount-1);
+ assert.ok(Number.isFinite(segment.maxWheelCenterDisplacementPerInterval));
+});
+ 
 test('per-wheel clearance skips intermediate RK4 samples when the reconstructed endpoint does not match',()=>{
  const p={...params,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
   trailerTrack:2.79,tireLength:0.72,tireWidth:0.44};
