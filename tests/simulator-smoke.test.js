@@ -489,3 +489,16 @@ test('simulator applies measured mirror geometry and reports a mirror-side obsta
  assert.match(elements.assistantAdvice.textContent,/левое зеркало/);
  assert.match(elements.assistantAdvice.textContent,/пересекаются с препятствием/);
 });
+
+
+test('simulator exposes calibrated wheel tracks and invalidates a route when they change',()=>{
+ const {elements}=bootSimulator();
+ assert.equal(elements.tractorFrontTrack.value,'2.05');
+ assert.equal(elements.tractorRearTrack.value,'2.05');
+ assert.equal(elements.trailerTrack.value,'2.79');
+ assert.equal(elements.tireLength.value,'0.72');
+ assert.equal(elements.tireWidth.value,'0.44');
+ elements.trailerTrack.value='2.65';
+ elements.apply.onclick();
+ assert.match(elements.routeAdvice.textContent,/Параметры модели изменены/);
+});
