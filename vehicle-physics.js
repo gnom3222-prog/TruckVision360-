@@ -15,7 +15,14 @@
   trailerLength:{min:4,max:30},
   trailerWidth:{min:1.5,max:5},
   trailerAxleSpacing:{min:0.3,max:5,optional:true},
-  footprintUncertainty:{min:0,max:1,optional:true}
+  footprintUncertainty:{min:0,max:1,optional:true},
+  cabOffset:{min:0,max:6,optional:true},
+  cabFront:{min:0.5,max:3.5,optional:true},
+  cabRear:{min:0.3,max:2.5,optional:true},
+  cabWidth:{min:1.8,max:2.55,optional:true},
+  mirrorOutboard:{min:0,max:1,optional:true},
+  mirrorLongitudinal:{min:-2,max:8,optional:true},
+  mirrorLength:{min:0.2,max:2,optional:true}
  });
 
  function validateVehicleParams(params){
@@ -54,6 +61,37 @@
      errors.push('trailerAxleSpacing: продольное положение оси '+(index+1)+' выходит за границы кузова полуприцепа.');
     }
    });
+  }
+
+  // Cab dimensions are configurable calibration inputs, not factory defaults.
+  const cabOffset=params.cabOffset??2.1;
+  const cabFront=params.cabFront??1.35;
+  const cabRear=params.cabRear??0.9;
+  const cabWidth=params.cabWidth??2.25;
+  const validCabEnvelope=[cabOffset,cabFront,cabRear,cabWidth].every(Number.isFinite)&&
+   cabOffset>=0&&cabOffset<=6&&cabFront>=0.5&&cabFront<=3.5&&
+   cabRear>=0.3&&cabRear<=2.5&&cabWidth>=1.8&&cabWidth<=2.55;
+  if(validCabEnvelope&&(
+   cabOffset+cabFront>5+1e-9||
+   cabOffset-cabRear< -1.2-1e-9||
+   cabWidth>2.55+1e-9
+  )){
+   errors.push('Геометрия кабины выходит за пределы общего контура тягача; проверьте положение, длину и ширину кабины.');
+  }
+
+  const mirrorOutboard=params.mirrorOutboard??0;
+  const mirrorLongitudinal=params.mirrorLongitudinal??3.0;
+  const mirrorLength=params.mirrorLength??0.8;
+  if(validCabEnvelope&&Number.isFinite(mirrorOutboard)&&mirrorOutboard>0&&
+     Number.isFinite(mirrorLongitudinal)&&Number.isFinite(mirrorLength)&&
+     mirrorOutboard<=1&&mirrorLongitudinal>=-2&&mirrorLongitudinal<=8&&
+     mirrorLength>=0.2&&mirrorLength<=2){
+   const cabRearEdge=cabOffset-cabRear;
+   const cabFrontEdge=cabOffset+cabFront;
+   if(mirrorLongitudinal-mirrorLength/2<cabRearEdge-1e-9||
+      mirrorLongitudinal+mirrorLength/2>cabFrontEdge+1e-9){
+    errors.push('mirrorLongitudinal/mirrorLength: оболочка зеркал должна располагаться вдоль боковой поверхности кабины.');
+   }
   }
   return errors;
  }
@@ -139,14 +177,51 @@
 
  function vehiclePolygons(q,params){
   const h=hitchPoint(q,params);
-  const cab=localPoint(q,q.psi,2.1);
+  const cabOffset=params.cabOffset??2.1;
+  const cabFront=params.cabFront??1.35;
+  const cabRear=params.cabRear??0.9;
+  const cabWidth=params.cabWidth??2.25;
+  const cab=localPoint(q,q.psi,cabOffset);
   const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
-  // A bounded outward envelope is applied to every rectangular body edge.
-  // It is a geometry tolerance, not a tire, suspension, or localization model.
+  // The tractor rectangle remains a broad outer envelope. The cab is a
+  // nested diagnostic component whose dimensions can be calibrated separately.
   return[
    bodyCorners(q,q.psi,5+uncertainty,-1.2-uncertainty,2.55+2*uncertainty),
-   bodyCorners(cab,q.psi,1.35+uncertainty,-0.9-uncertainty,2.25+2*uncertainty),
+   bodyCorners(cab,q.psi,cabFront+uncertainty,-cabRear-uncertainty,cabWidth+2*uncertainty),
    bodyCorners(h,q.psiT,1.5+uncertainty,-(params.trailerLength-1.5+uncertainty),params.trailerWidth+2*uncertainty)
+  ];
+ }
+
+ // Optional side-mirror envelopes. mirrorOutboard is the measured projection
+ // beyond each cab side; zero means the mirrors are not included in collision geometry.
+ function mirrorPolygons(q,params){
+  const outboard=params.mirrorOutboard??0;
+  if(!Number.isFinite(outboard)||outboard<=0)return [];
+  const cabWidth=params.cabWidth??2.25;
+  const longitudinal=params.mirrorLongitudinal??3.0;
+  const length=params.mirrorLength??0.8;
+  const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
+  return [1,-1].map((side,index)=>{
+   const center=localPoint(q,q.psi,longitudinal,side*(cabWidth/2+outboard/2));
+   return {
+    name:index===0?'левое зеркало':'правое зеркало',
+    polygon:bodyCorners(center,q.psi,length/2+uncertainty,-length/2-uncertainty,outboard+2*uncertainty)
+   };
+  });
+ }
+
+ // Collision components are grouped into the same three driver-facing parts.
+ // Mirrors are separate cab components, so their nearest obstacle can be named.
+ function vehicleCollisionParts(q,params){
+  const bodies=vehiclePolygons(q,params);
+  const mirrors=mirrorPolygons(q,params);
+  return [
+   {vehiclePart:'тягач',bodyIndex:0,components:[{name:'основной контур тягача',polygon:bodies[0]}]},
+   {vehiclePart:'кабина',bodyIndex:1,components:[
+    {name:'кабина',polygon:bodies[1]},
+    ...mirrors
+   ]},
+   {vehiclePart:'полуприцеп',bodyIndex:2,components:[{name:'кузов полуприцепа',polygon:bodies[2]}]}
   ];
  }
 
@@ -254,5 +329,5 @@
   };
  }
 
- return Object.freeze({norm,validateVehicleParams,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,trailerAxleDiagnostics,trailerAxleScrubExposure,vehiclePolygons});
+ return Object.freeze({norm,validateVehicleParams,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,trailerAxleDiagnostics,trailerAxleScrubExposure,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
 });
