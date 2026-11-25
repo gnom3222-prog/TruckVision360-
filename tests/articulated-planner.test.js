@@ -1303,3 +1303,27 @@ test('clearance checker forwards steering to protruding front tire collision geo
  const unsteered=planner.clearance({...state,steer:0},[obstacle],p);
  assert.ok(unsteered.distance>0.1,'the same obstacle must not intersect the unsteered tire envelope');
 });
+
+
+test('clearance checker applies the requested Ackermann wheel angle before measuring a protruding front tire',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,
+  tractorFrontTrack:2.4,tractorSteeringTrack:2.4,tractorRearTrack:2.05,
+  trailerTrack:2.5,tireLength:1.2,tireWidth:0.8
+ };
+ const q={x:0,y:0,psi:0,psiT:0};
+ const wheel=physics.wheelFootprints(q,p,0.6).find(item=>
+  item.name==='левое переднее колесо тягача'
+ );
+ assert.ok(wheel);
+ const corner=wheel.polygon[0];
+ const obstacle={x:corner.x,y:corner.y,w:0.04,h:0.04,name:'front tire corner post'};
+ const straight=planner.clearance(q,[obstacle],p,0);
+ const steered=planner.clearance(q,[obstacle],p,0.6);
+ assert.ok(straight.distance>0.1,JSON.stringify(straight));
+ assert.equal(steered.distance,0,JSON.stringify(steered));
+ assert.equal(steered.component,'левое переднее колесо тягача');
+ const stateSteered=planner.clearance({...q,steer:0.6},[obstacle],p);
+ assert.equal(stateSteered.distance,0);
+});
