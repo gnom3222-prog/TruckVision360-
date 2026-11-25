@@ -1212,9 +1212,13 @@ if(result.reason==='geometry-sensitive-start'||result.reason==='geometry-envelop
   return gear+', '+turn+distance+(turnGear?' (на '+turnGear+after+')':'');
  };
  const comparison=geometry.comparison;
+ const comparisonLabels=geometry.status==='start-action-changed-under-clearance-reserve'?
+  {nominal:'В расширенной геометрии при обычном требуемом зазоре',
+   reserve:'В расширенной геометрии с резервом зазора'}:
+  {nominal:'Номинально',reserve:'С учётом ограниченной геометрии'};
  const comparisonNote=comparison&&comparison.nominalAction&&comparison.reserveAction?
-  ' Номинально: '+describeStartAction(comparison.nominalAction)+
-  '. С учётом ограниченной оболочки: '+describeStartAction(comparison.reserveAction)+
+  ' '+comparisonLabels.nominal+': '+describeStartAction(comparison.nominalAction)+
+  '. '+comparisonLabels.reserve+': '+describeStartAction(comparison.reserveAction)+
   '. Изменились поля: '+(comparison.changedFields||[]).join(', ')+'.':
   '';
  if(result.reason==='geometry-sensitive-start'){
