@@ -784,6 +784,47 @@ test('recommendation sensitivity detects a changed initial action across clearan
  assert.ok(result.changedFields.includes('firstTurn'));
 });
  
+test('recommendation sensitivity reports which obstacle limits each selected scenario',()=>{
+ const nominal={
+  ok:true,
+  recommendation:{initialGear:1,firstTurn:'left',firstTurnGear:1,tractorYawDirection:'left'},
+  minimumClearanceLowerBound:0.42,
+  minimumClearanceDetail:{
+   distance:0.48,obstacle:'столб у левого косяка',
+   vehiclePart:'тягач',component:'левое переднее колесо тягача'
+  },
+  sweptClearanceDetail:{
+   kind:'segment-lower-bound',lowerBound:0.42,
+   referenceObstacle:'столб у левого косяка',referenceVehiclePart:'тягач'
+  }
+ };
+ const envelope={
+  ok:true,
+  recommendation:{initialGear:1,firstTurn:'right',firstTurnGear:1,tractorYawDirection:'right'},
+  minimumClearanceLowerBound:0.31,
+  minimumClearanceDetail:{
+   distance:0.36,obstacle:'правый столб',
+   vehiclePart:'полуприцеп',component:'правое колесо 3-й оси полуприцепа'
+  },
+  sweptClearanceDetail:{
+   kind:'segment-lower-bound',lowerBound:0.31,
+   referenceObstacle:'правый столб',referenceVehiclePart:'полуприцеп'
+  }
+ };
+ const result=planner.compareRecommendationSensitivity(nominal,envelope);
+ assert.equal(result.status,'changed');
+ assert.equal(result.clearanceEvidence.limitingObstacleChanged,true);
+ assert.equal(result.clearanceEvidence.limitingVehiclePartChanged,true);
+ assert.equal(result.clearanceEvidence.nominal.limitingObstacle,'столб у левого косяка');
+ assert.equal(result.clearanceEvidence.nominal.limitingVehiclePart,'тягач');
+ assert.equal(result.clearanceEvidence.nominal.minimumClearanceLowerBound,0.42);
+ assert.equal(result.clearanceEvidence.nominal.sampled.component,'левое переднее колесо тягача');
+ assert.equal(result.clearanceEvidence.reserve.limitingObstacle,'правый столб');
+ assert.equal(result.clearanceEvidence.reserve.limitingVehiclePart,'полуприцеп');
+ assert.equal(result.clearanceEvidence.reserve.minimumClearanceLowerBound,0.31);
+ assert.equal(result.clearanceEvidence.reserve.swept.kind,'segment-lower-bound');
+});
+
 test('recommendation sensitivity reports a stable action without claiming global optimality',()=>{
  const action={initialGear:-1,firstTurn:'right',firstTurnGear:-1,tractorYawDirection:'left'};
  const result=planner.compareRecommendationSensitivity(
