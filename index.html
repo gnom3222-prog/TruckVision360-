@@ -392,7 +392,7 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <section class="panel tab-page" id="measurementSection">
 <div class="assistant-box camera-panel">
 <strong>📷 Измерение ворот камерой iPhone</strong>
-<p class="small">Камера запускается только после нажатия кнопки. Изображение обрабатывается локально в браузере и не отправляется на сервер.</p>
+<p class="small">Камера запускается только после нажатия кнопки. Изображение обрабатывается локально в браузере и не отправляется на сервер. При нажатии «Калибровать» видеокадр фиксируется: эталон и ворота отмечаются на одном изображении. Поток камеры остаётся активным до кнопки «Выключить камеру».</p>
 <div class="camera-stage">
  <video id="measureVideo" playsinline muted autoplay></video>
  <canvas id="measureOverlay" aria-label="Коснитесь четырёх углов эталона или ворот"></canvas>
@@ -433,7 +433,7 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <script src="truckvision.js?v=20261125-13"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261124-13"></script>
-<script src="camera-measure.js?v=20261124-16"></script>
+<script src="camera-measure.js?v=20261125-17"></script>
 
 <script>
 // App-style section navigation. Existing controls remain in the DOM with their IDs.
