@@ -55,7 +55,9 @@ const cfg={
  hitchOffsetUncertainty:0,
  kingpinAxlesUncertainty:0,
  trailerLengthUncertainty:0,
- trailerWidthUncertainty:0
+ trailerWidthUncertainty:0,
+ trailerAxleSpacingUncertainty:0,
+ tractorSteeringTrackUncertainty:0
 };
 
 let state,steer=0,targetSpeed=2,speed=0,drive=0;
@@ -184,7 +186,9 @@ function readSettings(){
   hitchOffsetUncertainty:[0,1],
   kingpinAxlesUncertainty:[0,5],
   trailerLengthUncertainty:[0,5],
-  trailerWidthUncertainty:[0,1.5]
+  trailerWidthUncertainty:[0,1.5],
+  trailerAxleSpacingUncertainty:[0,2],
+  tractorSteeringTrackUncertainty:[0,1.25]
  };
  for(const [key,range] of Object.entries(limits)){
   const value=candidate[key];
@@ -201,7 +205,9 @@ function readSettings(){
   hitchOffsetUncertainty:'hitchOffset',
   kingpinAxlesUncertainty:'kingpinAxles',
   trailerLengthUncertainty:'trailerLength',
-  trailerWidthUncertainty:'trailerWidth'
+  trailerWidthUncertainty:'trailerWidth',
+  trailerAxleSpacingUncertainty:'trailerAxleSpacing',
+  tractorSteeringTrackUncertainty:'tractorSteeringTrack'
  };
  for(const [uncertaintyKey,parameterKey] of Object.entries(parameterUncertaintyMap)){
   const uncertainty=candidate[uncertaintyKey];
@@ -224,7 +230,9 @@ function vehicleParameterBoundsFromSettings(){
   hitchOffsetUncertainty:'hitchOffset',
   kingpinAxlesUncertainty:'kingpinAxles',
   trailerLengthUncertainty:'trailerLength',
-  trailerWidthUncertainty:'trailerWidth'
+  trailerWidthUncertainty:'trailerWidth',
+  trailerAxleSpacingUncertainty:'trailerAxleSpacing',
+  tractorSteeringTrackUncertainty:'tractorSteeringTrack'
  };
  const bounds={};
  for(const [uncertaintyKey,parameterKey] of Object.entries(mapping)){
