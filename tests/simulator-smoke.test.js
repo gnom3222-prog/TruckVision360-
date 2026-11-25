@@ -446,3 +446,31 @@ test('invalid alternative-route indices fail closed and never keep a stale candi
  elements.routeStart.onclick();
  assert.match(elements.routeAdvice.textContent,/Сначала нажмите «Построить путь»/);
 });
+
+test('simulator applies measured mirror geometry and reports a mirror-side obstacle component',()=>{
+ const {elements,windowObject}=bootSimulator();
+ assert.equal(elements.mirrorOutboard.value,'0');
+ assert.match(elements.assistantAdvice.textContent,/Геометрия зеркал не задана/);
+ elements.mirrorOutboard.value='0.45';
+ elements.mirrorLongitudinal.value='3.00';
+ elements.mirrorLength.value='0.80';
+ elements.apply.onclick();
+ assert.match(elements.routeAdvice.textContent,/Параметры модели проверены/);
+ const frame=windowObject.TruckVisionSetPerceptionFrame({
+  frameId:'mirror-calibration-smoke',
+  timestamp:Date.now(),
+  coordinateFrame:'vehicle-local',
+  vehiclePose:{x:0,y:0,heading:0},
+  objects:[{
+   id:'left-mirror-post',type:'post',
+   pose:{x:3,y:1.75,heading:0},
+   dimensions:{length:0.2,width:0.2,height:1.0},
+   confidence:0.99,source:'fused'
+  }]
+ });
+ assert.equal(frame.ok,true);
+ const diagnostics=windowObject.TruckVisionGetClearanceDiagnostics();
+ assert.equal(diagnostics.uncertainty.mirror.enabled,true);
+ assert.equal(diagnostics.parts[1].component,'левое зеркало');
+ assert.match(elements.assistantAdvice.textContent,/левое зеркало/);
+});
