@@ -1184,3 +1184,33 @@ test('swept displacement bound grows to include configured mirror corners',()=>{
  assert.equal(withMirrors.tractor,base.tractor);
  assert.equal(withMirrors.trailer,base.trailer);
 });
+
+
+test('trailer swept displacement bound includes the outboard tire track',()=>{
+ const narrow=planner.sweptDisplacementRatesPerMeter(0.25,{
+  ...params,trailerTrack:2.0,tireWidth:0.3
+ });
+ const wide=planner.sweptDisplacementRatesPerMeter(0.25,{
+  ...params,trailerTrack:2.79,tireWidth:0.44
+ });
+ assert.ok(wide.trailer>narrow.trailer);
+ assert.equal(wide.tractor,narrow.tractor);
+ assert.equal(wide.cab,narrow.cab);
+});
+
+test('clearance checker identifies an outboard trailer tire as the limiting component',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const p={
+  ...params,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerTrack:2.79,tireLength:0.72,tireWidth:0.44
+ };
+ const axle=physics.axlePoint(q,p);
+ const firstAxle=physics.trailerAxlePoints(q,p)[0];
+ const obstacle={x:firstAxle.x,y:1.66,w:0.1,h:0.1,name:'outer trailer post'};
+ const result=planner.clearance(q,[obstacle],p);
+ assert.equal(result.vehiclePart,'полуприцеп');
+ assert.equal(result.component,'левое колесо 1-й оси полуприцепа');
+ assert.equal(result.obstacle,'outer trailer post');
+ assert.ok(result.distance<0.05);
+ assert.ok(axle.x<firstAxle.x);
+});
