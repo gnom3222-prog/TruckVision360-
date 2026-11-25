@@ -858,7 +858,13 @@
   }
   if(!finish){
    const errors=goalErrors(closest.q,goal);
-   return {ok:false,reason:'no-path',expanded,
+   // A non-empty valid frontier means the expansion budget stopped the search;
+   // do not report that as proof that no route exists.
+   const frontierRemains=open.some(node=>
+    node.g<=(best.get(key(node.q))??Infinity)+1e-8
+   );
+   return {ok:false,reason:frontierRemains?'search-limit':'no-path',expanded,
+    searchLimitReached:frontierRemains,searchExhausted:!frontierRemains,
     closest:{x:closest.q.x,y:closest.q.y,psi:closest.q.psi,psiT:closest.q.psiT},
     goalDistance:errors.position,headingError:errors.headingError,articulationAngle:errors.articulation};
   }
@@ -1111,7 +1117,7 @@
    const result=plan(planOptions);
    expanded+=result.expanded||0;
    if(!result.ok){
-    failures.push({label,reason:result.reason,expanded:result.expanded||0});
+    failures.push({label,candidateIndex,reason:result.reason,expanded:result.expanded||0});
     return;
    }
    const recommendation=recommendStart(result.states);
@@ -1122,6 +1128,29 @@
   for(let index=0;index<constraints.length;index++){
    const constraint=constraints[index];
    attempt(constraint.label,{initialGear:constraint.initialGear,firstTurn:constraint.firstTurn},index+2);
+  }
+  const incompleteActions=failures.filter(failure=>
+   failure.candidateIndex>1&&failure.reason==='search-limit'
+  );
+  if(incompleteActions.length){
+   return {
+    ok:false,reason:'search-incomplete',expanded,
+    candidatesFound:candidates.length,candidatesAttempted:candidateCount,
+    candidateSummaries:candidates.map(candidate=>({
+     label:candidate.label,cost:candidate.cost,
+     initialGear:candidate.recommendation.initialGear,
+     firstTurn:candidate.recommendation.firstTurn,
+     firstTurnGear:candidate.recommendation.firstTurnGear,
+     tractorYawDirection:candidate.recommendation.tractorYawDirection,
+     pathLength:candidate.score.pathLength,
+     gearChanges:candidate.score.gearChanges,
+     maxArticulationDegrees:candidate.score.maxArticulationDegrees,
+     minimumClearanceLowerBound:candidate.score.minimumClearanceLowerBound,
+     scoreComponents:candidate.score.components
+    })),
+    failures,incompleteActions,recommendation:null,
+    note:'Не все четыре ограниченных начальных действия были исследованы до исчерпания поискового фронтира; рекомендация заблокирована.'
+   };
   }
   if(!candidates.length){
    return {
@@ -1323,7 +1352,7 @@
    return {
     ...nominal,
     sensitivity:{
-     status:'nominal-unavailable',measurementUncertainty:uncertainty,
+     status:nominal.reason==='search-incomplete'?'nominal-search-incomplete':'nominal-unavailable',measurementUncertainty:uncertainty,
      nominalRequiredClearance,reserveRequiredClearance,
      nominalReason:nominal.reason
     }
@@ -1332,6 +1361,22 @@
   const nominalExpanded=nominal.expanded||0;
   const reserve=runScenario('reserve',reserveRequiredClearance,nominalExpanded);
   const totalExpanded=nominalExpanded+(reserve.expanded||0);
+  if(!reserve.ok&&reserve.reason==='search-incomplete'){
+   return {
+    ok:false,reason:'search-incomplete',expanded:totalExpanded,
+    candidatesFound:reserve.candidatesFound??0,
+    nominalCandidateSummaries:nominal.candidateSummaries||[],
+    reserveCandidateSummaries:reserve.candidateSummaries||[],
+    incompleteActions:reserve.incompleteActions||[],
+    reserveFailure:{reason:reserve.reason,failures:reserve.failures||[]},
+    requiredClearance:reserveRequiredClearance,
+    sensitivity:{
+     status:'reserve-search-incomplete',measurementUncertainty:uncertainty,
+     nominalRequiredClearance,reserveRequiredClearance,
+     nominalStatus:nominal.status,reserveStatus:reserve.reason
+    }
+   };
+  }
   if(!reserve.ok){
    if(reserve.reason==='ambiguous-start'){
     return {
@@ -1541,7 +1586,8 @@ function planAlternativesWithGeometryUncertainty(options={}){
    ...nominal,
    geometrySensitivity:{
     ...geometryBounds,
-    status:nominal.reason==='ambiguous-start'?'nominal-ambiguous':'nominal-unavailable',
+    status:nominal.reason==='ambiguous-start'?'nominal-ambiguous':
+     nominal.reason==='search-incomplete'?'nominal-search-incomplete':'nominal-unavailable',
     envelopeEvaluated:false
    }
   };
@@ -1564,6 +1610,21 @@ function planAlternativesWithGeometryUncertainty(options={}){
  };
  const robust=runScenario('expanded-geometry-envelope',expandedOptions,nominal.expanded||0);
  const totalExpanded=(nominal.expanded||0)+(robust.expanded||0);
+ if(!robust.ok&&robust.reason==='search-incomplete'){
+  return {
+   ok:false,reason:'geometry-search-incomplete',expanded:totalExpanded,
+   candidatesFound:robust.candidatesFound??0,
+   nominalCandidateSummaries:nominal.candidateSummaries||[],
+   envelopeCandidateSummaries:robust.candidateSummaries||[],
+   incompleteActions:robust.incompleteActions||[],
+   envelopeFailure:{reason:robust.reason,failures:robust.failures||[]},
+   geometrySensitivity:{
+    ...geometryBounds,status:'envelope-search-incomplete',
+    nominalStatus:nominal.status,envelopeStatus:robust.reason,
+    incompleteActions:robust.incompleteActions||[]
+   }
+  };
+ }
  if(!robust.ok){
   if(robust.reason==='uncertainty-sensitive-start'){
    return {
