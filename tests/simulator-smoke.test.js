@@ -193,17 +193,33 @@ test('negative measurement uncertainty blocks route playback instead of weakenin
  assert.match(elements.routeAdvice.textContent,/Автопроезд заблокирован/);
 });
 
-test('kinematic uncertainty settings include Ackermann steering track and tri-axle spacing',()=>{
+test('kinematic uncertainty settings include Ackermann, axle tracks and tire dimensions',()=>{
  const {elements}=bootSimulator();
- assert.equal(elements.trailerAxleSpacingUncertainty.value,'0');
- assert.equal(elements.tractorSteeringTrackUncertainty.value,'0');
+ const ids=[
+  'trailerAxleSpacingUncertainty','tractorSteeringTrackUncertainty',
+  'tractorFrontTrackUncertainty','tractorRearTrackUncertainty',
+  'trailerTrackUncertainty','tireLengthUncertainty','tireWidthUncertainty'
+ ];
+ for(const id of ids)assert.equal(elements[id].value,'0',id+' should start as not-varied');
  elements.trailerAxleSpacingUncertainty.value='0.02';
  elements.tractorSteeringTrackUncertainty.value='0.03';
+ elements.tractorFrontTrackUncertainty.value='0.02';
+ elements.tractorRearTrackUncertainty.value='0.02';
+ elements.trailerTrackUncertainty.value='0.03';
+ elements.tireLengthUncertainty.value='0.02';
+ elements.tireWidthUncertainty.value='0.01';
  elements.apply.onclick();
  assert.doesNotMatch(elements.routeAdvice.textContent,/Параметры не применены/);
  const source=fs.readFileSync(path.join(__dirname,'..','truckvision.js'),'utf8');
- assert.match(source,/trailerAxleSpacingUncertainty:'trailerAxleSpacing'/);
- assert.match(source,/tractorSteeringTrackUncertainty:'tractorSteeringTrack'/);
+ for(const mapping of [
+  /trailerAxleSpacingUncertainty:'trailerAxleSpacing'/,
+  /tractorSteeringTrackUncertainty:'tractorSteeringTrack'/,
+  /tractorFrontTrackUncertainty:'tractorFrontTrack'/,
+  /tractorRearTrackUncertainty:'tractorRearTrack'/,
+  /trailerTrackUncertainty:'trailerTrack'/,
+  /tireLengthUncertainty:'tireLength'/,
+  /tireWidthUncertainty:'tireWidth'/
+ ])assert.match(source,mapping);
 });
 
 test('live assistant identifies the nearest vehicle part and named obstacle',()=>{
