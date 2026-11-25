@@ -193,6 +193,19 @@ test('negative measurement uncertainty blocks route playback instead of weakenin
  assert.match(elements.routeAdvice.textContent,/Автопроезд заблокирован/);
 });
 
+test('kinematic uncertainty settings include Ackermann steering track and tri-axle spacing',()=>{
+ const {elements}=bootSimulator();
+ assert.equal(elements.trailerAxleSpacingUncertainty.value,'0');
+ assert.equal(elements.tractorSteeringTrackUncertainty.value,'0');
+ elements.trailerAxleSpacingUncertainty.value='0.02';
+ elements.tractorSteeringTrackUncertainty.value='0.03';
+ elements.apply.onclick();
+ assert.doesNotMatch(elements.routeAdvice.textContent,/Параметры не применены/);
+ const source=fs.readFileSync(path.join(__dirname,'..','truckvision.js'),'utf8');
+ assert.match(source,/trailerAxleSpacingUncertainty:'trailerAxleSpacing'/);
+ assert.match(source,/tractorSteeringTrackUncertainty:'tractorSteeringTrack'/);
+});
+
 test('live assistant identifies the nearest vehicle part and named obstacle',()=>{
  const {elements}=bootSimulator();
  assert.match(elements.assistantAdvice.textContent,/Ближайший объект:/);
