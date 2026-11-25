@@ -1586,7 +1586,8 @@ test('camera obstacle uncertainty compares raw nominal polygon with its conserva
   'the raw nominal obstacle polygon must allow the nominal candidate search');
  assert.equal(result.geometrySensitivity.perObstaclePoseEnvelopeCount,1);
  assert.equal(result.geometrySensitivity.status,'no-route-under-envelope');
- assert.equal(result.envelopeFailure.reason,'start-collision');
+ assert.equal(result.envelopeFailure.reason,'no-candidate-route');
+ assert.ok(result.envelopeFailure.failures.every(failure=>failure.reason==='start-collision'));
 });
 
 
