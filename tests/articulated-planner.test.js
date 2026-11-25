@@ -1475,6 +1475,47 @@ test('per-wheel trajectory clearance applies a segment lower bound between sampl
  assert.equal(wheel.limitingDetail.obstacleAtReference,'front wheel post');
 });
 
+test('per-wheel clearance samples intermediate RK4 poses and detects an obstacle between route nodes',()=>{
+ const p={...params,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerTrack:2.79,tireLength:0.72,tireWidth:0.44};
+ const stepDistance=2;
+ const steer=0.25;
+ const start={x:0,y:0,psi:0,psiT:0,gear:1,steer,stepDistance:0};
+ const middle=physics.rk4(start,0.7,steer,stepDistance*0.5/0.7,p);
+ const end=physics.rk4(start,0.7,steer,stepDistance/0.7,p);
+ const target=physics.wheelFootprints(middle,p,steer).find(wheel=>
+  wheel.name==='левое колесо 1-й оси полуприцепа'
+ );
+ assert.ok(target);
+ const obstacle={x:target.center.x-0.04,y:target.center.y-0.04,w:0.08,h:0.08,name:'mid-segment tire post'};
+ const result=planner.analyzeWheelTrajectoryClearance([
+  start,{...end,gear:1,steer,stepDistance}
+ ],[obstacle],p);
+ const wheel=result.wheels.find(item=>item.name===target.name);
+ assert.equal(result.segmentsWithIntermediateKinematicSamples,1);
+ assert.equal(result.segmentsWithoutIntermediateKinematicSamples,0);
+ assert.equal(result.intermediateSamplesAnalyzed,3);
+ assert.equal(result.segmentDiagnostics[0].status,'rk4-intermediate-samples');
+ assert.equal(wheel.minimumIntermediatePolygonDetail.obstacle,'mid-segment tire post');
+ assert.ok(wheel.minimumIntermediatePolygonClearance<=1e-9);
+ assert.ok(wheel.minimumIntermediateEnvelopeClearance<wheel.minimumSampledEnvelopeClearance);
+ assert.ok(result.minimumClearanceLowerBound<=wheel.minimumIntermediateEnvelopeClearance+1e-9);
+});
+
+test('per-wheel clearance skips intermediate RK4 samples when the reconstructed endpoint does not match',()=>{
+ const p={...params,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerTrack:2.79,tireLength:0.72,tireWidth:0.44};
+ const start={x:0,y:0,psi:0,psiT:0,gear:1,steer:0.18,stepDistance:0};
+ const inconsistent={x:0.5,y:0,psi:0,psiT:0,gear:1,steer:0.18,stepDistance:0.5};
+ const obstacle={x:0.4,y:1.5,w:0.1,h:0.1,name:'endpoint mismatch post'};
+ const result=planner.analyzeWheelTrajectoryClearance([start,inconsistent],[obstacle],p);
+ assert.equal(result.segmentsWithIntermediateKinematicSamples,0);
+ assert.equal(result.segmentsWithoutIntermediateKinematicSamples,1);
+ assert.equal(result.intermediateSamplesAnalyzed,0);
+ assert.equal(result.segmentDiagnostics[0].status,'kinematic-endpoint-mismatch');
+ assert.ok(result.wheels.some(wheel=>Number.isFinite(wheel.minimumClearanceLowerBound)));
+});
+
 test('per-wheel trajectory clearance rejects missing or inconsistent integration distances',()=>{
  const start={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
  const missing={x:0.05,y:0,psi:0,psiT:0,gear:1,steer:0};
