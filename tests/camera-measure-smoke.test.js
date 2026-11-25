@@ -196,7 +196,9 @@ test('camera-measured obstacle is registered with manual map pose and can be cle
  assert.equal(registration.anchor.y,4);
  assert.equal(registration.heading,Math.PI/2);
  assert.equal(registration.name,'Опорный столб');
- assert.deepEqual(registration.poseUncertainty,{positionX:0.10,positionY:0.15,headingDeg:2});
+ assert.equal(registration.poseUncertainty.positionX,0.10);
+ assert.equal(registration.poseUncertainty.positionY,0.15);
+ assert.equal(registration.poseUncertainty.headingDeg,2);
  assert.ok(registration.measurement.width>0);
  assert.ok(registration.measurement.height>0);
  assert.match(camera.elements.cameraStatus.textContent,/Препятствие добавлено на карту/);
