@@ -58,7 +58,7 @@ test('calibration and gate points use one frozen frame until the user resets cal
  app.elements.cameraCalibrate.fire('click');
  assert.equal(app.video.paused,true,'calibration must freeze the live video frame');
  app.tapQuad();
- assert.match(app.elements.cameraStatus.textContent,/Кадр зафиксирован/i);
+ assert.match(app.elements.cameraStatus.textContent,/Плоскость откалибрована/i);
  app.elements.cameraMeasureGate.fire('click');
  assert.equal(app.video.paused,true,'gate measurement must keep the calibration frame frozen');
  app.tapQuad();
