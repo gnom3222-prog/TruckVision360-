@@ -796,6 +796,64 @@ test('recommendation sensitivity reports a stable action without claiming global
  assert.deepEqual(result.changedFields,[]);
 });
  
+test('recommendation sensitivity blocks a materially different first-turn lead-in distance',()=>{
+ const nominal={
+  ok:true,recommendation:{
+   initialGear:1,firstTurn:'left',firstTurnGear:1,tractorYawDirection:'left',
+   firstTurnAfterGearChange:false,firstTurnDistance:0.45
+  }
+ };
+ const envelope={
+  ok:true,recommendation:{
+   initialGear:1,firstTurn:'left',firstTurnGear:1,tractorYawDirection:'left',
+   firstTurnAfterGearChange:false,firstTurnDistance:0.90
+  }
+ };
+ const result=planner.compareRecommendationSensitivity(nominal,envelope);
+ assert.equal(result.ok,true);
+ assert.equal(result.status,'changed');
+ assert.ok(result.changedFields.includes('firstTurnDistance'));
+ assert.equal(result.firstTurnDistanceTolerance,0.25);
+});
+
+test('recommendation sensitivity ignores small first-turn distance variation within tolerance',()=>{
+ const action={
+  initialGear:1,firstTurn:'left',firstTurnGear:1,tractorYawDirection:'left',
+  firstTurnAfterGearChange:false,firstTurnDistance:0.45
+ };
+ const result=planner.compareRecommendationSensitivity(
+  {ok:true,recommendation:action},
+  {ok:true,recommendation:{...action,firstTurnDistance:0.60}}
+ );
+ assert.equal(result.status,'stable');
+ assert.deepEqual(result.changedFields,[]);
+});
+
+test('near-equal routes with materially different turn lead-in distances are ambiguous',()=>{
+ const earlyTurn=[
+  {x:0,y:0,gear:1,steer:0},
+  {x:0.45,y:0,gear:1,steer:0.12},
+  {x:0.9,y:0.02,gear:1,steer:0.12}
+ ];
+ const delayedTurn=[
+  {x:0,y:0,gear:1,steer:0},
+  {x:0.3,y:0,gear:1,steer:0},
+  {x:0.6,y:0,gear:1,steer:0},
+  {x:0.9,y:0.02,gear:1,steer:0.12},
+  {x:1.2,y:0.05,gear:1,steer:0.12}
+ ];
+ const result=planner.compareStartCandidates([
+  {states:earlyTurn,cost:10,label:'ранний поворот'},
+  {states:delayedTurn,cost:10.1,label:'поздний поворот'}
+ ],{costTolerance:0.25});
+ assert.equal(result.ok,true);
+ assert.equal(result.status,'ambiguous');
+ assert.equal(result.recommendation,null);
+ assert.ok(result.ambiguousFields.includes('firstTurnDistance'));
+ assert.ok(result.bestCandidate.firstTurnDistance<0.5);
+ assert.ok(result.comparableAlternatives[0].firstTurnDistance>0.8);
+});
+
 test('uncertainty-aware alternatives add twice the per-side reserve to required clearance',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
  let target={...start};
