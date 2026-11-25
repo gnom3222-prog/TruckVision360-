@@ -363,18 +363,23 @@ test('mirror collision geometry is explicitly disabled when no outward projectio
  assert.equal(parts[1].components[0].name,'кабина');
 });
 
-test('vehicle geometry rejects a cab outside the tractor envelope and mirrors outside the cab side',()=>{
+test('vehicle geometry rejects a cab outside the tractor envelope and bounds mirrors by the outer tractor envelope',()=>{
  const base={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
   trailerLength:13.6,trailerWidth:2.55
  };
  const cabErrors=physics.validateVehicleParams({...base,cabOffset:4.8,cabFront:1.35,cabRear:0.9,cabWidth:2.25});
  assert.ok(cabErrors.some(message=>message.includes('Геометрия кабины выходит за пределы')));
- const mirrorErrors=physics.validateVehicleParams({
+ const mirrorBeyondCab=physics.validateVehicleParams({
   ...base,cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25,
-  mirrorOutboard:0.45,mirrorLongitudinal:1.3,mirrorLength:0.8
+  mirrorOutboard:0.45,mirrorLongitudinal:4.8,mirrorLength:0.2
  });
- assert.ok(mirrorErrors.some(message=>message.includes('mirrorLongitudinal/mirrorLength')));
+ assert.deepEqual(mirrorBeyondCab,[]);
+ const mirrorBeyondTractor=physics.validateVehicleParams({
+  ...base,cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25,
+  mirrorOutboard:0.45,mirrorLongitudinal:5.0,mirrorLength:0.8
+ });
+ assert.ok(mirrorBeyondTractor.some(message=>message.includes('mirrorLongitudinal/mirrorLength')));
 });
 
 
