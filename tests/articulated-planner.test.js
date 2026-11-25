@@ -1020,16 +1020,22 @@ test('vehicle parameter bounds pairwise covering array checks every endpoint pai
  }
 });
 
-test('pairwise endpoint generator covers all pairs for twelve tire and track dimensions',()=>{
- const rows=planner.parameterEndpointVectors(12);
- assert.equal(rows.length,17);
+test('pairwise endpoint generator covers all pairs for nineteen cab, mirror, tire and track dimensions',()=>{
+ const rows=planner.parameterEndpointVectors(19);
+ assert.equal(rows.length,33);
  assert.ok(rows.some(row=>row.every(value=>value===1)),'joint all-high endpoint should be included');
  const expected=['0/0','0/1','1/0','1/1'];
- for(let i=0;i<12;i++)for(let j=i+1;j<12;j++){
+ for(let i=0;i<19;i++)for(let j=i+1;j<19;j++){
   const observed=new Set(rows.map(row=>row[i]+'/'+row[j]));
   assert.deepEqual([...observed].sort(),expected,'pair '+i+'/'+j);
  }
- assert.throws(()=>planner.parameterEndpointVectors(16),/от 0 до 15/);
+ const maximum=planner.parameterEndpointVectors(31);
+ assert.equal(maximum.length,33);
+ for(let i=0;i<31;i++)for(let j=i+1;j<31;j++){
+  const observed=new Set(maximum.map(row=>row[i]+'/'+row[j]));
+  assert.deepEqual([...observed].sort(),expected,'maximum pair '+i+'/'+j);
+ }
+ assert.throws(()=>planner.parameterEndpointVectors(32),/от 0 до 31/);
 });
 
 test('vehicle parameter bounds accept a calibrated front tire track interval',()=>{
@@ -1050,6 +1056,32 @@ test('vehicle parameter bounds accept a calibrated front tire track interval',()
  assert.equal(result.parameterSensitivity.activeParameterCount,1);
  assert.equal(result.parameterSensitivity.testedScenarioCount,2);
  assert.equal(result.parameterSensitivity.coverage,'full-endpoint-combinations');
+});
+
+test('vehicle parameter bounds include a possible mirror projection from a zero nominal width',()=>{
+ const geometryParams={
+  ...params,cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25,
+  mirrorOutboard:0,mirrorLongitudinal:3.0,mirrorLength:0.8
+ };
+ const start={x:0,y:0,psi:0,psiT:0};
+ let target={...start};
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,geometryParams);
+ const result=planner.planAlternativesWithVehicleParameterBounds({
+  start,goal:{x:target.x,y:target.y,heading:target.psi},
+  params:geometryParams,obstacles:[],integrate,
+  alternativeMaxExpansions:1200,
+  positionTolerance:0.02,headingTolerance:0.01,
+  maxTerminalArticulation:0.5,minClearance:0.30,
+  measurementUncertainty:0,obstaclePositionUncertainty:0,
+  obstacleSizeUncertainty:0,vehicleFootprintUncertainty:0,
+  vehicleParameterBounds:{mirrorOutboard:{min:0,max:0.02}}
+ });
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.parameterSensitivity.activeParameterCount,1);
+ assert.equal(result.parameterSensitivity.testedScenarioCount,2);
+ assert.equal(result.parameterSensitivity.coverage,'full-endpoint-combinations');
+ assert.equal(result.parameterSensitivity.suppliedBounds.mirrorOutboard.min,0);
+ assert.equal(result.parameterSensitivity.suppliedBounds.mirrorOutboard.max,0.02);
 });
 
 test('vehicle parameter bounds reject a physically invalid joint endpoint combination',()=>{
