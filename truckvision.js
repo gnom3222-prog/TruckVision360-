@@ -27,6 +27,7 @@ const cfg={
  mirrorLongitudinal:3.0,
  mirrorLength:0.8,
  tractorFrontTrack:2.05,
+ tractorSteeringTrack:2.05,
  tractorRearTrack:2.05,
  trailerTrack:2.79,
  tireLength:0.72,
@@ -160,6 +161,7 @@ function readSettings(){
   brakeDecel:[0.1,12],
   maxAccel:[0.1,3],
   tractorFrontTrack:[1,3.5],
+  tractorSteeringTrack:[1,3.5],
   tractorRearTrack:[1,3.5],
   trailerTrack:[1,4.5],
   tireLength:[0.2,1.5],
@@ -337,8 +339,9 @@ function bodyCorners(origin,angle,front,rear,width){
 
 function vehiclePolygons(q){return physics.vehiclePolygons(q,{...cfg,footprintUncertainty:cfg.vehicleFootprintUncertainty});}
 function nominalVehiclePolygons(q){return physics.vehiclePolygons(q,{...cfg,footprintUncertainty:0});}
-function vehicleCollisionParts(q,uncertainty=cfg.vehicleFootprintUncertainty){
- return physics.vehicleCollisionParts(q,{...cfg,footprintUncertainty:uncertainty});
+function vehicleCollisionParts(q,uncertainty=cfg.vehicleFootprintUncertainty,
+ steeringAngle=Number.isFinite(q&&q.steer)?q.steer:steer){
+ return physics.vehicleCollisionParts(q,{...cfg,footprintUncertainty:uncertainty},steeringAngle);
 }
 
 function obstaclePolygon(o){
@@ -988,7 +991,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261125-3');
+   worker=new Worker('./planner-worker.js?v=20261125-4');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
