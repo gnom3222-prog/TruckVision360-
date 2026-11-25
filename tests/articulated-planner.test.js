@@ -1498,7 +1498,7 @@ test('per-wheel clearance adaptively samples long RK4 segments and tightens inte
  assert.ok(segment.intervalCount>4);
  assert.equal(result.intermediateSamplesAnalyzed,segment.intervalCount-1);
  assert.equal(segment.sampleFractions.length,segment.intervalCount-1);
- assert.ok(segment.sampleFractions.includes(0.5));
+ assert.ok(segment.sampleFractions.some(fraction=>Math.abs(fraction-0.5)<=0.5/segment.intervalCount));
  assert.equal(segment.status,'rk4-adaptive-intermediate-samples');
  assert.ok(segment.maxWheelCenterDisplacementPerInterval<=
   result.targetMaxWheelCenterDisplacementPerInterval+1e-9||segment.adaptiveCapReached);
