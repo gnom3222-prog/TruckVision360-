@@ -1084,6 +1084,42 @@ test('vehicle parameter bounds include a possible mirror projection from a zero 
  assert.equal(result.parameterSensitivity.suppliedBounds.mirrorOutboard.max,0.02);
 });
 
+test('vehicle parameter bounds accept all nineteen truck cab, mirror, tire and trailer dimensions',()=>{
+ const geometryParams={
+  ...params,cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25,
+  mirrorOutboard:0,mirrorLongitudinal:3.0,mirrorLength:0.8
+ };
+ const halfWidths={
+  wheelbase:0.01,hitchOffset:0.005,kingpinAxles:0.05,trailerLength:0.05,
+  trailerWidth:0.01,trailerAxleSpacing:0.01,tractorSteeringTrack:0.01,
+  tractorFrontTrack:0.01,tractorRearTrack:0.01,trailerTrack:0.01,
+  tireLength:0.01,tireWidth:0.01,cabOffset:0.01,cabFront:0.01,
+  cabRear:0.01,cabWidth:0.01,mirrorOutboard:0.02,
+  mirrorLongitudinal:0.01,mirrorLength:0.01
+ };
+ const limits=physics.VEHICLE_PARAMETER_LIMITS;
+ const bounds=Object.fromEntries(Object.entries(halfWidths).map(([key,halfWidth])=>[
+  key,{
+   min:Math.max(limits[key].min,geometryParams[key]-halfWidth),
+   max:Math.min(limits[key].max,geometryParams[key]+halfWidth)
+  }
+ ]));
+ const result=planner.planAlternativesWithVehicleParameterBounds({
+  start:{x:0,y:0,psi:0,psiT:0},goal:{x:100,y:0},
+  params:geometryParams,obstacles:[],integrate,
+  maxExpansions:1,alternativeMaxExpansions:1,
+  measurementUncertainty:0,obstaclePositionUncertainty:0,
+  obstacleSizeUncertainty:0,vehicleFootprintUncertainty:0,
+  vehicleParameterBounds:bounds
+ });
+ assert.equal(Object.keys(bounds).length,19);
+ assert.ok(result.parameterSensitivity,JSON.stringify(result));
+ assert.equal(result.parameterSensitivity.activeParameterCount,19);
+ assert.equal(result.parameterSensitivity.coverage,'pairwise-endpoint-covering-array');
+ assert.equal(result.parameterSensitivity.pairwiseEndpointCoverage,true);
+ assert.equal(result.parameterSensitivity.allParameterCombinationsEvaluated,false);
+});
+
 test('vehicle parameter bounds reject a physically invalid joint endpoint combination',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
  let target={...start};
