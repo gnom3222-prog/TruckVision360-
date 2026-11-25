@@ -1225,14 +1225,17 @@ if(result.reason==='geometry-sensitive-start'||result.reason==='geometry-envelop
  const describeStartAction=action=>{
   if(!action)return 'не определено';
   const gear=action.initialGear===1?'вперёд':action.initialGear===-1?'назад':'передача не определена';
-  const turn=action.firstTurn==='left'?'первый поворот налево':
-   action.firstTurn==='right'?'первый поворот направо':'первый поворот не определён';
+  const steering=action.steeringWheelDirection??action.firstTurn;
+  const turn=steering==='left'?'руль влево':
+   steering==='right'?'руль вправо':'направление руля не определено';
+  const yaw=action.tractorYawDirection==='left'?'курс тягача меняется влево':
+   action.tractorYawDirection==='right'?'курс тягача меняется вправо':'направление курса не определено';
   const distance=Number.isFinite(action.firstTurnDistance)?
    ' через '+action.firstTurnDistance.toFixed(2)+' м':'';
   const turnGear=action.firstTurnGear===1?'вперёд':
    action.firstTurnGear===-1?'назад':'';
   const after=action.firstTurnAfterGearChange?' после переключения передачи':'';
-  return gear+', '+turn+distance+(turnGear?' (на '+turnGear+after+')':'');
+  return gear+', '+turn+distance+(turnGear?' (на '+turnGear+after+')':'')+'; '+yaw;
  };
  const comparison=geometry.comparison;
  const comparisonLabels=geometry.status==='start-action-changed-under-clearance-reserve'?
@@ -1242,7 +1245,13 @@ if(result.reason==='geometry-sensitive-start'||result.reason==='geometry-envelop
  const comparisonNote=comparison&&comparison.nominalAction&&comparison.reserveAction?
   ' '+comparisonLabels.nominal+': '+describeStartAction(comparison.nominalAction)+
   '. '+comparisonLabels.reserve+': '+describeStartAction(comparison.reserveAction)+
-  '. Изменились поля: '+(comparison.changedFields||[]).join(', ')+'.':
+  '. Изменились поля: '+(comparison.changedFields||[]).map(field=>({
+    firstTurn:'сторона поворота руля',
+    tractorYawDirection:'направление изменения курса тягача',
+    firstTurnDistance:'расстояние до первого рулевого действия',
+    initialGear:'начальная передача',
+    turnGear:'передача при первом рулевом действии'
+   }[field]||field)).join(', ')+'.':
   '';
  const clearanceEvidence=comparison?.clearanceEvidence;
  const describeClearanceEvidence=(label,evidence)=>{
@@ -1329,9 +1338,12 @@ if(result.reason==='uncertainty-sensitive-start'){
    const describeAction=action=>{
     if(!action)return 'не выбрано';
     const gear=action.initialGear<0?'назад':'вперёд';
-    const turn=action.firstTurn==='left'?'руль влево':
-     action.firstTurn==='right'?'руль вправо':'без значимого поворота руля';
-    return gear+', '+turn;
+    const steering=action.steeringWheelDirection??action.firstTurn;
+    const turn=steering==='left'?'руль влево':
+     steering==='right'?'руль вправо':'без значимого поворота руля';
+    const yaw=action.tractorYawDirection==='left'?'курс тягача влево':
+     action.tractorYawDirection==='right'?'курс тягача вправо':'курс не определён';
+    return gear+', '+turn+'; '+yaw;
    };
    $('routeAdvice').textContent='Рекомендация чувствительна к погрешности: базовый поиск ('+
     Number(sensitivity.nominalRequiredClearance||0).toFixed(2)+' м требуемого зазора) дал '+describeAction(sensitivity.comparison?.nominalAction)+
@@ -1374,9 +1386,12 @@ if(result.reason==='uncertainty-sensitive-start'){
    chooser.style.display=alternativeRoutes.length?'block':'none';
    const alternatives=(result.candidateSummaries||[]).map(candidate=>{
     const gear=candidate.initialGear<0?'задний ход':'вперёд';
-    const turn=candidate.firstTurn==='left'?'руль влево':
-     candidate.firstTurn==='right'?'руль вправо':'без значимого поворота';
-    return candidate.label+': '+gear+', '+turn+', эвристический балл '+candidate.cost.toFixed(2);
+    const steering=candidate.steeringWheelDirection??candidate.firstTurn;
+    const turn=steering==='left'?'руль влево':
+     steering==='right'?'руль вправо':'без значимого поворота';
+    const yaw=candidate.tractorYawDirection==='left'?'курс тягача влево':
+     candidate.tractorYawDirection==='right'?'курс тягача вправо':'курс не определён';
+    return candidate.label+': '+gear+', '+turn+', '+yaw+', эвристический балл '+candidate.cost.toFixed(2);
    }).join('; ');
    const geometrySensitivity=result.geometrySensitivity||{};
    const gateUncertainty=geometrySensitivity.gateGeometryUncertainty;
@@ -1422,9 +1437,10 @@ if(result.reason==='uncertainty-sensitive-start'){
    firstGear<0?'начать задним ходом':'начать движением вперёд';
   let firstTurnText='первый участок пройти прямо; значимого поворота руля в рассчитанном маршруте не найдено';
   if(ambiguousFields.includes('firstTurn')){
-   firstTurnText='сторона первого поворота не выбрана: близкие по стоимости варианты расходятся';
+   firstTurnText='сторона первого рулевого действия не выбрана: близкие по стоимости варианты расходятся';
   }else if(recommendation.firstTurn){
-   const side=recommendation.firstTurn==='left'?'повернуть руль влево':'повернуть руль вправо';
+   const steering=recommendation.steeringWheelDirection??recommendation.firstTurn;
+   const side=steering==='left'?'повернуть руль влево':'повернуть руль вправо';
    const timing=recommendation.firstTurnDistance<=0.3?'сразу':'примерно через '+recommendation.firstTurnDistance.toFixed(1)+' м';
    const turnGear=ambiguousFields.includes('turnGear')?'при неоднозначной передаче':
     recommendation.firstTurnGear<0?'задним ходом':'вперёд';
@@ -2355,7 +2371,7 @@ $('alternativeRouteSelect').onchange=()=>{
   level:routeAssessment.level,
   start:selectedRecommendation.initialGear<0?'Начать задним ходом':'Начать движением вперёд',
   turn:selectedRecommendation.firstTurn?
-   (selectedRecommendation.firstTurn==='left'?'Руль влево':'Руль вправо')+' примерно через '+selectedRecommendation.firstTurnDistance.toFixed(1)+' м'+(selectedRecommendation.firstTurnGear<0?' задним ходом':' вперёд'):
+   (selectedRecommendation.steeringWheelDirection==='left'?'Руль влево':'Руль вправо')+' примерно через '+selectedRecommendation.firstTurnDistance.toFixed(1)+' м'+(selectedRecommendation.firstTurnGear<0?' задним ходом':' вперёд')+'; '+(selectedRecommendation.tractorYawDirection==='left'?'курс тягача влево':'курс тягача вправо'):
    'Значимого первого поворота руля не найдено',
   reasons:routeAssessment.reasons.slice(0,4).join('; ')+'. Пиковый угол '+routeAssessment.maxBeta.toFixed(1)+'°; эффективный зазор '+(Number.isFinite(routeAssessment.effectiveClearance)?routeAssessment.effectiveClearance.toFixed(2)+' м':'не определён')+'.',
   check:passed?'Выбранный вариант повторно проверен; автопроезд возможен только в виртуальной модели.':'Проверка не пройдена; виртуальный автопроезд остаётся заблокирован.'
