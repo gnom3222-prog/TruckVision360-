@@ -3,7 +3,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const physics=require('../vehicle-physics.js');
 const planner=require('../articulated-planner.js');
-const params={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerTrack:2.11,tireLength:0.72,tireWidth:0.44};
+const params={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,tractorSteeringTrack:2.05,trailerTrack:2.11,tireLength:0.72,tireWidth:0.44};
 const integrate=(q,v,steer,dt,p)=>physics.rk4(q,v,steer,dt,p);
 test('articulated planner reaches a clear goal in open space',()=>{
  const result=planner.plan({start:{x:0,y:0,psi:0,psiT:0},goal:{x:7,y:0},params,obstacles:[],integrate,maxExpansions:5000});
@@ -975,7 +975,7 @@ test('vehicle parameter bounds evaluate all endpoint combinations for one active
  assert.deepEqual(bounds,{wheelbase:{min:3.7999,max:3.8}});
 });
 
-test('vehicle parameter bounds pairwise covering array checks every endpoint pair for five active dimensions',()=>{
+test('vehicle parameter bounds pairwise covering array checks every endpoint pair for seven active dimensions',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
  let target={...start};
  for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
@@ -984,7 +984,9 @@ test('vehicle parameter bounds pairwise covering array checks every endpoint pai
   hitchOffset:{min:0.574,max:0.576},
   kingpinAxles:{min:7.999,max:8.001},
   trailerLength:{min:13.599,max:13.601},
-  trailerWidth:{min:2.549,max:2.551}
+  trailerWidth:{min:2.549,max:2.551},
+  trailerAxleSpacing:{min:1.299,max:1.301},
+  tractorSteeringTrack:{min:2.049,max:2.051}
  };
  const result=planner.planAlternativesWithVehicleParameterBounds({
   start,goal:{x:target.x,y:target.y,heading:target.psi},
@@ -1069,7 +1071,9 @@ test('vehicle parameter bounds reject unknown, inverted, out-of-range, and non-c
   {wheelbase:{min:4,max:3}},
   {wheelbase:{min:0,max:3.8}},
   {hitchOffset:{min:-0.1,max:0.575}},
-  {kingpinAxles:{min:7,max:7.5}}
+  {kingpinAxles:{min:7,max:7.5}},
+  {trailerAxleSpacing:{min:0.2,max:1.3}},
+  {tractorSteeringTrack:{min:0.9,max:2.05}}
  ]){
   const result=planner.planAlternativesWithVehicleParameterBounds({
    ...base,vehicleParameterBounds:bounds
