@@ -318,15 +318,15 @@
   const tractorRearTrack=p.tractorRearTrack??2.05;
   const tireLength=p.tireLength??0.72;
   const tireWidth=p.tireWidth??0.44;
-  const tractorHalfWidth=Math.max(
-   (2.55+2*footprintUncertainty)/2,
-   (Math.max(tractorFrontTrack,tractorRearTrack)+tireWidth+2*footprintUncertainty)/2
+  const tractorWheelCornerRadius=Math.hypot(
+   tireLength/2+footprintUncertainty,tireWidth/2+footprintUncertainty
   );
-  const tractorWheelHalfLength=tireLength/2+footprintUncertainty;
+  // Bound each tire corner by distance to its axle center plus the tire's
+  // circumscribed radius; this remains conservative for any steer orientation.
   const tractorRadius=Math.max(
-   Math.hypot(5+footprintUncertainty,tractorHalfWidth),
-   Math.hypot(wheelbase+tractorWheelHalfLength,tractorHalfWidth),
-   Math.hypot(1.2+footprintUncertainty,tractorHalfWidth)
+   Math.hypot(5+footprintUncertainty,(2.55+2*footprintUncertainty)/2),
+   Math.hypot(wheelbase,tractorFrontTrack/2)+tractorWheelCornerRadius,
+   Math.hypot(0,tractorRearTrack/2)+tractorWheelCornerRadius
   );
   const cabOffset=p.cabOffset??2.1;
   const cabFront=p.cabFront??1.35;
