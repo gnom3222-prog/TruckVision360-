@@ -198,7 +198,10 @@ test('kinematic uncertainty settings include Ackermann, axle tracks and tire dim
  const ids=[
   'trailerAxleSpacingUncertainty','tractorSteeringTrackUncertainty',
   'tractorFrontTrackUncertainty','tractorRearTrackUncertainty',
-  'trailerTrackUncertainty','tireLengthUncertainty','tireWidthUncertainty'
+  'trailerTrackUncertainty','tireLengthUncertainty','tireWidthUncertainty',
+  'cabOffsetUncertainty','cabFrontUncertainty','cabRearUncertainty',
+  'cabWidthUncertainty','mirrorOutboardUncertainty',
+  'mirrorLongitudinalUncertainty','mirrorLengthUncertainty'
  ];
  for(const id of ids)assert.equal(elements[id].value,'0',id+' should start as not-varied');
  elements.trailerAxleSpacingUncertainty.value='0.02';
@@ -208,6 +211,13 @@ test('kinematic uncertainty settings include Ackermann, axle tracks and tire dim
  elements.trailerTrackUncertainty.value='0.03';
  elements.tireLengthUncertainty.value='0.02';
  elements.tireWidthUncertainty.value='0.01';
+ elements.cabOffsetUncertainty.value='0.05';
+ elements.cabFrontUncertainty.value='0.05';
+ elements.cabRearUncertainty.value='0.05';
+ elements.cabWidthUncertainty.value='0.05';
+ elements.mirrorOutboardUncertainty.value='0.15';
+ elements.mirrorLongitudinalUncertainty.value='0.10';
+ elements.mirrorLengthUncertainty.value='0.10';
  elements.apply.onclick();
  assert.doesNotMatch(elements.routeAdvice.textContent,/Параметры не применены/);
  const source=fs.readFileSync(path.join(__dirname,'..','truckvision.js'),'utf8');
@@ -218,7 +228,14 @@ test('kinematic uncertainty settings include Ackermann, axle tracks and tire dim
   /tractorRearTrackUncertainty:'tractorRearTrack'/,
   /trailerTrackUncertainty:'trailerTrack'/,
   /tireLengthUncertainty:'tireLength'/,
-  /tireWidthUncertainty:'tireWidth'/
+  /tireWidthUncertainty:'tireWidth'/,
+  /cabOffsetUncertainty:'cabOffset'/,
+  /cabFrontUncertainty:'cabFront'/,
+  /cabRearUncertainty:'cabRear'/,
+  /cabWidthUncertainty:'cabWidth'/,
+  /mirrorOutboardUncertainty:'mirrorOutboard'/,
+  /mirrorLongitudinalUncertainty:'mirrorLongitudinal'/,
+  /mirrorLengthUncertainty:'mirrorLength'/
  ])assert.match(source,mapping);
 });
 
