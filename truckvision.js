@@ -2044,13 +2044,23 @@ $('alternativeRouteSelect').onchange=()=>{
  routeAssessment=routeMetrics(
   plannedRoute,
   Number(candidate.metrics?.minimumClearanceLowerBound??Infinity),
-  candidate.metrics?.sweptClearanceDetail??null
+  candidate.metrics?.sweptClearanceDetail??null,
+  candidate.trajectoryClearance??null
  );
  const passed=!routeAssessment.collision&&routeAssessment.reached&&
   !routeAssessment.articulationBlocked&&!routeAssessment.clearanceInsufficient&&
   Number.isFinite(routeAssessment.effectiveClearance);
  $('routeAdvice').textContent='Выбран вариант '+(index+1)+'. '+(passed?'Повторная проверка пройдена по текущей модели.':'Проверка не пройдена: '+routeAssessment.reasons.join('; '));
- $('difficultyAdvice').textContent='Сложность: '+routeAssessment.level+'. Длина '+routeAssessment.length.toFixed(1)+' м; пиковый угол сочленения '+routeAssessment.maxBeta.toFixed(1)+'°; минимальный эффективный зазор '+(Number.isFinite(routeAssessment.effectiveClearance)?routeAssessment.effectiveClearance.toFixed(2)+' м':'не определён')+'. '+(passed?'Автопроезд разрешён только в виртуальной модели.':'Автопроезд остаётся заблокирован.');
+ const selectedPartClearanceText=routeAssessment.clearanceByPart.map(part=>{
+  const lower=Number.isFinite(part.minimumClearanceLowerBound)?part.minimumClearanceLowerBound.toFixed(2)+' м':'не определён';
+  const detail=part.limitingDetail;
+  const obstacle=detail?.obstacleAtReference||detail?.obstacle||'препятствие не выделено';
+  const location=detail?.kind==='segment-lower-bound'?
+   'сегмент '+Number(detail.distanceAlongRoute).toFixed(1)+' м, '+(detail.gear<0?'задний ход':'вперёд'):
+   detail?.kind==='sampled-pose'?'поза '+Number(detail.distanceAlongRoute).toFixed(1)+' м':'положение не определено';
+  return part.vehiclePart+': '+lower+', '+obstacle+', '+location;
+ }).join('; ');
+ $('difficultyAdvice').textContent='Сложность: '+routeAssessment.level+'. Длина '+routeAssessment.length.toFixed(1)+' м; пиковый угол сочленения '+routeAssessment.maxBeta.toFixed(1)+'°; минимальный эффективный зазор '+(Number.isFinite(routeAssessment.effectiveClearance)?routeAssessment.effectiveClearance.toFixed(2)+' м':'не определён')+'. Зазоры по частям вдоль маршрута: '+selectedPartClearanceText+'. '+(passed?'Автопроезд разрешён только в виртуальной модели.':'Автопроезд остаётся заблокирован.');
  const selectedRecommendation=planner.recommendStart(plannedRoute);
  updateRecommendationCard({
   status:'Вариант '+(index+1)+' выбран',
