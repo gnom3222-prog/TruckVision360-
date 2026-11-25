@@ -194,6 +194,16 @@
   ];
  }
 
+ function polygonOutsideEnvelope(poly,origin,angle,front,rear,width){
+  const c=Math.cos(angle),s=Math.sin(angle),halfWidth=width/2;
+  return poly.some(point=>{
+   const dx=point.x-origin.x,dy=point.y-origin.y;
+   const longitudinal=dx*c+dy*s;
+   const lateral=-dx*s+dy*c;
+   return longitudinal>front+1e-9||longitudinal<rear-1e-9||Math.abs(lateral)>halfWidth+1e-9;
+  });
+ }
+
  function vehiclePolygons(q,params){
   const h=hitchPoint(q,params);
   const cabOffset=params.cabOffset??2.1;
@@ -234,11 +244,24 @@
  function vehicleCollisionParts(q,params){
   const bodies=vehiclePolygons(q,params);
   const mirrors=mirrorPolygons(q,params);
-  const wheels=wheelFootprints(q,params,0);
+  const wheels=buildWheelFootprints(q,params,0);
+  const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
+  const tractorWheelComponents=wheels.filter(wheel=>
+   wheel.vehiclePart==='тягач'&&polygonOutsideEnvelope(
+    wheel.polygon,q,q.psi,5+uncertainty,-1.2-uncertainty,2.55+2*uncertainty
+   )
+  );
+  const hitch=hitchPoint(q,params);
+  const trailerWheelComponents=wheels.filter(wheel=>
+   wheel.vehiclePart==='полуприцеп'&&polygonOutsideEnvelope(
+    wheel.polygon,hitch,q.psiT,1.5+uncertainty,
+    -(params.trailerLength-1.5+uncertainty),params.trailerWidth+2*uncertainty
+   )
+  );
   return [
    {vehiclePart:'тягач',bodyIndex:0,components:[
     {name:'основной контур тягача',polygon:bodies[0]},
-    ...wheels.filter(wheel=>wheel.vehiclePart==='тягач').map(wheel=>({name:wheel.name,polygon:wheel.polygon}))
+    ...tractorWheelComponents.map(wheel=>({name:wheel.name,polygon:wheel.polygon}))
    ]},
    {vehiclePart:'кабина',bodyIndex:1,components:[
     {name:'кабина',polygon:bodies[1]},
@@ -246,7 +269,7 @@
    ]},
    {vehiclePart:'полуприцеп',bodyIndex:2,components:[
     {name:'кузов полуприцепа',polygon:bodies[2]},
-    ...wheels.filter(wheel=>wheel.vehiclePart==='полуприцеп').map(wheel=>({name:wheel.name,polygon:wheel.polygon}))
+    ...trailerWheelComponents.map(wheel=>({name:wheel.name,polygon:wheel.polygon}))
    ]}
   ];
  }
@@ -262,17 +285,9 @@
   return trailerAxleOffsets(params).map(offset=>localPoint(center,q.psiT,offset));
  }
 
- // Returns calibrated rectangular tire footprints in the same local frame as the
- // collision model. Track/tire defaults preserve the prior illustrative drawing only.
- function wheelFootprints(q,params,steer=0){
-  const errors=validateVehicleParams(params);
-  if(errors.length)throw new Error('Некорректные параметры колёс: '+errors.join(' '));
-  if(!q||![q.x,q.y,q.psi,q.psiT].every(Number.isFinite)){
-   throw new Error('Положение автопоезда для геометрии колёс некорректно.');
-  }
-  if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2){
-   throw new Error('Угол поворота передних колёс некорректен.');
-  }
+ // Build the ten calibrated rectangular tire footprints without re-validating the
+ // complete vehicle parameter set on every planner node.
+ function buildWheelFootprints(q,params,steer=0){
   const frontTrack=params.tractorFrontTrack??2.05;
   const rearTrack=params.tractorRearTrack??2.05;
   const trailerTrack=params.trailerTrack??(params.trailerWidth+0.24);
@@ -306,6 +321,18 @@
    }
   });
   return wheels;
+ }
+
+ function wheelFootprints(q,params,steer=0){
+  const errors=validateVehicleParams(params);
+  if(errors.length)throw new Error('Некорректные параметры колёс: '+errors.join(' '));
+  if(!q||![q.x,q.y,q.psi,q.psiT].every(Number.isFinite)){
+   throw new Error('Положение автопоезда для геометрии колёс некорректно.');
+  }
+  if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2){
+   throw new Error('Угол поворота передних колёс некорректен.');
+  }
+  return buildWheelFootprints(q,params,steer);
  }
 
  // Rigid-body lateral velocity relative to the equivalent axle-group center.
