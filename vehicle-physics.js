@@ -406,6 +406,12 @@
    if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2){
     throw new Error('Угол руля в состоянии '+(index+1)+' некорректен.');
    }
+   if(q.stepDistance!==undefined&&(
+    !Number.isFinite(q.stepDistance)||
+    (index===0?q.stepDistance!==0:q.stepDistance<=0)
+   )){
+    throw new Error('stepDistance в состоянии '+(index+1)+' должен быть конечным; для начального состояния — 0, для следующих — положительным.');
+   }
    return {q,gear,steer};
   };
   const offsets=trailerAxleOffsets(params);
@@ -432,15 +438,28 @@
   // Composite Simpson quadrature (4 equal subintervals) reduces midpoint bias.
   // It remains a sampled-path diagnostic, not a certified integration-error bound.
   const sampleTimes=[0,0.25,0.5,0.75,1];
+  let segmentsUsingStepDistance=0,segmentsUsingChordFallback=0;
   for(let i=1;i<states.length;i++){
    const previous=states[i-1],current=states[i];
-   const distance=Math.hypot(current.q.x-previous.q.x,current.q.y-previous.q.y);
+   const chord=Math.hypot(current.q.x-previous.q.x,current.q.y-previous.q.y);
+   let distance=chord;
+   if(current.q.stepDistance!==undefined){
+    if(current.q.stepDistance<=0||chord>current.q.stepDistance+1e-6){
+     throw new Error('Хорда траектории превышает stepDistance на сегменте '+i+'.');
+    }
+    distance=current.q.stepDistance;
+    segmentsUsingStepDistance++;
+   }else{
+    segmentsUsingChordFallback++;
+   }
    if(distance<=0)continue;
    const samples=sampleTimes.map(t=>{
     const q=interpolateState(previous,current,t);
     const steer=previous.steer+(current.steer-previous.steer)*t;
     return evaluate(q,steer);
    });
+   // Planner stepDistance is the traveled rear-axle arc length. The endpoint
+   // chord is only a fallback for externally supplied paths without that field.
    const elapsed=distance/nominalSpeed;
    for(let axle=0;axle<offsets.length;axle++){
     const f0=samples[0][axle],f1=samples[1][axle],f2=samples[2][axle];
@@ -458,6 +477,10 @@
    maxAbsoluteLateralTravelByAxle:axleTravel.length?Math.max(...axleTravel):0,
    totalAbsoluteLateralTravel,
    integration:'composite-simpson-4-subintervals',
+   distanceMethod:segmentsUsingStepDistance&&segmentsUsingChordFallback?
+    'step-distance-when-available-otherwise-chord':
+    (segmentsUsingStepDistance?'planner-step-distance':'chord-fallback'),
+   segmentsUsingStepDistance,segmentsUsingChordFallback,
    model:'rigid-axle-group-kinematic-proxy'
   };
  }
