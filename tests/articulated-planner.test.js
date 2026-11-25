@@ -133,6 +133,14 @@ test('trajectory clearance attributes sampled and swept lower bounds to each veh
  assert.ok(cab.minimumClearanceLowerBound>=tractor.minimumClearanceLowerBound);
 });
 
+test('per-part trajectory clearance rejects invalid gear and steering controls',()=>{
+ const start={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
+ const invalidGear={x:0.05,y:0,psi:0,psiT:0,gear:0,steer:0,stepDistance:0.05};
+ const invalidSteer={x:0.05,y:0,psi:0,psiT:0,gear:1,steer:Math.PI/2,stepDistance:0.05};
+ assert.throws(()=>planner.analyzeTrajectoryClearance([start,invalidGear],[],params),/invalid gear/);
+ assert.throws(()=>planner.analyzeTrajectoryClearance([start,invalidSteer],[],params),/steering angle/);
+});
+
 test('per-part trajectory clearance rejects a chord longer than the declared integration distance',()=>{
  const states=[
   {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
