@@ -88,6 +88,59 @@ test('prepared clearance checker matches direct collision-distance queries',()=>
  assert.deepEqual(check(q),planner.clearance(q,obstacles,params));
 });
 
+test('clearance checker reports independent minima for tractor, cab and trailer',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const obstacles=[
+  {x:6.3,y:0,w:1,h:1,name:'front tractor pallet'},
+  {x:-13.65,y:0,w:1,h:1,name:'rear trailer pallet'}
+ ];
+ const result=planner.createClearanceChecker(obstacles,params)(q);
+ assert.equal(result.perPart.length,3);
+ assert.equal(result.perPart[0].vehiclePart,'тягач');
+ assert.equal(result.perPart[0].obstacle,'front tractor pallet');
+ assert.equal(result.perPart[2].vehiclePart,'полуприцеп');
+ assert.equal(result.perPart[2].obstacle,'rear trailer pallet');
+ assert.ok(result.perPart[2].distance<result.perPart[0].distance);
+});
+
+test('trajectory clearance attributes sampled and swept lower bounds to each vehicle part and route segment',()=>{
+ const states=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
+  {x:0.05,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0.05},
+  {x:0.10,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0.05}
+ ];
+ const obstacles=[
+  {x:6.3,y:0,w:1,h:1,name:'front tractor pallet'},
+  {x:-13.65,y:0,w:1,h:1,name:'rear trailer pallet'}
+ ];
+ const result=planner.analyzeTrajectoryClearance(states,obstacles,params);
+ assert.equal(result.statesAnalyzed,3);
+ assert.equal(result.segmentsAnalyzed,2);
+ assert.ok(Math.abs(result.distanceAlongRoute-0.1)<1e-10);
+ const tractor=result.parts[0],cab=result.parts[1],trailer=result.parts[2];
+ assert.equal(tractor.minimumSampledDetail.obstacle,'front tractor pallet');
+ assert.equal(trailer.minimumSampledDetail.obstacle,'rear trailer pallet');
+ assert.ok(tractor.minimumClearanceLowerBound<=tractor.minimumSampledClearance);
+ assert.ok(trailer.minimumClearanceLowerBound<=trailer.minimumSampledClearance);
+ assert.equal(trailer.limitingDetail.kind,'segment-lower-bound');
+ assert.equal(trailer.limitingDetail.gear,1);
+ assert.equal(trailer.limitingDetail.vehiclePart,'полуприцеп');
+ assert.equal(result.limitingPart,'полуприцеп');
+ assert.ok(result.minimumClearanceLowerBound<=trailer.minimumClearanceLowerBound+1e-9);
+ assert.ok(cab.minimumClearanceLowerBound>=tractor.minimumClearanceLowerBound);
+});
+
+test('per-part trajectory clearance fails closed when an integration step distance is missing',()=>{
+ const states=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
+  {x:0.05,y:0,psi:0,psiT:0,gear:1,steer:0}
+ ];
+ assert.throws(
+  ()=>planner.analyzeTrajectoryClearance(states,[{x:6.3,y:0,w:1,h:1}],params),
+  /stepDistance/
+ );
+});
+
 test('clearance checker identifies whether the tractor or trailer is nearest to an obstacle',()=>{
  const q={x:0,y:0,psi:0,psiT:0};
  const rear=planner.clearance(q,[{x:-13.5,y:0,w:1,h:1,name:'rear pallet'}],params);
