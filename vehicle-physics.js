@@ -24,6 +24,7 @@
   mirrorLongitudinal:{min:-2,max:8,optional:true},
   mirrorLength:{min:0.2,max:2,optional:true},
   tractorFrontTrack:{min:1,max:3.5,optional:true},
+  tractorSteeringTrack:{min:1,max:3.5,optional:true},
   tractorRearTrack:{min:1,max:3.5,optional:true},
   trailerTrack:{min:1,max:4.5,optional:true},
   tireLength:{min:0.2,max:1.5,optional:true},
@@ -288,6 +289,31 @@
   return trailerAxleOffsets(params).map(offset=>localPoint(center,q.psiT,offset));
  }
 
+ // Convert the planner's equivalent bicycle steering angle into left/right
+ // Ackermann wheel headings. The steering-track input approximates the distance
+ // between the front steering pivot axes; it is not a measured linkage model.
+ function frontWheelSteerAngles(steer,params){
+  if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2){
+   throw new Error('Угол эквивалентного рулевого колеса некорректен.');
+  }
+  const wheelbase=params&&params.wheelbase;
+  const steeringTrack=params?
+   (params.tractorSteeringTrack??params.tractorFrontTrack??2.05):NaN;
+  if(!Number.isFinite(wheelbase)||wheelbase<=0||
+     !Number.isFinite(steeringTrack)||steeringTrack<=0){
+   throw new Error('Колёсная база и расстояние между осями поворота передних колёс должны быть положительными.');
+  }
+  if(Math.abs(steer)<1e-12)return {left:0,right:0};
+  const turnRadius=wheelbase/Math.abs(Math.tan(steer));
+  const halfTrack=steeringTrack/2;
+  if(!Number.isFinite(turnRadius)||turnRadius<=halfTrack+1e-9){
+   throw new Error('Радиус поворота слишком мал для геометрии Аккермана при заданной колее рулевой оси.');
+  }
+  const inner=Math.atan2(wheelbase,turnRadius-halfTrack);
+  const outer=Math.atan2(wheelbase,turnRadius+halfTrack);
+  return steer>0?{left:inner,right:outer}:{left:-outer,right:-inner};
+ }
+
  // Build the ten calibrated rectangular tire footprints without re-validating the
  // complete vehicle parameter set on every planner node.
  function buildWheelFootprints(q,params,steer=0){
@@ -297,6 +323,7 @@
   const tireLength=params.tireLength??0.72;
   const tireWidth=params.tireWidth??0.44;
   const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
+  const steeringAngles=frontWheelSteerAngles(steer,params);
   const wheels=[];
   const add=(vehiclePart,axleIndex,side,center,heading,name)=>{
    wheels.push({
@@ -309,7 +336,8 @@
   for(const side of [1,-1]){
    const sideName=side>0?'левое':'правое';
    add('тягач',1,side>0?'left':'right',
-    localPoint(frontAxle,q.psi,0,side*frontTrack/2),q.psi+steer,
+    localPoint(frontAxle,q.psi,0,side*frontTrack/2),
+    q.psi+(side>0?steeringAngles.left:steeringAngles.right),
     sideName+' переднее колесо тягача');
    add('тягач',2,side>0?'left':'right',
     localPoint(rearAxle,q.psi,0,side*rearTrack/2),q.psi,
@@ -555,5 +583,5 @@
   };
  }
 
- return Object.freeze({norm,validateVehicleParams,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
+ return Object.freeze({norm,validateVehicleParams,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
 });
