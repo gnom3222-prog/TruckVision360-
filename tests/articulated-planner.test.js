@@ -1020,6 +1020,57 @@ test('vehicle parameter bounds pairwise covering array checks every endpoint pai
  }
 });
 
+test('vehicle parameter bounds pairwise covering array checks all twelve tire and track dimensions',()=>{
+ const start={x:0,y:0,psi:0,psiT:0};
+ let target={...start};
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ const calibratedParams={...params,tractorFrontTrack:2.05,tractorRearTrack:2.05};
+ const bounds={
+  wheelbase:{min:3.799,max:3.801},
+  hitchOffset:{min:0.574,max:0.576},
+  kingpinAxles:{min:7.999,max:8.001},
+  trailerLength:{min:13.599,max:13.601},
+  trailerWidth:{min:2.549,max:2.551},
+  trailerAxleSpacing:{min:1.299,max:1.301},
+  tractorSteeringTrack:{min:2.049,max:2.051},
+  tractorFrontTrack:{min:2.049,max:2.051},
+  tractorRearTrack:{min:2.049,max:2.051},
+  trailerTrack:{min:2.109,max:2.111},
+  tireLength:{min:0.719,max:0.721},
+  tireWidth:{min:0.439,max:0.441}
+ };
+ const result=planner.planAlternativesWithVehicleParameterBounds({
+  start,goal:{x:target.x,y:target.y,heading:target.psi},
+  params:calibratedParams,obstacles:[],integrate,
+  alternativeMaxExpansions:1200,
+  positionTolerance:0.02,headingTolerance:0.01,
+  maxTerminalArticulation:0.5,minClearance:0.30,
+  measurementUncertainty:0,
+  obstaclePositionUncertainty:0,
+  obstacleSizeUncertainty:0,
+  vehicleFootprintUncertainty:0,
+  vehicleParameterBounds:bounds
+ });
+ assert.equal(result.ok,true,JSON.stringify(result));
+ const sensitivity=result.parameterSensitivity;
+ assert.equal(sensitivity.status,'stable-across-pairwise-endpoint-scenarios');
+ assert.equal(sensitivity.coverage,'pairwise-endpoint-covering-array');
+ assert.equal(sensitivity.testedScenarioCount,17);
+ assert.equal(sensitivity.midpointScenarioCount,0);
+ assert.equal(sensitivity.testedMidpointScenarioCount,0);
+ assert.equal(sensitivity.interiorCoverage,'one-factor-midpoints');
+ assert.equal(sensitivity.allParameterCombinationsEvaluated,false);
+ assert.equal(sensitivity.pairwiseEndpointCoverage,true);
+ const keys=Object.keys(bounds);
+ const expected=['max/max','max/min','min/max','min/min'];
+ for(let i=0;i<keys.length;i++)for(let j=i+1;j<keys.length;j++){
+  const observed=new Set(sensitivity.completedScenarios.map(s=>
+   s.endpointSides[keys[i]]+'/'+s.endpointSides[keys[j]]
+  ));
+  assert.deepEqual([...observed].sort(),expected);
+ }
+});
+
 test('vehicle parameter bounds reject a physically invalid joint endpoint combination',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
  let target={...start};
