@@ -231,8 +231,8 @@ test('measurement page exposes the complete camera obstacle workflow',()=>{
 
 test('camera-registered obstacles remain in planner input while live perception is active',()=>{
  const app=fs.readFileSync(path.join(__dirname,'..','truckvision.js'),'utf8');
- const match=app.match(/function getObstacles\(\)\s*\{([\s\S]*?)\n\}/);
- assert.ok(match,'getObstacles function must exist');
+ const match=app.match(/function sceneObstacles\(\)\s*\{([\s\S]*?)\n\}/);
+ assert.ok(match,'sceneObstacles function must exist');
  const body=match[1];
  const cameraPush=body.indexOf('result.push(...cameraObstacles');
  const perceptionPush=body.indexOf('result.push(...perceptionObstacles');
