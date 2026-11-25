@@ -1504,7 +1504,12 @@ function planAlternativesWithVehicleParameterBounds(options={}){
   trailerLength:[4,30],
   trailerWidth:[1.5,5],
   trailerAxleSpacing:[0.3,5],
-  tractorSteeringTrack:[1,3.5]
+  tractorSteeringTrack:[1,3.5],
+  tractorFrontTrack:[1,3.5],
+  tractorRearTrack:[1,3.5],
+  trailerTrack:[1,4.5],
+  tireLength:[0.2,1.5],
+  tireWidth:[0.1,0.8]
  };
  const unknownKeys=Object.keys(suppliedBounds).filter(key=>!Object.prototype.hasOwnProperty.call(allowedBounds,key));
  if(unknownKeys.length){
@@ -1547,19 +1552,28 @@ function planAlternativesWithVehicleParameterBounds(options={}){
     Array.from({length:count},(_,index)=>(mask>>index)&1)
    );
   }
-  // An 8-row binary orthogonal array of strength two. Distinct non-zero
-  // columns over GF(2)^3 ensure every pair sees all four endpoint pairs.
-  const columnMasks=[1,2,4,3,5,6,7].slice(0,count);
+  if(count>15)throw new Error('Парное покрытие поддерживает не более 15 активных бинарных параметров.');
+  // Distinct non-zero vectors over GF(2)^k are pairwise independent.
+  // Use 8 rows for 4–7 dimensions and 16 rows for 8–15 dimensions.
+  const width=count<=7?3:4;
+  const rowCount=1<<width;
+  const columnMasks=Array.from({length:rowCount-1},(_,index)=>index+1).slice(0,count);
   const rows=[];
   const parity=value=>{
    let result=0;
    for(let n=value;n;n>>=1)result^=n&1;
    return result;
   };
-  for(let row=0;row<8;row++)rows.push(columnMasks.map(mask=>parity(row&mask)));
+  for(let row=0;row<rowCount;row++){
+   rows.push(columnMasks.map(mask=>parity(row&mask)));
+  }
+  // Add a joint all-high endpoint in addition to pairwise coverage.
   const allHigh=Array(count).fill(1);
   if(!rows.some(row=>row.every((value,index)=>value===allHigh[index])))rows.push(allHigh);
   return rows;
+ }
+ if(activeDimensions.length>15){
+  return {ok:false,reason:'invalid-input',errors:['Поддерживается не более 15 активных параметров неопределённости.'],expanded:0};
  }
  const endpointRows=endpointVectors(activeDimensions.length);
  const endpointScenarios=endpointRows.map((row,index)=>{
@@ -1636,7 +1650,10 @@ function planAlternativesWithVehicleParameterBounds(options={}){
  const interiorCoverage='one-factor-midpoints';
  const coverageNote=(allParameterCombinationsEvaluated?
   'Проверены все сочетания нижних и верхних границ активных параметров.':
-  'Для четырёх–семи активных параметров применён 8-строчный парный covering array плюс совместный верхний угол; каждая пара параметров проверена во всех четырёх сочетаниях min/max, но все многопараметрические комбинации не перебирались.')+
+  (activeDimensions.length<=7?
+   'Для 4–7 активных параметров применён 8-строчный парный covering array на GF(2)^3 плюс совместный верхний угол; каждая пара проверена во всех четырёх сочетаниях min/max.':
+   'Для 8–15 активных параметров применён 16-строчный парный covering array на GF(2)^4 плюс совместный верхний угол; каждая пара проверена во всех четырёх сочетаниях min/max.')+
+   ' Полные многопараметрические комбинации не перебирались.')+
   ' Дополнительно проверяется середина каждого активного диапазона по одному параметру за раз; совместные промежуточные отклонения и непрерывный интервал не проверяются.';
  const testedMidpoints=()=>completed.filter(item=>item.kind==='one-factor-midpoint').length;
  if(!nominal.ok){
