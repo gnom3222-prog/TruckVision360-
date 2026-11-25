@@ -1218,10 +1218,10 @@ test('clearance checker identifies an outboard trailer tire as the limiting comp
 
 test('tractor swept displacement bound includes wider calibrated tire tracks',()=>{
  const narrow=planner.sweptDisplacementRatesPerMeter(0.25,{
-  ...params,tractorFrontTrack:2.05,tractorRearTrack:2.05,tireWidth:0.44
+  ...params,wheelbase:5.0,tractorFrontTrack:2.05,tractorRearTrack:2.05,tireWidth:0.44
  });
  const wide=planner.sweptDisplacementRatesPerMeter(0.25,{
-  ...params,tractorFrontTrack:2.7,tractorRearTrack:2.7,tireWidth:0.44
+  ...params,wheelbase:5.0,tractorFrontTrack:2.7,tractorRearTrack:2.7,tireWidth:0.44
  });
  assert.ok(wide.tractor>narrow.tractor);
  assert.equal(wide.cab,narrow.cab);
