@@ -398,6 +398,7 @@ test('start recommendation identifies the first steering side after a straight l
  assert.equal(result.ok,true);
  assert.equal(result.initialGear,1);
  assert.equal(result.firstTurn,'left');
+ assert.equal(result.steeringWheelDirection,'left');
  assert.equal(result.firstTurnGear,1);
  assert.equal(result.tractorYawDirection,'left');
  assert.equal(result.firstTurnAfterGearChange,false);
@@ -412,6 +413,7 @@ test('start recommendation keeps steering-wheel direction explicit during revers
  ]);
  assert.equal(result.initialGear,-1);
  assert.equal(result.firstTurn,'right');
+ assert.equal(result.steeringWheelDirection,'right');
  assert.equal(result.firstTurnGear,-1);
  assert.equal(result.tractorYawDirection,'left');
  assert.equal(result.firstTurnAfterGearChange,false);
@@ -745,9 +747,10 @@ test('multi-start planner searches a free route and four constrained first actio
  });
  assert.equal(result.candidatesAttempted,5);
  assert.ok(result.candidatesFound>=1,JSON.stringify(result));
- assert.ok(result.candidateSummaries.some(candidate=>candidate.label==='вперёд, первый поворот влево'),
+ assert.ok(result.candidateSummaries.some(candidate=>candidate.label==='вперёд, руль влево'),
   'the matching constrained forward-left route should be found');
  assert.ok(result.candidateSummaries.every(candidate=>Number.isFinite(candidate.cost)));
+ assert.ok(result.candidateSummaries.every(candidate=>candidate.steeringWheelDirection===candidate.firstTurn));
  if(result.ok){
   assert.ok(['single-candidate','preferred'].includes(result.status));
   assert.ok(result.states.length>1);
