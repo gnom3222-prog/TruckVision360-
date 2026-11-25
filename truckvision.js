@@ -454,6 +454,7 @@ function updateAssistant(){
   if(a.collision){
    const hit=a.collisionDetail||a.nearest;
    message='Стоп! Расчётные контуры '+(hit.vehiclePart||'автопоезда')+
+    (hit.component?' · '+hit.component:'')+
     ' пересекаются с препятствием '+hit.name+'. Остановитесь и измените траекторию.';
    color='#ff8585';
   }else if(Number.isFinite(effectiveClearance)&&effectiveClearance<=0){
