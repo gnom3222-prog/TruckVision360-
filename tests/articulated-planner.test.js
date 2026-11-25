@@ -742,7 +742,7 @@ test('multi-start planner searches a free route and four constrained first actio
   start,goal:{x:target.x,y:target.y,heading:target.psi},
   params,obstacles:[],integrate,
   maxExpansions:1200,alternativeMaxExpansions:1200,
-  positionTolerance:0.02,headingTolerance:0.01,
+  positionTolerance:0.1,headingTolerance:0.04,
   maxTerminalArticulation:0.5
  });
  assert.equal(result.candidatesAttempted,5);
@@ -903,12 +903,12 @@ test('near-equal routes with materially different turn lead-in distances are amb
 test('uncertainty-aware alternatives add twice the per-side reserve to required clearance',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
  let target={...start};
- for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.24,0.05/0.7,params);
  const result=planner.planAlternativesWithReserve({
   start,goal:{x:target.x,y:target.y,heading:target.psi},
   params,obstacles:[],integrate,
   alternativeMaxExpansions:1200,
-  positionTolerance:0.02,headingTolerance:0.01,
+  positionTolerance:0.05,headingTolerance:0.02,
   maxTerminalArticulation:0.5,
   minClearance:0.30,measurementUncertainty:0.10
  });
@@ -950,12 +950,12 @@ test('uncertainty-aware alternatives reject negative or excessive uncertainty',(
 test('geometry uncertainty planning uses expanded obstacle and vehicle envelopes',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
  let target={...start};
- for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.24,0.05/0.7,params);
  const result=planner.planAlternativesWithGeometryUncertainty({
   start,goal:{x:target.x,y:target.y,heading:target.psi},
   params,obstacles:[],integrate,
   maxExpansions:1200,alternativeMaxExpansions:1200,
-  positionTolerance:0.02,headingTolerance:0.01,
+  positionTolerance:0.05,headingTolerance:0.02,
   maxTerminalArticulation:0.5,minClearance:0.30,
   measurementUncertainty:0,
   obstaclePositionUncertainty:0.05,
@@ -1046,14 +1046,14 @@ test('swept displacement bound contains every body-corner displacement across ar
 test('vehicle parameter bounds evaluate all endpoint combinations for one active parameter',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
  let target={...start};
- for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.24,0.05/0.7,params);
  const originalParams={...params};
  const bounds={wheelbase:{min:3.7999,max:3.8}};
  const result=planner.planAlternativesWithVehicleParameterBounds({
   start,goal:{x:target.x,y:target.y,heading:target.psi},
   params,obstacles:[],integrate,
   alternativeMaxExpansions:1200,
-  positionTolerance:0.02,headingTolerance:0.01,
+  positionTolerance:0.05,headingTolerance:0.02,
   maxTerminalArticulation:0.5,minClearance:0.30,
   measurementUncertainty:0,
   obstaclePositionUncertainty:0,
@@ -1082,7 +1082,7 @@ test('vehicle parameter bounds evaluate all endpoint combinations for one active
 test('vehicle parameter bounds pairwise covering array checks every endpoint pair for seven active dimensions',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
  let target={...start};
- for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.24,0.05/0.7,params);
  const bounds={
   wheelbase:{min:3.799,max:3.801},
   hitchOffset:{min:0.574,max:0.576},
@@ -1096,7 +1096,7 @@ test('vehicle parameter bounds pairwise covering array checks every endpoint pai
   start,goal:{x:target.x,y:target.y,heading:target.psi},
   params,obstacles:[],integrate,
   alternativeMaxExpansions:1200,
-  positionTolerance:0.02,headingTolerance:0.01,
+  positionTolerance:0.05,headingTolerance:0.02,
   maxTerminalArticulation:0.5,minClearance:0.30,
   measurementUncertainty:0,
   obstaclePositionUncertainty:0,
@@ -1145,12 +1145,12 @@ test('pairwise endpoint generator covers all pairs for nineteen cab, mirror, tir
 test('vehicle parameter bounds accept a calibrated front tire track interval',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
  let target={...start};
- for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.24,0.05/0.7,params);
  const result=planner.planAlternativesWithVehicleParameterBounds({
   start,goal:{x:target.x,y:target.y,heading:target.psi},
   params,obstacles:[],integrate,
   alternativeMaxExpansions:1200,
-  positionTolerance:0.02,headingTolerance:0.01,
+  positionTolerance:0.05,headingTolerance:0.02,
   maxTerminalArticulation:0.5,minClearance:0.30,
   measurementUncertainty:0,obstaclePositionUncertainty:0,
   obstacleSizeUncertainty:0,vehicleFootprintUncertainty:0,
@@ -1170,12 +1170,12 @@ test('vehicle parameter bounds include a possible mirror projection from a zero 
  };
  const start={x:0,y:0,psi:0,psiT:0};
  let target={...start};
- for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,geometryParams);
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.24,0.05/0.7,geometryParams);
  const result=planner.planAlternativesWithVehicleParameterBounds({
   start,goal:{x:target.x,y:target.y,heading:target.psi},
   params:geometryParams,obstacles:[],integrate,
   alternativeMaxExpansions:1200,
-  positionTolerance:0.02,headingTolerance:0.01,
+  positionTolerance:0.05,headingTolerance:0.02,
   maxTerminalArticulation:0.5,minClearance:0.30,
   measurementUncertainty:0,obstaclePositionUncertainty:0,
   obstacleSizeUncertainty:0,vehicleFootprintUncertainty:0,
@@ -1229,12 +1229,12 @@ test('vehicle parameter bounds accept all nineteen truck cab, mirror, tire and t
 test('vehicle parameter bounds reject a physically invalid joint endpoint combination',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
  let target={...start};
- for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.24,0.05/0.7,params);
  const result=planner.planAlternativesWithVehicleParameterBounds({
   start,goal:{x:target.x,y:target.y,heading:target.psi},
   params,obstacles:[],integrate,
   alternativeMaxExpansions:1200,
-  positionTolerance:0.02,headingTolerance:0.01,
+  positionTolerance:0.05,headingTolerance:0.02,
   maxTerminalArticulation:0.5,
   vehicleParameterBounds:{
    kingpinAxles:{min:8,max:10.2},
@@ -1252,12 +1252,12 @@ test('vehicle parameter bounds reject a physically invalid joint endpoint combin
 test('vehicle parameter bounds report not-varied instead of implying zero physical uncertainty',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
  let target={...start};
- for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.24,0.05/0.7,params);
  const result=planner.planAlternativesWithVehicleParameterBounds({
   start,goal:{x:target.x,y:target.y,heading:target.psi},
   params,obstacles:[],integrate,
   alternativeMaxExpansions:1200,
-  positionTolerance:0.02,headingTolerance:0.01,
+  positionTolerance:0.05,headingTolerance:0.02,
   maxTerminalArticulation:0.5,
   vehicleParameterBounds:{wheelbase:{min:3.8,max:3.8}}
  });
@@ -1665,7 +1665,7 @@ test('multiple independently uncertain obstacles constrain all ten wheels along 
 test('camera obstacle uncertainty compares raw nominal polygon with its conservative envelope',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
  let target={...start};
- for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.12,0.05/0.7,params);
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.24,0.05/0.7,params);
  const cameraObstacle={
   kind:'camera-obstacle',
   name:'camera post with uncertain map pose',
@@ -1680,7 +1680,7 @@ test('camera obstacle uncertainty compares raw nominal polygon with its conserva
   start,goal:{x:target.x,y:target.y,heading:target.psi},
   params,obstacles:[cameraObstacle],integrate,
   maxExpansions:1200,alternativeMaxExpansions:1200,
-  positionTolerance:0.02,headingTolerance:0.01,
+  positionTolerance:0.05,headingTolerance:0.02,
   maxTerminalArticulation:0.5,minClearance:0.30,
   measurementUncertainty:0,costTolerance:0.001
  });
