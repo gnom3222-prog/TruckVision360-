@@ -1054,7 +1054,8 @@ test('vehicle parameter bounds accept a calibrated front tire track interval',()
  });
  assert.equal(result.ok,true,JSON.stringify(result));
  assert.equal(result.parameterSensitivity.activeParameterCount,1);
- assert.equal(result.parameterSensitivity.testedScenarioCount,3);
+ assert.equal(result.parameterSensitivity.testedScenarioCount,2);
+ assert.equal(result.parameterSensitivity.testedMidpointScenarioCount,0);
  assert.equal(result.parameterSensitivity.coverage,'full-endpoint-combinations');
 });
 
@@ -1078,7 +1079,8 @@ test('vehicle parameter bounds include a possible mirror projection from a zero 
  });
  assert.equal(result.ok,true,JSON.stringify(result));
  assert.equal(result.parameterSensitivity.activeParameterCount,1);
- assert.equal(result.parameterSensitivity.testedScenarioCount,2);
+ assert.equal(result.parameterSensitivity.testedScenarioCount,3);
+ assert.equal(result.parameterSensitivity.testedMidpointScenarioCount,1);
  assert.equal(result.parameterSensitivity.coverage,'full-endpoint-combinations');
  assert.equal(result.parameterSensitivity.suppliedBounds.mirrorOutboard.min,0);
  assert.equal(result.parameterSensitivity.suppliedBounds.mirrorOutboard.max,0.02);
