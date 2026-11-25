@@ -518,6 +518,90 @@ test('trailer wheel trajectory diagnostics returns sampled centers for all six t
  assert.equal(result.model,'single-equivalent-trailer-axle-group');
 });
 
+test('trailer wheel trajectory diagnostics integrates straight wheel paths from planner RK4 steps',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerTrack:2.79
+ };
+ const step=0.5;
+ let q={x:0,y:0,psi:0,psiT:0};
+ const path=[{...q,gear:1,steer:0,stepDistance:0}];
+ for(let i=0;i<4;i++){
+  q=physics.rk4(q,0.7,0,step/0.7,p);
+  path.push({...q,gear:1,steer:0,stepDistance:step});
+ }
+ const result=physics.trailerWheelTrajectoryDiagnostics(path,p);
+ assert.equal(result.wheelTravelMethod,'rk4-reconstructed-composite-simpson-4-subintervals');
+ assert.equal(result.segmentsWithKinematicEstimate,4);
+ assert.equal(result.segmentsWithoutKinematicEstimate,0);
+ near(result.totalRouteDistance,2,1e-9);
+ for(const axle of result.axles){
+  for(const track of [axle.center,axle.left,axle.right]){
+   near(track.sampledTravel,2,1e-8);
+   near(track.integratedTravelEstimate,2,1e-8);
+   near(track.integratedTravelCoveredDistance,2,1e-9);
+  }
+ }
+});
+
+test('trailer wheel trajectory diagnostics estimates curved wheel arcs beyond endpoint chords',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerTrack:2.79
+ };
+ const step=0.5;
+ let q={x:0,y:0,psi:0,psiT:0};
+ const path=[{...q,gear:1,steer:0.18,stepDistance:0}];
+ for(let i=0;i<6;i++){
+  q=physics.rk4(q,0.7,0.18,step/0.7,p);
+  path.push({...q,gear:1,steer:0.18,stepDistance:step});
+ }
+ const result=physics.trailerWheelTrajectoryDiagnostics(path,p);
+ assert.equal(result.segmentsWithKinematicEstimate,6);
+ assert.equal(result.segmentsWithoutKinematicEstimate,0);
+ for(const axle of result.axles){
+  for(const track of [axle.center,axle.left,axle.right]){
+   assert.ok(track.integratedTravelEstimate>=track.sampledTravel-1e-7);
+   near(track.integratedTravelCoveredDistance,3,1e-8);
+  }
+ }
+ for(const segment of result.segments){
+  assert.equal(segment.integrationStatus,'rk4-simpson-estimate');
+  assert.ok(segment.endpointResidual.position<=result.kinematicEndpointTolerance.position);
+  assert.ok(segment.axles.every(axle=>axle.integratedOuterMinusInner>0));
+ }
+});
+
+test('trailer wheel trajectory diagnostics withholds integrated estimates when planner endpoints do not match RK4',()=>{
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3};
+ const path=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0.18,stepDistance:0},
+  {x:0.5,y:0,psi:0,psiT:0,gear:1,steer:0.18,stepDistance:0.5}
+ ];
+ const result=physics.trailerWheelTrajectoryDiagnostics(path,p);
+ assert.equal(result.segments[0].integrationStatus,'kinematic-endpoint-mismatch');
+ assert.equal(result.segmentsWithKinematicEstimate,0);
+ assert.equal(result.segmentsWithoutKinematicEstimate,1);
+ assert.equal(result.axles[0].center.integratedTravelEstimate,null);
+ assert.ok(result.segments[0].endpointResidual.position>result.kinematicEndpointTolerance.position);
+});
+
+test('trailer wheel trajectory diagnostics keeps chord-only fallback explicit when stepDistance is absent',()=>{
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3};
+ const path=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0},
+  {x:1,y:0,psi:0,psiT:0,gear:1,steer:0}
+ ];
+ const result=physics.trailerWheelTrajectoryDiagnostics(path,p);
+ assert.equal(result.distanceMethod,'chord-fallback');
+ assert.equal(result.wheelTravelMethod,'sampled-chords-only');
+ assert.equal(result.segments[0].integrationStatus,'step-distance-missing');
+ assert.equal(result.axles[0].center.integratedTravelEstimate,null);
+ near(result.axles[0].center.sampledTravel,1,1e-9);
+});
+
 test('trailer wheel paths identify inner and outer sides for forward and reverse turns',()=>{
  const p={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
