@@ -268,31 +268,39 @@
   const geometryErrors=rootPhysics&&typeof rootPhysics.validateVehicleParams==='function'?
    rootPhysics.validateVehicleParams(p):['Модуль проверки геометрии недоступен.'];
   if(geometryErrors.length)throw new Error('Некорректная геометрия автопоезда: '+geometryErrors.join(' '));
+  if(!rootPhysics||typeof rootPhysics.vehicleCollisionParts!=='function'){
+   throw new Error('Модуль отдельных collision-компонентов автопоезда недоступен.');
+  }
   const obstacleErrors=validateObstacles(obstacles);
   if(obstacleErrors.length)throw new Error('Некорректные препятствия: '+obstacleErrors.join(' '));
   const prepared=obstacles.map(o=>{
    const poly=obstaclePoly(o);
    return {poly,bounds:polygonBounds(poly),name:o.name||'препятствие'};
   });
-  const bodyNames=['тягач','кабина','полуприцеп'];
   return function(q){
-   const bodies=polygons(q,p),bodyBounds=bodies.map(polygonBounds);
-   const perPart=bodyNames.map((vehiclePart,bodyIndex)=>({
-    distance:Infinity,obstacle:null,vehiclePart,bodyIndex
+   const groups=rootPhysics.vehicleCollisionParts(q,p);
+   const perPart=groups.map(group=>({
+    distance:Infinity,obstacle:null,vehiclePart:group.vehiclePart,bodyIndex:group.bodyIndex,component:null
    }));
    for(const obstacle of prepared){
-    for(let i=0;i<bodies.length;i++){
-     if(aabbDistance(bodyBounds[i],obstacle.bounds)>=perPart[i].distance)continue;
-     const d=polyDist(bodies[i],obstacle.poly);
-     if(d<perPart[i].distance){
-      perPart[i]={distance:d,obstacle:obstacle.name,vehiclePart:bodyNames[i],bodyIndex:i};
+    for(let i=0;i<groups.length;i++){
+     for(const component of groups[i].components){
+      const bounds=polygonBounds(component.polygon);
+      if(aabbDistance(bounds,obstacle.bounds)>=perPart[i].distance)continue;
+      const d=polyDist(component.polygon,obstacle.poly);
+      if(d<perPart[i].distance){
+       perPart[i]={
+        distance:d,obstacle:obstacle.name,vehiclePart:groups[i].vehiclePart,
+        bodyIndex:groups[i].bodyIndex,component:component.name
+       };
+      }
      }
     }
    }
    let nearest=perPart[0];
    for(let i=1;i<perPart.length;i++)if(perPart[i].distance<nearest.distance)nearest=perPart[i];
    return {distance:nearest.distance,hit:nearest.obstacle,obstacle:nearest.obstacle,
-    vehiclePart:nearest.vehiclePart,bodyIndex:nearest.bodyIndex,perPart};
+    vehiclePart:nearest.vehiclePart,bodyIndex:nearest.bodyIndex,component:nearest.component,perPart};
   };
  }
  function sweptDisplacementRatesPerMeter(steer,p,q=null,maxDistance=0.05){
@@ -307,7 +315,23 @@
   const tractorYawPerMeter=Math.abs(Math.tan(steer)/wheelbase);
   const footprintUncertainty=Number.isFinite(p.footprintUncertainty)?p.footprintUncertainty:0;
   const tractorRadius=Math.hypot(5+footprintUncertainty,(2.55+2*footprintUncertainty)/2);
-  const cabRadiusFromRearAxle=2.1+Math.hypot(1.35+footprintUncertainty,(2.25+2*footprintUncertainty)/2);
+  const cabOffset=p.cabOffset??2.1;
+  const cabFront=p.cabFront??1.35;
+  const cabWidth=p.cabWidth??2.25;
+  let cabRadiusFromRearAxle=cabOffset+Math.hypot(
+   cabFront+footprintUncertainty,(cabWidth+2*footprintUncertainty)/2
+  );
+  const mirrorOutboard=p.mirrorOutboard??0;
+  if(mirrorOutboard>0){
+   const mirrorLongitudinal=p.mirrorLongitudinal??3.0;
+   const mirrorHalfLength=(p.mirrorLength??0.8)/2+footprintUncertainty;
+   const mirrorOuterLateral=cabWidth/2+mirrorOutboard+footprintUncertainty;
+   const mirrorRadius=Math.max(
+    Math.hypot(mirrorLongitudinal-mirrorHalfLength,mirrorOuterLateral),
+    Math.hypot(mirrorLongitudinal+mirrorHalfLength,mirrorOuterLateral)
+   );
+   cabRadiusFromRearAxle=Math.max(cabRadiusFromRearAxle,mirrorRadius);
+  }
   const trailerFrontFromAxle=kingpinAxles+1.5+footprintUncertainty;
   const trailerRearFromAxle=kingpinAxles-(trailerLength-1.5+footprintUncertainty);
   if(q&&(!Number.isFinite(q.psi)||!Number.isFinite(q.psiT))){
@@ -403,7 +427,8 @@
       parts[partIndex].minimumClearanceLowerBound=lowerBound;
       parts[partIndex].limitingDetail={
        kind:'segment-lower-bound',lowerBound,vehiclePart:partNames[partIndex],bodyIndex:partIndex,
-       obstacleAtReference:reference.obstacle,referenceDistance:reference.distance,
+       obstacleAtReference:reference.obstacle,componentAtReference:reference.component,
+       referenceDistance:reference.distance,
        displacementRate:rateByPart[partIndex],stepDistance,distanceAlongRoute,
        from:snapshot(previousState),to:snapshot(state),
        gear:state.gear===-1?-1:1,steer:Number.isFinite(state.steer)?state.steer:0
