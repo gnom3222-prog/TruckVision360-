@@ -379,6 +379,10 @@
     if(!Number.isFinite(stepDistance)||stepDistance<=0){
      throw new Error('Route state '+index+' is missing its positive integration stepDistance; continuous per-part bound cannot be established.');
     }
+    const chordDistance=Math.hypot(state.x-previousState.x,state.y-previousState.y);
+    if(chordDistance>stepDistance+1e-6){
+     throw new Error('Route state '+index+' moves farther than its integration stepDistance; per-part swept bound is invalid.');
+    }
     const rates=sweptDisplacementRatesPerMeter(
      Number.isFinite(state.steer)?state.steer:0,p,previousState,stepDistance
     );
@@ -861,6 +865,7 @@
      index,label:candidate.label,cost:candidate.cost,
      states:candidate.states,
      metrics:candidate.score,
+     trajectoryClearance:candidate.route.trajectoryClearance,
      recommendation:candidate.recommendation
     })),
     failures,comparison
