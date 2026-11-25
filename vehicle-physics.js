@@ -465,6 +465,10 @@
   let previousState=null;
   for(let index=0;index<states.length;index++){
    const state=states[index];
+   if(index===0&&state.q.stepDistance!==undefined&&
+      (!Number.isFinite(state.q.stepDistance)||state.q.stepDistance!==0)){
+    throw new Error('Начальное состояние траектории колёс должно иметь stepDistance равный нулю.');
+   }
    if(index>0){
     const chord=Math.hypot(state.q.x-previousState.q.x,state.q.y-previousState.q.y);
     let segmentDistance=chord;
