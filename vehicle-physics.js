@@ -428,5 +428,125 @@
   };
  }
 
- return Object.freeze({norm,validateVehicleParams,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
+
+ // Returns sampled center tracks for all six trailer tires and all three axle centers.
+ // Left/right inner-side classification is relative to the direction of travel:
+ // reverse gear swaps the vehicle-side label. Distances are chords between route samples.
+ function trailerWheelTrajectoryDiagnostics(path,params){
+  const errors=validateVehicleParams(params);
+  if(errors.length)throw new Error('Некорректная геометрия траектории колёс: '+errors.join(' '));
+  if(!Array.isArray(path))throw new Error('Траектория колёс должна быть массивом состояний.');
+  if(path.length===0)throw new Error('Траектория колёс должна содержать хотя бы одно состояние.');
+  const readState=(state,index)=>{
+   if(!state||![state.x,state.y,state.psi,state.psiT].every(Number.isFinite)){
+    throw new Error('Состояние траектории колёс '+(index+1)+' содержит некорректные координаты или углы.');
+   }
+   const gear=state.gear===undefined?1:state.gear;
+   const steer=state.steer===undefined?0:state.steer;
+   if(gear!==1&&gear!==-1)throw new Error('Передача в состоянии траектории колёс '+(index+1)+' должна быть +1 или -1.');
+   if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2){
+    throw new Error('Угол руля в состоянии траектории колёс '+(index+1)+' некорректен.');
+   }
+   return {q:state,gear,steer};
+  };
+  const states=Array.from(path,readState);
+  const track=params.trailerTrack??(params.trailerWidth+0.24);
+  if(!Number.isFinite(track)||track<=0)throw new Error('Колея полуприцепа для траектории колёс некорректна.');
+  const offsets=trailerAxleOffsets(params);
+  const axles=offsets.map((offset,index)=>({
+   axleIndex:index+1,offsetFromGroupCenter:offset,
+   center:{points:[],sampledTravel:0},
+   left:{side:'left',name:'левое колесо '+(index+1)+'-й оси полуприцепа',points:[],sampledTravel:0},
+   right:{side:'right',name:'правое колесо '+(index+1)+'-й оси полуприцепа',points:[],sampledTravel:0}
+  }));
+  const segments=[];
+  let routeDistance=0;
+  let previousTracks=null;
+  let previousState=null;
+  for(let index=0;index<states.length;index++){
+   const state=states[index];
+   if(index>0){
+    const chord=Math.hypot(state.q.x-previousState.q.x,state.q.y-previousState.q.y);
+    let segmentDistance=chord;
+    if(state.q.stepDistance!==undefined){
+     if(!Number.isFinite(state.q.stepDistance)||state.q.stepDistance<=0){
+      throw new Error('Состояние траектории колёс '+(index+1)+' содержит некорректный stepDistance.');
+     }
+     if(chord>state.q.stepDistance+1e-6){
+      throw new Error('Хорда траектории колёс превышает stepDistance на сегменте '+index+'.');
+     }
+     segmentDistance=state.q.stepDistance;
+    }
+    routeDistance+=segmentDistance;
+   }
+   const axleCenters=trailerAxlePoints(state.q,params);
+   const currentTracks=axleCenters.map((center,axleIndex)=>({
+    center,
+    left:localPoint(center,state.q.psiT,0,track/2),
+    right:localPoint(center,state.q.psiT,0,-track/2)
+   }));
+   currentTracks.forEach((sample,axleIndex)=>{
+    const axle=axles[axleIndex];
+    const append=(trackData,point)=>{
+     if(trackData.points.length){
+      const previous=trackData.points[trackData.points.length-1];
+      trackData.sampledTravel+=Math.hypot(point.x-previous.x,point.y-previous.y);
+     }
+     trackData.points.push({
+      x:point.x,y:point.y,routeDistance,heading:state.q.psiT,gear:state.gear,sampleIndex:index
+     });
+    };
+    append(axle.center,sample.center);
+    append(axle.left,sample.left);
+    append(axle.right,sample.right);
+   });
+   if(previousTracks){
+    const deltaHeading=norm(state.q.psiT-previousState.q.psiT);
+    const axleSegments=currentTracks.map((sample,axleIndex)=>{
+     const previous=previousTracks[axleIndex];
+     const leftWheelDistance=Math.hypot(sample.left.x-previous.left.x,sample.left.y-previous.left.y);
+     const rightWheelDistance=Math.hypot(sample.right.x-previous.right.x,sample.right.y-previous.right.y);
+     const centerDistance=Math.hypot(sample.center.x-previous.center.x,sample.center.y-previous.center.y);
+     const turnDirection=centerDistance<1e-9||Math.abs(deltaHeading)<1e-8?
+      'straight':(deltaHeading>0?'left':'right');
+     const innerSide=turnDirection==='straight'?null:
+      (turnDirection==='left'?
+       (state.gear===1?'left':'right'):
+       (state.gear===1?'right':'left'));
+     const outerSide=innerSide===null?null:(innerSide==='left'?'right':'left');
+     const innerWheelDistance=innerSide==='left'?leftWheelDistance:
+      (innerSide==='right'?rightWheelDistance:null);
+     const outerWheelDistance=outerSide==='left'?leftWheelDistance:
+      (outerSide==='right'?rightWheelDistance:null);
+     return {
+      axleIndex:axleIndex+1,centerDistance,leftWheelDistance,rightWheelDistance,
+      turnDirection,innerSide,outerSide,innerWheelDistance,outerWheelDistance,
+      outerMinusInner:innerWheelDistance===null?null:outerWheelDistance-innerWheelDistance
+     };
+    });
+    segments.push({
+     fromSample:index-1,toSample:index,gear:state.gear,gearChanged:state.gear!==previousState.gear,
+     tractorReferenceDistance:routeDistance,
+     trailerHeadingChange:deltaHeading,
+     axles:axleSegments
+    });
+   }
+   previousTracks=currentTracks;
+   previousState=state;
+  }
+  return {
+   samples:states.length,segments:segments.length,totalRouteDistance:routeDistance,
+   axles,
+   segments,
+   distanceMethod:'sampled-centerline-chords-between-route-states',
+   model:'single-equivalent-trailer-axle-group',
+   limitations:[
+    'Траектории колёс — выборки в узлах переданного маршрута; длина между ними измеряется хордами и не является точной непрерывной длиной.',
+    'Все три оси жёстко привязаны к одному эквивалентному курсу полуприцепа; независимое руление, подвеска и деформация шин не моделируются.',
+    'Внутренняя и внешняя стороны классифицируются по знаку изменения курса между соседними узлами и передаче; это геометрический индикатор среза, не измерение бокового скольжения.'
+   ]
+  };
+ }
+
+ return Object.freeze({norm,validateVehicleParams,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
 });
