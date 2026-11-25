@@ -234,6 +234,9 @@
       !Number.isFinite(o.w)||!Number.isFinite(o.h)||o.w<=0||o.h<=0){
     errors.push('Препятствие '+(index+1)+' должно иметь конечные координаты и положительные ширину/высоту либо выпуклый polygon.');
    }
+   if(o.nominalPolygon!==undefined&&!isConvexPolygon(o.nominalPolygon)){
+    errors.push('Номинальный контур препятствия '+(index+1)+' должен быть конечным невырожденным выпуклым многоугольником.');
+   }
   });
   return errors;
  }
@@ -1365,7 +1368,21 @@ function planAlternativesWithGeometryUncertainty(options={}){
   return {ok:false,reason:'invalid-input',errors:['Суммарное расширение контура автопоезда не должно превышать 1 м на каждую внешнюю грань.'],expanded:0};
  }
  const gateGeometry=options.gateGeometry??null;
- let obstaclesForNominal=options.obstacles;
+ const nominalizedObstacles=options.obstacles.map(obstacle=>{
+  if(!Array.isArray(obstacle?.nominalPolygon))return obstacle;
+  return {
+   ...obstacle,
+   polygon:obstacle.nominalPolygon.map(point=>({x:point.x,y:point.y}))
+  };
+ });
+ const perObstaclePoseEnvelopeCount=options.obstacles.filter(obstacle=>{
+  if(!Array.isArray(obstacle?.nominalPolygon)||!Array.isArray(obstacle?.polygon))return false;
+  if(obstacle.nominalPolygon.length!==obstacle.polygon.length)return true;
+  return obstacle.nominalPolygon.some((point,index)=>
+   Math.hypot(point.x-obstacle.polygon[index].x,point.y-obstacle.polygon[index].y)>1e-9
+  );
+ }).length;
+ let obstaclesForNominal=nominalizedObstacles;
  let obstaclesForEnvelope=options.obstacles;
  let gateBoundsActive=false;
  let gateGeometryUncertainty=null;
@@ -1378,9 +1395,10 @@ function planAlternativesWithGeometryUncertainty(options={}){
     ...gateGeometry,widthUncertainty:0,positionUncertainty:0,headingUncertaintyDeg:0
    });
    const boundedGatePosts=createGateObstacles(gateGeometry);
-   const staticObstacles=options.obstacles.filter(obstacle=>obstacle?.kind!=='gate-jamb');
-   obstaclesForNominal=[...staticObstacles,...nominalGatePosts];
-   obstaclesForEnvelope=[...staticObstacles,...boundedGatePosts];
+   const nominalStaticObstacles=nominalizedObstacles.filter(obstacle=>obstacle?.kind!=='gate-jamb');
+   const boundedStaticObstacles=options.obstacles.filter(obstacle=>obstacle?.kind!=='gate-jamb');
+   obstaclesForNominal=[...nominalStaticObstacles,...nominalGatePosts];
+   obstaclesForEnvelope=[...boundedStaticObstacles,...boundedGatePosts];
    const widthUncertainty=gateGeometry.widthUncertainty??0;
    const positionUncertainty=gateGeometry.positionUncertainty??0;
    const headingUncertaintyDeg=gateGeometry.headingUncertaintyDeg??0;
@@ -1415,7 +1433,8 @@ function planAlternativesWithGeometryUncertainty(options={}){
   };
  });
  const hasGeometryBounds=obstaclePositionUncertainty>0||
-  obstacleSizeUncertainty>0||vehicleFootprintUncertainty>0||gateBoundsActive;
+  obstacleSizeUncertainty>0||vehicleFootprintUncertainty>0||
+  perObstaclePoseEnvelopeCount>0||gateBoundsActive;
  const baseOptions={...options,obstacles:obstaclesForNominal};
  delete baseOptions.obstaclePositionUncertainty;
  delete baseOptions.obstacleSizeUncertainty;
@@ -1445,7 +1464,8 @@ function planAlternativesWithGeometryUncertainty(options={}){
   vehicleFootprintUncertainty,obstacleExpansionPerSide,
   footprintExpansionPerEdge:vehicleFootprintUncertainty,
   gateGeometryUncertainty,
-  obstacleModel:'axis-aligned rectangles expanded per axis; convex polygons receive a conservative radial offset covering the same per-axis bound',
+  perObstaclePoseEnvelopeCount,
+  obstacleModel:'camera obstacles with nominalPolygon use that contour in the nominal scenario and polygon in the bounded scenario; global bounds are added only to the bounded contour; axis-aligned rectangles expand per axis and convex polygons receive a conservative radial offset',
   vehicleModel:'all three rectangular body contours expanded outward on every edge',
   kinematicParameterUncertaintyIncluded:false
  };
