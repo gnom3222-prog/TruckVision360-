@@ -196,7 +196,6 @@
     name:'Верхняя перемычка ворот',
     kind:'gate-lintel',
     polygon,
-    nominalPolygon,
     zMin:beamBottom,
     zMax:beamTop,
     zUncertainty:verticalUncertainty,
