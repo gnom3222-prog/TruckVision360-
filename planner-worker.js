@@ -1,5 +1,5 @@
 'use strict';
-importScripts('./vehicle-physics.js?v=20261126-13','./articulated-planner.js?v=20261126-8');
+importScripts('./vehicle-physics.js?v=20261126-14','./articulated-planner.js?v=20261126-8');
 
 self.addEventListener('message',event=>{
  const data=event.data||{};
