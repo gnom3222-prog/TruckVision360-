@@ -71,6 +71,8 @@ const cfg={
  gateLintelFloorUncertainty:0,
  gateLintelThickness:0,
  gateLintelThicknessUncertainty:0,
+ gateLintelSpan:0,
+ gateLintelSpanUncertainty:0,
  gateLintelDepth:0,
  gateLintelDepthUncertainty:0,
  margin:0.2,
@@ -155,6 +157,8 @@ function gateGeometryForPlanner(){
    floorDatumUncertainty:cfg.gateLintelFloorUncertainty,
    thickness:cfg.gateLintelThickness,
    thicknessUncertainty:cfg.gateLintelThicknessUncertainty,
+   span:cfg.gateLintelSpan,
+   spanUncertainty:cfg.gateLintelSpanUncertainty,
    depth:cfg.gateLintelDepth,
    depthUncertainty:cfg.gateLintelDepthUncertainty
   };
@@ -289,6 +293,8 @@ function readSettings(){
   gateLintelFloorUncertainty:[0,1],
   gateLintelThickness:[0,2],
   gateLintelThicknessUncertainty:[0,1],
+  gateLintelSpan:[0,30],
+  gateLintelSpanUncertainty:[0,2],
   gateLintelDepth:[0,10],
   gateLintelDepthUncertainty:[0,2],
   margin:[0,5],
@@ -358,6 +364,8 @@ function readSettings(){
       floorDatumUncertainty:candidate.gateLintelFloorUncertainty,
       thickness:candidate.gateLintelThickness,
       thicknessUncertainty:candidate.gateLintelThicknessUncertainty,
+      span:candidate.gateLintelSpan,
+      spanUncertainty:candidate.gateLintelSpanUncertainty,
       depth:candidate.gateLintelDepth,
       depthUncertainty:candidate.gateLintelDepthUncertainty
      }
@@ -2437,6 +2445,8 @@ function applyCameraGateRegistration(registration){
   floorDatumUncertainty:readGateSetting('gateLintelFloorUncertainty','gateLintelFloorUncertainty'),
   thickness:readGateSetting('gateLintelThickness','gateLintelThickness'),
   thicknessUncertainty:readGateSetting('gateLintelThicknessUncertainty','gateLintelThicknessUncertainty'),
+  span:readGateSetting('gateLintelSpan','gateLintelSpan'),
+  spanUncertainty:readGateSetting('gateLintelSpanUncertainty','gateLintelSpanUncertainty'),
   depth:readGateSetting('gateLintelDepth','gateLintelDepth'),
   depthUncertainty:readGateSetting('gateLintelDepthUncertainty','gateLintelDepthUncertainty')
  }:null;
@@ -2483,6 +2493,8 @@ function applyCameraGateRegistration(registration){
   cfg.gateLintelFloorUncertainty=lintel.floorDatumUncertainty;
   cfg.gateLintelThickness=lintel.thickness;
   cfg.gateLintelThicknessUncertainty=lintel.thicknessUncertainty;
+  cfg.gateLintelSpan=lintel.span;
+  cfg.gateLintelSpanUncertainty=lintel.spanUncertainty;
   cfg.gateLintelDepth=lintel.depth;
   cfg.gateLintelDepthUncertainty=lintel.depthUncertainty;
  }
