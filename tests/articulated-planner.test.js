@@ -314,7 +314,7 @@ test('gate lintel never claims vertical separation when vehicle height profiles 
   lintel:{
    clearHeight:3.8,clearHeightUncertainty:0.03,floorDatumUncertainty:0.02,
    thickness:0.25,thicknessUncertainty:0.01,
-   depth:8,depthUncertainty:0
+   span:8,spanUncertainty:0,depth:8,depthUncertainty:0
   }
  });
  const result=planner.createClearanceChecker([gate[2]],params)(q);
