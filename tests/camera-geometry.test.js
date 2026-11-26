@@ -15,6 +15,11 @@ const stableUncertainty={
  nonlinearSensitivityModel:'axiswise-one-sigma-finite-perturbations',
  nonlinearMismatchWidth:0,maxAxisAsymmetryRatio:0
 };
+const repeatabilityFor=(sigmaWidth=0.01,sigmaHeight=0.02,width=4,height=2)=>camera.summarizeRepeatability([
+ {width,height,sigmaWidth,sigmaHeight},
+ {width,height,sigmaWidth,sigmaHeight},
+ {width,height,sigmaWidth,sigmaHeight}
+],{widthTolerance:0.02,heightTolerance:0.02});
 
 test('camera calibration accepts a convex four-corner reference in clockwise order',()=>{
  assert.equal(camera.validQuad(reference),true);
@@ -187,9 +192,10 @@ test('camera-measured gate registers its clear opening on a manually anchored ma
   {x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2}
  ];
  const result=camera.registerGateOnMap(
-  {width:4,points,...stableUncertainty},
+  {width:4,height:2,points,...stableUncertainty},
   {x:12,y:-3},
-  Math.PI/2
+  Math.PI/2,
+  repeatabilityFor()
  );
  near(result.centerX,12);
  near(result.centerY,-3);
@@ -199,11 +205,12 @@ test('camera-measured gate registers its clear opening on a manually anchored ma
  near(result.openingEnd.x,12);
  near(result.openingEnd.y,-1);
  near(result.sourceAxisLength,4);
+ near(result.clearHeight,2);
  assert.equal(result.mapRegistration,'manual-center-and-heading');
 });
 
 test('camera gate map registration rejects missing or invalid manual map pose',()=>{
- const measurement={width:4,points:[
+ const measurement={width:4,height:2,points:[
   {x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2},
  ],...stableUncertainty};
  assert.throws(()=>camera.registerGateOnMap(measurement,{x:NaN,y:0},0));
@@ -217,20 +224,21 @@ test('camera registration carries a two-sigma width envelope into gate geometry'
   {x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2}
  ];
  const registration=camera.registerGateOnMap(
-  {width:4,points,...stableUncertainty,sigmaWidth:0.03},
+  {width:4,height:2,points,...stableUncertainty,sigmaWidth:0.03},
   {x:12,y:0},
-  Math.PI/2
+  Math.PI/2,
+  repeatabilityFor(0.03,0.02)
  );
  near(registration.widthSigma,0.03);
  near(registration.widthUncertaintyBound,0.06);
  assert.equal(registration.widthUncertaintyMultiplier,2);
- assert.equal(registration.widthUncertaintyModel,'2-sigma-normal-approximation');
+ assert.equal(registration.widthUncertaintyModel,'observed-range-plus-per-frame-2sigma-screening');
  assert.throws(
-  ()=>camera.registerGateOnMap({width:4,points,...stableUncertainty,sigmaWidth:-0.01},{x:0,y:0},0),
-  /1σ ширины/
+  ()=>camera.registerGateOnMap({width:4,height:2,points,...stableUncertainty,sigmaWidth:-0.01},{x:0,y:0},0,repeatabilityFor()),
+  /Оценки 1σ ширины и высоты/
  );
  assert.throws(
-  ()=>camera.registerGateOnMap({width:4,points,...stableUncertainty,sigmaWidth:2.1},{x:0,y:0},0),
+  ()=>camera.registerGateOnMap({width:4,height:2,points,...stableUncertainty,sigmaWidth:2.1},{x:0,y:0},0,repeatabilityFor(2.1,0.02)),
   /превышает поддерживаемый предел/
  );
 });
@@ -279,7 +287,7 @@ test('map registration rejects a non-rectangular measured gate and inconsistent 
   [{x:20,y:10},{x:80,y:10},{x:80,y:40},{x:20,y:40}]
  );
  assert.throws(
-  ()=>camera.registerGateOnMap({...rectangular,width:rectangular.width+0.2},{x:12,y:0},Math.PI/2),
+  ()=>camera.registerGateOnMap({...rectangular,...stableUncertainty,width:rectangular.width+0.2},{x:12,y:0},Math.PI/2,repeatabilityFor()),
   /не совпадает с шириной/
  );
 });
@@ -333,11 +341,84 @@ test('gate map registration refuses measurements without a successful nonlinear 
   sigmaReferenceHeight:0.002
  });
  assert.throws(
-  ()=>camera.registerGateOnMap({...measurement,nonlinearWarning:true},{x:12,y:0},Math.PI/2),
+  ()=>camera.registerGateOnMap({...measurement,nonlinearWarning:true},{x:12,y:0},Math.PI/2,repeatabilityFor(measurement.sigmaWidth,measurement.sigmaHeight,measurement.width,measurement.height)),
   /Нелинейная проверка неопределённости/
  );
  assert.throws(
-  ()=>camera.registerGateOnMap({width:measurement.width,points:measurement.points,sigmaWidth:measurement.sigmaWidth},{x:12,y:0},Math.PI/2),
+  ()=>camera.registerGateOnMap({...measurement,nonlinearSensitivityAvailable:undefined},{x:12,y:0},Math.PI/2,repeatabilityFor(measurement.sigmaWidth,measurement.sigmaHeight,measurement.width,measurement.height)),
   /Нелинейная проверка неопределённости/
  );
+});
+
+
+
+test('map registration refuses a single frame without repeatability evidence',()=>{
+ const points=[{x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2}];
+ const measurement={width:4,height:2,points,...stableUncertainty};
+ assert.throws(()=>camera.registerGateOnMap(measurement,{x:12,y:0},Math.PI/2),/Повторяемость ворот не подтверждена/);
+});
+
+const repeatableReadings=[
+ {width:4.001,height:2.000,sigmaWidth:0.01,sigmaHeight:0.015},
+ {width:4.004,height:2.003,sigmaWidth:0.012,sigmaHeight:0.014},
+ {width:3.999,height:1.998,sigmaWidth:0.011,sigmaHeight:0.016}
+];
+
+test('repeatability summary reports mean, sample spread and conservative per-frame envelope',()=>{
+ const result=camera.summarizeRepeatability(repeatableReadings,{widthTolerance:0.02,heightTolerance:0.02});
+ assert.equal(result.count,3);
+ assert.equal(result.withinTolerance,true);
+ assert.equal(result.status,'repeatable-within-operator-tolerance');
+ near(result.meanWidth,4.001333333333333);
+ near(result.meanHeight,2.000333333333333);
+ near(result.rangeWidth,0.005);
+ near(result.rangeHeight,0.005);
+ near(result.widthEnvelopeBound,0.026666666666667);
+ near(result.heightEnvelopeBound,0.034333333333333);
+ assert.equal(result.uncertaintyModel,'observed-range-plus-per-frame-2sigma-screening');
+});
+
+test('repeatability summary fails when either observed range exceeds operator tolerance',()=>{
+ const widthFailure=camera.summarizeRepeatability([
+  ...repeatableReadings.slice(0,2),{width:4.08,height:2.001,sigmaWidth:0.01,sigmaHeight:0.01}
+ ],{widthTolerance:0.02,heightTolerance:0.02});
+ assert.equal(widthFailure.withinTolerance,false);
+ assert.equal(widthFailure.status,'repeatability-exceeds-operator-tolerance');
+ const heightFailure=camera.summarizeRepeatability([
+  ...repeatableReadings.slice(0,2),{width:4.002,height:2.08,sigmaWidth:0.01,sigmaHeight:0.01}
+ ],{widthTolerance:0.02,heightTolerance:0.02});
+ assert.equal(heightFailure.withinTolerance,false);
+});
+
+test('repeatability summary rejects too few, too many, invalid readings and missing tolerances',()=>{
+ assert.throws(()=>camera.summarizeRepeatability(repeatableReadings.slice(0,2),{widthTolerance:0.02,heightTolerance:0.02}),/от 3 до 10/);
+ assert.throws(()=>camera.summarizeRepeatability([...repeatableReadings,...Array(8).fill(repeatableReadings[0])],{widthTolerance:0.02,heightTolerance:0.02}),/от 3 до 10/);
+ assert.throws(()=>camera.summarizeRepeatability([...repeatableReadings.slice(0,2),{width:NaN,height:2,sigmaWidth:0.01,sigmaHeight:0.01}],{widthTolerance:0.02,heightTolerance:0.02}),/положительные размеры/);
+ assert.throws(()=>camera.summarizeRepeatability(repeatableReadings,{widthTolerance:0,heightTolerance:0.02}),/положительными значениями/);
+});
+
+test('map registration refuses a repeated series that exceeds the operator tolerance',()=>{
+ const points=[{x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2}];
+ const rejected=camera.summarizeRepeatability([
+  {width:4,height:2,sigmaWidth:0.01,sigmaHeight:0.01},
+  {width:4.01,height:2,sigmaWidth:0.01,sigmaHeight:0.01},
+  {width:4.08,height:2,sigmaWidth:0.01,sigmaHeight:0.01}
+ ],{widthTolerance:0.02,heightTolerance:0.02});
+ assert.throws(()=>camera.registerGateOnMap(
+  {width:4,height:2,points,...stableUncertainty},{x:12,y:0},Math.PI/2,rejected
+ ),/Повторяемость ворот не подтверждена/);
+});
+
+test('map registration uses repeat mean and range-plus-per-frame envelope only after accepted series',()=>{
+ const points=[{x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2}];
+ const repeatability=camera.summarizeRepeatability(repeatableReadings,{widthTolerance:0.02,heightTolerance:0.02});
+ const result=camera.registerGateOnMap(
+  {width:4,height:2,points,...stableUncertainty,sigmaWidth:0.011,sigmaHeight:0.016},{x:12,y:0},Math.PI/2,repeatability
+ );
+ near(result.clearWidth,repeatability.meanWidth);
+ near(result.widthUncertaintyBound,repeatability.widthEnvelopeBound);
+ near(result.openingStart.y,-repeatability.meanWidth/2);
+ near(result.openingEnd.y,repeatability.meanWidth/2);
+ assert.equal(result.widthUncertaintyModel,'observed-range-plus-per-frame-2sigma-screening');
+ assert.equal(result.repeatability.count,3);
 });

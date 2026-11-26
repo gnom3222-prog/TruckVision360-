@@ -1,6 +1,7 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id),v=$('measureVideo'),c=$('measureOverlay'),ctx=c.getContext('2d'),status=$('cameraStatus'),geometry=window.TruckVisionCameraGeometry;
-let stream=null,streamRequestId=0,startPending=false,mode=null,pts=[],Hcal=null,referencePoints=null,referenceWidth=0,referenceHeight=0,fw=0,fh=0,frameLocked=false;
+let stream=null,streamRequestId=0,startPending=false,mode=null,pts=[],Hcal=null,referencePoints=null,referenceWidth=0,referenceHeight=0,fw=0,fh=0,frameLocked=false,frameCaptureId=0,frameCaptureTime=null,lastGateMeasurementFrameId=-1,lastGateFrameTime=null,gateRepeatabilityTolerances=null,gateRepeatabilityPose=null,gateRepeatabilityMeasurementConfig=null,gateRepeatabilityComplete=false;
+const gateReadings=[];
 const say=s=>status.textContent=s,dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 function readMeasurementUncertainty(){
  const pointText=$('cameraPointSigma').value.trim();
@@ -13,9 +14,55 @@ function readMeasurementUncertainty(){
  }
  return {sigmaPixels,sigmaReference:referenceSigmaMm/1000};
 }
-function lockFrame(){if(frameLocked)return true;if(!stream||!v.videoWidth||!v.videoHeight)return false;v.pause();frameLocked=true;return true;}
+function readGateRepeatabilityTolerance(){
+ const widthText=$('cameraRepeatabilityWidthTolerance').value.trim();
+ const heightText=$('cameraRepeatabilityHeightTolerance').value.trim();
+ if(!widthText||!heightText)throw new Error('Введите операторские допуски разброса ширины и высоты для серии повторных измерений.');
+ const widthTolerance=Number(widthText),heightTolerance=Number(heightText);
+ if(!Number.isFinite(widthTolerance)||widthTolerance<0.001||widthTolerance>0.5||
+    !Number.isFinite(heightTolerance)||heightTolerance<0.001||heightTolerance>0.5){
+  throw new Error('Допуски повторяемости должны быть в диапазоне 0,001–0,5 м.');
+ }
+ return {widthTolerance,heightTolerance};
+}
+function readGateMapPose(){
+ const xText=$('gateCenterX').value.trim(),yText=$('gateCenterY').value.trim(),headingText=$('gateHeadingDeg').value.trim();
+ if(!xText||!yText||!headingText)throw new Error('Введите центр ворот X/Y и направление линии ворот до начала серии повторов.');
+ const anchor={x:Number(xText),y:Number(yText)},headingDeg=Number(headingText);
+ if(![anchor.x,anchor.y,headingDeg].every(Number.isFinite)||
+    Math.abs(anchor.x)>10000||Math.abs(anchor.y)>10000||headingDeg< -180||headingDeg>180){
+  throw new Error('Проверьте координаты центра ворот и направление линии ворот.');
+ }
+ return {anchor,headingDeg};
+}
+function clearGateRepeatability(resetFrameTracking=false){
+ gateReadings.length=0;
+ gateRepeatabilityTolerances=null;
+ gateRepeatabilityPose=null;
+ gateRepeatabilityMeasurementConfig=null;
+ gateRepeatabilityComplete=false;
+ if(resetFrameTracking){
+  frameCaptureId=0;frameCaptureTime=null;lastGateMeasurementFrameId=-1;lastGateFrameTime=null;
+ }
+ const output=$('cameraRepeatabilityStatus');
+ if(output)output.textContent='Повторяемость не оценена. Нужны минимум три отдельно зафиксированных кадра.';
+}
+function lockFrame(){
+ if(frameLocked)return true;
+ if(!stream||!v.videoWidth||!v.videoHeight)return false;
+ const captureTime=Number(v.currentTime);
+ if(!Number.isFinite(captureTime)){
+  say('Браузер не сообщил время видеокадра. Дождитесь стабильного изображения и повторите калибровку.');
+  return false;
+ }
+ if(lastGateFrameTime!==null&&captureTime<=lastGateFrameTime+0.005){
+  say('Дождитесь следующего видеокадра после сброса калибровки.');
+  return false;
+ }
+ v.pause();frameLocked=true;frameCaptureId++;frameCaptureTime=captureTime;return true;
+}
 function resumeFrame(){if(!frameLocked)return;frameLocked=false;if(stream)v.play().catch(()=>say('Не удалось возобновить видеопоток. Выключите и снова включите камеру.'));}
-function draw(){if(!v.videoWidth)return;const w=v.videoWidth,h=v.videoHeight;if(c.width!==w||c.height!==h){if(fw&&(w!==fw||h!==fh)){Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];resumeFrame();say('Изменился размер видеокадра. Калибровка сброшена; повторите её.');}c.width=w;c.height=h;fw=w;fh=h;}c.style.left=v.offsetLeft+'px';c.style.top=v.offsetTop+'px';c.style.width=v.clientWidth+'px';c.style.height=v.clientHeight+'px';ctx.clearRect(0,0,w,h);if(pts.length){ctx.strokeStyle='#ffe082';ctx.fillStyle='#ffe082';ctx.lineWidth=Math.max(3,w/500);ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));if(pts.length===4)ctx.closePath();ctx.stroke();pts.forEach((p,i)=>{ctx.beginPath();ctx.arc(p.x,p.y,Math.max(8,w/160),0,7);ctx.fill();ctx.fillStyle='#081321';ctx.font='bold '+Math.max(16,w/40)+'px system-ui';ctx.fillText((mode==='reference'?['1','2','3','4']:['A','B','C','D'])[i],p.x+8,p.y-8);ctx.fillStyle='#ffe082';});}}
+function draw(){if(!v.videoWidth)return;const w=v.videoWidth,h=v.videoHeight;if(c.width!==w||c.height!==h){if(fw&&(w!==fw||h!==fh)){Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];clearGateRepeatability(true);resumeFrame();say('Изменился размер видеокадра. Калибровка и серия повторов сброшены; повторите её.');}c.width=w;c.height=h;fw=w;fh=h;}c.style.left=v.offsetLeft+'px';c.style.top=v.offsetTop+'px';c.style.width=v.clientWidth+'px';c.style.height=v.clientHeight+'px';ctx.clearRect(0,0,w,h);if(pts.length){ctx.strokeStyle='#ffe082';ctx.fillStyle='#ffe082';ctx.lineWidth=Math.max(3,w/500);ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));if(pts.length===4)ctx.closePath();ctx.stroke();pts.forEach((p,i)=>{ctx.beginPath();ctx.arc(p.x,p.y,Math.max(8,w/160),0,7);ctx.fill();ctx.fillStyle='#081321';ctx.font='bold '+Math.max(16,w/40)+'px system-ui';ctx.fillText((mode==='reference'?['1','2','3','4']:['A','B','C','D'])[i],p.x+8,p.y-8);ctx.fillStyle='#ffe082';});}}
 async function start(){
  if(stream||startPending)return;
  if(document.visibilityState==='hidden'){say('Страница находится в фоне. Вернитесь в приложение и нажмите «Включить камеру».');return;}
@@ -42,6 +89,7 @@ async function start(){
    v.srcObject=null;
    Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;
    ctx.clearRect(0,0,c.width,c.height);
+   clearGateRepeatability(true);
    say('Видеопоток камеры завершился или был прерван. Калибровка сброшена; нажмите «Включить камеру» и повторите измерение.');
   };
   for(const track of activeStream.getTracks()){
@@ -51,7 +99,7 @@ async function start(){
   v.srcObject=activeStream;
   await v.play();
   if(stream!==activeStream||requestId!==streamRequestId)throw new Error('Видеопоток камеры завершился до запуска.');
-  Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;
+  Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;clearGateRepeatability(true);
   say('Камера включена. Установите прямоугольный эталон в ту же плоскость, что и объект. При нажатии «Калибровать» текущий кадр будет зафиксирован: отметьте эталон и объект на одном неподвижном изображении.');
   draw();
  }catch(e){
@@ -72,13 +120,15 @@ async function start(){
   if(requestId===streamRequestId)startPending=false;
  }
 }
-function stop(){streamRequestId++;startPending=false;const activeStream=stream;stream=null;v.pause();activeStream?.getTracks().forEach(t=>t.stop());v.srcObject=null;Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;ctx.clearRect(0,0,c.width,c.height);say('Камера выключена. При следующем запуске нужна новая калибровка.');}
+function stop(){streamRequestId++;startPending=false;const activeStream=stream;stream=null;v.pause();activeStream?.getTracks().forEach(t=>t.stop());v.srcObject=null;Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;clearGateRepeatability(true);ctx.clearRect(0,0,c.width,c.height);say('Камера выключена. При следующем запуске нужна новая калибровка.');}
 function choose(m){
  if(!stream||!v.videoWidth){say('Сначала включите камеру.');return;}
  if((m==='gate'||m==='obstacle')&&!Hcal){say('Сначала выполните калибровку.');return;}
+ if(m==='gate'&&gateRepeatabilityComplete){say('Серия ворот уже завершена. Очистите повторные измерения для новой серии.');return;}
+ if(m==='gate'&&lastGateMeasurementFrameId===frameCaptureId){say('Этот кадр уже использован. Сбросьте калибровку, дождитесь нового кадра и повторите измерение.');return;}
  if(m==='reference'){
   Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;
-  if(!lockFrame()){say('Не удалось зафиксировать кадр. Дождитесь изображения камеры и повторите.');return;}
+  if(!lockFrame())return;
  }else if(!frameLocked){
   say('Кадр измерения не зафиксирован. Сбросьте калибровку и выполните её заново.');return;
  }
@@ -110,14 +160,58 @@ const applyObstacle=window.TruckVisionAddCameraObstacle;
 if(typeof applyObstacle!=='function'||applyObstacle(measurement,anchor,headingDeg*Math.PI/180,$('cameraObstacleName').value,poseUncertainty)!==true)throw Error('Препятствие не прошло геометрическую проверку и не добавлено на карту.');
 say('Препятствие добавлено на карту: размеры '+measurement.width.toFixed(2)+' × '+measurement.height.toFixed(2)+' м; чувствительность размеров ±'+measurement.sigmaWidth.toFixed(3)+' / ±'+measurement.sigmaHeight.toFixed(3)+' м (1σ). Нелинейная осевая проверка ±1σ выполнена; расхождение ширины '+(100*Number(measurement.nonlinearMismatchWidth||0)).toFixed(1)+'%, асимметрия '+(100*Number(measurement.maxAxisAsymmetryRatio||0)).toFixed(1)+'%. Отдельные границы ручной привязки: X ±'+poseUncertainty.positionX.toFixed(2)+' м, Y ±'+poseUncertainty.positionY.toFixed(2)+' м, курс ±'+poseUncertainty.headingDeg.toFixed(1)+'°. Это заданные абсолютные границы, не статистика камеры. Перестройте маршрут.');
 }else{if(c.width!==fw||c.height!==fh)throw Error('Размер кадра изменился. Повторите калибровку.');if(!geometry.validQuad(pts,1000,20))throw Error('Углы ворот должны образовывать чёткий четырёхугольник по часовой стрелке.');const {sigmaPixels,sigmaReference}=readMeasurementUncertainty();const measurement=geometry.estimateUncertainty({referencePoints,referenceWidth,referenceHeight,measuredPoints:pts,sigmaPixels,sigmaReferenceWidth:sigmaReference,sigmaReferenceHeight:sigmaReference});const w=measurement.width,h=measurement.height;const conditioningWarning=measurement.conditioningWarning===true;const nonlinearWarning=measurement.nonlinearSensitivityAvailable!==true||measurement.nonlinearWarning===true;const shape=measurement.shapeDiagnostics||{};const shapeWarning=measurement.shapeWarning===true;const nonlinearText=' Нелинейная проверка ±1σ: '+(measurement.nonlinearSensitivityAvailable?'выполнена; расхождение линейной и конечной оценки ширины '+(100*Number(measurement.nonlinearMismatchWidth||0)).toFixed(1)+'%, нормированный чётный сдвиг '+(100*Number(measurement.maxAxisAsymmetryRatio||0)).toFixed(1)+'%, порог 25%.':'недоступна; результат не переносится на карту.');const shapeText=' Геометрия проёма: разброс ширины '+(100*Number(shape.widthSpreadRatio||0)).toFixed(1)+'%, разброс высоты '+(100*Number(shape.heightSpreadRatio||0)).toFixed(1)+'%, отклонение угла '+Number(shape.maxOrthogonalityErrorDeg||0).toFixed(1)+'°, расхождение диагоналей '+(100*Number(shape.diagonalSpreadRatio||0)).toFixed(1)+'%.';const dimensions='Предварительный результат: ширина ≈ '+w.toFixed(2)+' м (локальная оценка чувствительности ±'+measurement.sigmaWidth.toFixed(3)+' м, 1σ); высота ≈ '+h.toFixed(2)+' м (±'+measurement.sigmaHeight.toFixed(3)+' м, 1σ).'+shapeText+nonlinearText;if(conditioningWarning){$('gateResult').textContent='Калибровка численно неустойчива. '+dimensions+' Результат не передан в настройки ворот. Увеличьте эталон в кадре, измените угол съёмки и выполните калибровку заново.';say('Калибровка плохо обусловлена. Предварительные размеры показаны только для диагностики; ширина ворот не обновлена. Увеличьте площадь эталона в кадре и повторите калибровку.');}else if(nonlinearWarning){$('gateResult').textContent='Нелинейная проверка неопределённости не прошла. '+dimensions+' Результат не передан в настройки ворот. Повторите калибровку с более крупным эталоном, меньшей перспективной деформацией или обоснованно меньшей погрешностью отметки.';say('Нелинейная проверка погрешности не пройдена. Ширина ворот не обновлена; повторите калибровку и измерение.');}else if(shapeWarning){$('gateResult').textContent='Форма измеренного проёма не соответствует прямоугольнику в заданных пределах. '+dimensions+' Результат не передан в настройки ворот. Проверьте порядок четырёх углов, плоскость эталона и проёма, затем повторите измерение.';say('Форма измеренного проёма заметно отличается от прямоугольника. Ширина ворот не обновлена; проверьте четыре угла и положение эталона в той же плоскости.');}else{
- const anchor={x:Number($('gateCenterX').value),y:Number($('gateCenterY').value)};
- const headingDeg=Number($('gateHeadingDeg').value);
- const registration=geometry.registerGateOnMap(measurement,anchor,headingDeg*Math.PI/180);
+ if(gateReadings.length>=10)throw Error('Достигнут предел 10 повторных кадров. Очистите серию и начните заново.');
+ const tolerances=readGateRepeatabilityTolerance();
+ if(gateRepeatabilityTolerances&&
+    (Math.abs(tolerances.widthTolerance-gateRepeatabilityTolerances.widthTolerance)>1e-12||
+     Math.abs(tolerances.heightTolerance-gateRepeatabilityTolerances.heightTolerance)>1e-12)){
+  throw Error('Допуски повторяемости изменились внутри серии. Очистите серию и начните заново.');
+ }
+ const mapPose=readGateMapPose();
+ if(gateRepeatabilityPose&&(
+    Math.abs(mapPose.anchor.x-gateRepeatabilityPose.anchor.x)>1e-9||
+    Math.abs(mapPose.anchor.y-gateRepeatabilityPose.anchor.y)>1e-9||
+    Math.abs(mapPose.headingDeg-gateRepeatabilityPose.headingDeg)>1e-9)){
+  throw Error('Координаты центра или направление ворот изменились внутри серии. Очистите серию и начните заново.');
+ }
+ const measurementConfig={referenceWidth,referenceHeight,sigmaPixels,sigmaReference};
+ if(gateRepeatabilityMeasurementConfig&&(
+    Math.abs(measurementConfig.referenceWidth-gateRepeatabilityMeasurementConfig.referenceWidth)>1e-12||
+    Math.abs(measurementConfig.referenceHeight-gateRepeatabilityMeasurementConfig.referenceHeight)>1e-12||
+    Math.abs(measurementConfig.sigmaPixels-gateRepeatabilityMeasurementConfig.sigmaPixels)>1e-12||
+    Math.abs(measurementConfig.sigmaReference-gateRepeatabilityMeasurementConfig.sigmaReference)>1e-12)){
+  throw Error('Размер эталона или допущения неопределённости изменились внутри серии. Очистите серию и начните заново.');
+ }
+ if(!gateRepeatabilityTolerances)gateRepeatabilityTolerances=tolerances;
+ if(!gateRepeatabilityPose)gateRepeatabilityPose=mapPose;
+ if(!gateRepeatabilityMeasurementConfig)gateRepeatabilityMeasurementConfig=measurementConfig;
+ gateReadings.push({width:w,height:h,sigmaWidth:measurement.sigmaWidth,sigmaHeight:measurement.sigmaHeight});
+ lastGateMeasurementFrameId=frameCaptureId;
+ lastGateFrameTime=frameCaptureTime;
+ if(gateReadings.length<3){
+  $('cameraRepeatabilityStatus').textContent='Собрано '+gateReadings.length+'/3 отдельных кадров. Для следующего повтора нажмите «Сбросить калибровку», дождитесь нового кадра и заново отметьте эталон и ворота.';
+  $('gateResult').textContent=dimensions+' Повторяемость пока не оценена: собрано '+gateReadings.length+' из 3 отдельных кадров. На карту ничего не перенесено.';
+  say('Повтор '+gateReadings.length+' из 3 сохранён только в текущей серии. Сбросьте калибровку, дождитесь нового кадра и повторите калибровку эталона и ворот.');
+  mode=null;pts=[];draw();return;
+ }
+ const repeatability=geometry.summarizeRepeatability(gateReadings,gateRepeatabilityTolerances);
+ const repeatabilityText=' Повторяемость по '+repeatability.count+' отдельным кадрам: средняя ширина '+repeatability.meanWidth.toFixed(3)+' м, диапазон '+repeatability.rangeWidth.toFixed(3)+' м, выборочное s '+repeatability.sampleStdDevWidth.toFixed(3)+' м (допуск '+repeatability.widthTolerance.toFixed(3)+' м); средняя высота '+repeatability.meanHeight.toFixed(3)+' м, диапазон '+repeatability.rangeHeight.toFixed(3)+' м, выборочное s '+repeatability.sampleStdDevHeight.toFixed(3)+' м (допуск '+repeatability.heightTolerance.toFixed(3)+' м). Screening-оболочки чувствительности: ширина ±'+repeatability.widthEnvelopeBound.toFixed(3)+' м, высота ±'+repeatability.heightEnvelopeBound.toFixed(3)+' м.';
+ $('cameraRepeatabilityStatus').textContent=repeatabilityText+(repeatability.withinTolerance?' Допуск повторяемости выполнен; карта будет обновлена с консервативной оболочкой.':' Разброс превышает операторский допуск. Карта не обновлена; очистите серию и повторите измерения.');
+ if(!repeatability.withinTolerance){
+  gateRepeatabilityComplete=true;
+  $('gateResult').textContent=dimensions+repeatabilityText+' Повторяемость не подтверждена; результат не передан в настройки ворот.';
+  say('Повторяемость не подтверждена. Разброс ширины или высоты превышает введённый допуск. Ворота не обновлены; очистите серию и повторите измерения.');
+  mode=null;pts=[];draw();return;
+ }
+ const anchor=gateRepeatabilityPose.anchor;
+ const headingDeg=gateRepeatabilityPose.headingDeg;
+ const registration=geometry.registerGateOnMap(measurement,anchor,headingDeg*Math.PI/180,repeatability);
  const applyRegistration=window.TruckVisionApplyGateRegistration;
  if(typeof applyRegistration!=='function')throw Error('Привязка ворот к карте недоступна. Обновите приложение и повторите измерение.');
  if(applyRegistration(registration)!==true)throw Error('Привязка ворот не прошла проверку. Координаты и ширина не применены.');
- $('gateResult').textContent=dimensions+' Измеренная ширина, вручную заданные координаты центра ('+registration.centerX.toFixed(2)+', '+registration.centerY.toFixed(2)+' м) и курс линии ворот ('+registration.headingDeg.toFixed(1)+'°) перенесены в карту. Косяки ворот включены как препятствия. Ширина оболочки ±'+registration.widthUncertaintyBound.toFixed(3)+' м (приблизительно 2σ); расчётный чистый проём сужен до '+(registration.clearWidth-registration.widthUncertaintyBound).toFixed(3)+' м. Центр и курс не определяются камерой — их нужно задать в разделе «Ворота» и указать их допуски. Перепроверьте рулеткой.';
- say('Измерение применено к карте: ширина '+w.toFixed(2)+' м; центр ('+registration.centerX.toFixed(2)+', '+registration.centerY.toFixed(2)+' м); направление линии '+registration.headingDeg.toFixed(1)+'°. Косяки включены. Оценка чувствительности (1σ): ширина ±'+measurement.sigmaWidth.toFixed(3)+' м; высота ±'+measurement.sigmaHeight.toFixed(3)+' м. Нелинейная осевая проверка ±1σ выполнена; расхождение ширины '+(100*Number(measurement.nonlinearMismatchWidth||0)).toFixed(1)+'%, асимметрия '+(100*Number(measurement.maxAxisAsymmetryRatio||0)).toFixed(1)+'%. Для геометрии ворот применена отдельная оболочка ширины ±'+registration.widthUncertaintyBound.toFixed(3)+' м (2σ, приблизительное нормальное приближение); расчётный чистый проём сужен до '+(registration.clearWidth-registration.widthUncertaintyBound).toFixed(3)+' м. Положение и курс введены вручную, их погрешность не определена камерой. Это не полная точность камеры и не гарантия безопасного проезда.');
+ gateRepeatabilityComplete=true;
+ $('gateResult').textContent=dimensions+repeatabilityText+' Измеренная средняя ширина, вручную заданные координаты центра ('+registration.centerX.toFixed(2)+', '+registration.centerY.toFixed(2)+' м) и курс линии ворот ('+registration.headingDeg.toFixed(1)+'°) перенесены в карту. Косяки ворот включены как препятствия. Ширина оболочки ±'+registration.widthUncertaintyBound.toFixed(3)+' м (наблюдаемый разброс плюс максимальная оценка 2σ на кадр, screening-оценка, не жёсткая граница); расчётный чистый проём сужен до '+(registration.clearWidth-registration.widthUncertaintyBound).toFixed(3)+' м. Центр и курс не определяются камерой — их нужно задать в разделе «Ворота» и указать их допуски. Перепроверьте рулеткой.';
+ say('Измерение применено к карте: средняя ширина '+registration.clearWidth.toFixed(2)+' м; центр ('+registration.centerX.toFixed(2)+', '+registration.centerY.toFixed(2)+' м); направление линии '+registration.headingDeg.toFixed(1)+'°. Косяки включены. Оценка чувствительности (1σ): ширина ±'+measurement.sigmaWidth.toFixed(3)+' м; высота ±'+measurement.sigmaHeight.toFixed(3)+' м. Нелинейная осевая проверка ±1σ выполнена; расхождение ширины '+(100*Number(measurement.nonlinearMismatchWidth||0)).toFixed(1)+'%, асимметрия '+(100*Number(measurement.maxAxisAsymmetryRatio||0)).toFixed(1)+'%. Для геометрии ворот применена отдельная оболочка ширины ±'+registration.widthUncertaintyBound.toFixed(3)+' м (наблюдаемый разброс плюс максимальная оценка 2σ на кадр; screening-оценка, не жёсткая граница); расчётный чистый проём сужен до '+(registration.clearWidth-registration.widthUncertaintyBound).toFixed(3)+' м. Положение и курс введены вручную, их погрешность не определена камерой. Это не полная точность камеры и не гарантия безопасного проезда.');
 }mode=null;pts=[];}}catch(err){const failedMode=mode;mode=null;pts=[];const unchanged=failedMode==='obstacle'?'Препятствие не добавлено. Проверьте координаты и повторите измерение.':'Ширина ворот не обновлена; проверьте актуальное значение рулеткой.';say((err.message||'Ошибка измерения. Повторите калибровку.')+' '+unchanged);}draw();});
-v.addEventListener('resize',draw);window.addEventListener('resize',draw);window.addEventListener('orientationchange',()=>{Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];resumeFrame();draw();say('Ориентация телефона изменилась. Калибровка сброшена. Повторите калибровку.');});['cameraReferenceWidth','cameraReferenceHeight'].forEach(id=>$(id).addEventListener('input',()=>{if(Hcal){Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];draw();say('Размер эталона изменён. Повторите калибровку перед измерением ворот.');}}));$('cameraStart').addEventListener('click',start);$('cameraStop').addEventListener('click',stop);$('cameraCalibrate').addEventListener('click',()=>choose('reference'));$('cameraMeasureGate').addEventListener('click',()=>choose('gate'));$('cameraMeasureObstacle')?.addEventListener('click',()=>choose('obstacle'));$('cameraClearObstacles')?.addEventListener('click',()=>{const clear=window.TruckVisionClearCameraObstacles;if(typeof clear==='function'&&clear()===true)say('Добавленные камерой препятствия удалены с карты.');});$('cameraReset').addEventListener('click',()=>{Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];draw();resumeFrame();say(stream?'Калибровка сброшена; видеопоток возобновлён. Переместите камеру к новой плоскости и выполните калибровку заново.':'Калибровка сброшена.');});v.addEventListener('loadedmetadata',draw);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&(stream||startPending)){stop();say('Страница перешла в фон. Камера остановлена, калибровка сброшена; вернитесь и нажмите «Включить камеру».');}});window.addEventListener('pagehide',stop);
+v.addEventListener('resize',draw);window.addEventListener('resize',draw);window.addEventListener('orientationchange',()=>{Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];clearGateRepeatability(true);resumeFrame();draw();say('Ориентация телефона изменилась. Калибровка и серия повторов сброшены. Повторите калибровку.');});['cameraReferenceWidth','cameraReferenceHeight'].forEach(id=>$(id).addEventListener('input',()=>{Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];clearGateRepeatability(false);if(frameLocked)resumeFrame();draw();say('Размер эталона изменён. Калибровка и серия повторов сброшены; дождитесь нового кадра и повторите калибровку.');}));['cameraPointSigma','cameraReferenceSigma'].forEach(id=>$(id).addEventListener('input',()=>{Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];clearGateRepeatability(false);if(frameLocked)resumeFrame();draw();say('Допущения неопределённости изменены. Калибровка и серия повторов сброшены; дождитесь нового кадра и повторите калибровку.');}));$('cameraStart').addEventListener('click',start);$('cameraStop').addEventListener('click',stop);$('cameraCalibrate').addEventListener('click',()=>choose('reference'));$('cameraMeasureGate').addEventListener('click',()=>choose('gate'));$('cameraClearGateRepeats')?.addEventListener('click',()=>{clearGateRepeatability(false);say('Серия повторных измерений очищена. Для нового кадра сбросьте калибровку и дождитесь обновления изображения.');});$('cameraMeasureObstacle')?.addEventListener('click',()=>choose('obstacle'));$('cameraClearObstacles')?.addEventListener('click',()=>{const clear=window.TruckVisionClearCameraObstacles;if(typeof clear==='function'&&clear()===true)say('Добавленные камерой препятствия удалены с карты.');});$('cameraReset').addEventListener('click',()=>{Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];draw();resumeFrame();say(stream?'Калибровка сброшена; видеопоток возобновлён. Серия повторов сохранена. Дождитесь нового кадра и выполните калибровку заново.':'Калибровка сброшена.');});v.addEventListener('loadedmetadata',draw);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&(stream||startPending)){stop();say('Страница перешла в фон. Камера остановлена, калибровка сброшена; вернитесь и нажмите «Включить камеру».');}});window.addEventListener('pagehide',stop);
 })();

@@ -10,10 +10,10 @@ function makeHarness(options={}){
   const el={id,value:'',textContent:'',style:{},listeners:{},addEventListener(type,fn){this.listeners[type]=fn;},fire(type,event={}){return this.listeners[type]?.(event);}};
   elements[id]=el;return el;
  };
- const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','cameraCalibrate','cameraMeasureGate','cameraMeasureObstacle','cameraReset','cameraObstacleName','cameraObstacleHeading','cameraObstacleX','cameraObstacleY','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg','gateCenterX','gateCenterY','gateHeadingDeg','gateResult'];
+ const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','cameraCalibrate','cameraMeasureGate','cameraMeasureObstacle','cameraReset','cameraObstacleName','cameraObstacleHeading','cameraObstacleX','cameraObstacleY','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg','gateCenterX','gateCenterY','gateHeadingDeg','gateResult','cameraRepeatabilityWidthTolerance','cameraRepeatabilityHeightTolerance','cameraRepeatabilityStatus','cameraClearGateRepeats'];
  ids.forEach(makeElement);
  const video=elements.measureVideo;
- Object.assign(video,{videoWidth:640,videoHeight:480,clientWidth:640,clientHeight:480,offsetLeft:0,offsetTop:0,readyState:4,paused:true,srcObject:null,playCalls:0,pauseCalls:0,play(){this.playCalls++;this.paused=false;return Promise.resolve();},pause(){this.pauseCalls++;this.paused=true;}});
+ Object.assign(video,{videoWidth:640,videoHeight:480,clientWidth:640,clientHeight:480,offsetLeft:0,offsetTop:0,readyState:4,currentTime:0.1,paused:true,srcObject:null,playCalls:0,pauseCalls:0,play(){this.playCalls++;this.currentTime+=0.1;this.paused=false;return Promise.resolve();},pause(){this.pauseCalls++;this.paused=true;}});
  const context={clearRect(){},beginPath(){},moveTo(){},lineTo(){},closePath(){},stroke(){},arc(){},fill(){},fillText(){}};
  const canvas=elements.measureOverlay;
  Object.assign(canvas,{width:0,height:0,getContext(){return context;},getBoundingClientRect(){return {left:0,top:0,width:this.width,height:this.height};}});
@@ -21,6 +21,8 @@ function makeHarness(options={}){
  Object.assign(elements.cameraReferenceHeight,{value:'0.210'});
  Object.assign(elements.cameraPointSigma,{value:'2'});
  Object.assign(elements.cameraReferenceSigma,{value:'2'});
+ Object.assign(elements.cameraRepeatabilityWidthTolerance,{value:'0.02'});
+ Object.assign(elements.cameraRepeatabilityHeightTolerance,{value:'0.02'});
  Object.assign(elements.gateCenterX,{value:'12'});
  Object.assign(elements.gateCenterY,{value:'0'});
  Object.assign(elements.gateHeadingDeg,{value:'90'});
@@ -49,7 +51,12 @@ function makeHarness(options={}){
   validQuad(){return true;},
   homography(){return [1,0,0,0,1,0,0,0];},
   estimateUncertainty({measuredPoints}){return {width:4,height:2,points:measuredPoints.map(p=>({...p})),sigmaWidth:0.01,sigmaHeight:0.02,conditioningWarning:false,shapeWarning:false,nonlinearSensitivityAvailable:options.nonlinearSensitivityAvailable??true,nonlinearWarning:options.nonlinearWarning??false,nonlinearMismatchWidth:0.01,maxAxisAsymmetryRatio:0.02,shapeDiagnostics:{widthSpreadRatio:0,heightSpreadRatio:0,maxOrthogonalityErrorDeg:0,diagonalSpreadRatio:0}};},
-  registerGateOnMap(){return {centerX:12,centerY:0,headingDeg:90,clearWidth:4,widthUncertaintyBound:0.02,openingStart:{x:12,y:-2},openingEnd:{x:12,y:2}};}
+  summarizeRepeatability(readings,options){
+  const stats=key=>{const values=readings.map(r=>r[key]);const mean=values.reduce((a,b)=>a+b,0)/values.length;return{mean,range:Math.max(...values)-Math.min(...values),maxDeviation:Math.max(...values.map(v=>Math.abs(v-mean))),sampleStdDev:0};};
+  const w=stats('width'),h=stats('height');
+  return{count:readings.length,meanWidth:w.mean,meanHeight:h.mean,sampleStdDevWidth:w.sampleStdDev,sampleStdDevHeight:h.sampleStdDev,rangeWidth:w.range,rangeHeight:h.range,maxDeviationWidth:w.maxDeviation,maxDeviationHeight:h.maxDeviation,widthTolerance:options.widthTolerance,heightTolerance:options.heightTolerance,widthEnvelopeBound:Math.max(...readings.map(r=>Math.abs(r.width-w.mean)+2*r.sigmaWidth)),heightEnvelopeBound:Math.max(...readings.map(r=>Math.abs(r.height-h.mean)+2*r.sigmaHeight)),withinTolerance:w.range<=options.widthTolerance&&h.range<=options.heightTolerance,status:'repeatable-within-operator-tolerance',uncertaintyModel:'observed-range-plus-per-frame-2sigma-screening'};
+ },
+ registerGateOnMap(){return {centerX:12,centerY:0,headingDeg:90,clearWidth:4,clearHeight:2,widthUncertaintyBound:0.02,heightUncertaintyBound:0.04,openingStart:{x:12,y:-2},openingEnd:{x:12,y:2}};}
  };
  const window={TruckVisionCameraGeometry:geometry,TruckVisionApplyGateRegistration(){registrationCalls++;return true;},TruckVisionAddCameraObstacle(){obstacleCalls++;return true;},addEventListener(){}};
  const documentListeners={};
@@ -75,19 +82,22 @@ test('camera permission is requested only after an explicit user action',async()
  assert.equal(app.video.paused,false);
 });
 
-test('calibration and gate points use one frozen frame until the user resets calibration',async()=>{
+test('calibration and gate points use three separately frozen frames before map registration',async()=>{
  const app=makeHarness();
  await app.elements.cameraStart.fire('click');
  assert.equal(app.video.paused,false);
- app.elements.cameraCalibrate.fire('click');
- assert.equal(app.video.paused,true,'calibration must freeze the live video frame');
- app.tapQuad();
- assert.match(app.elements.cameraStatus.textContent,/Плоскость откалибрована/i);
- app.elements.cameraMeasureGate.fire('click');
- assert.equal(app.video.paused,true,'gate measurement must keep the calibration frame frozen');
- app.tapQuad();
- assert.equal(app.registrationCalls,1);
- assert.equal(app.video.paused,true,'successful measurement must not silently resume a moving image');
+ for(let index=0;index<3;index++){
+  if(index)app.elements.cameraReset.fire('click');
+  app.elements.cameraCalibrate.fire('click');
+  assert.equal(app.video.paused,true,'calibration must freeze the live video frame');
+  app.tapQuad();
+  assert.match(app.elements.cameraStatus.textContent,/Плоскость откалибрована/i);
+  app.elements.cameraMeasureGate.fire('click');
+  assert.equal(app.video.paused,true,'gate measurement must keep the calibration frame frozen');
+  app.tapQuad();
+  assert.equal(app.registrationCalls,index===2?1:0);
+ }
+ assert.equal(app.video.paused,true,'successful registration must not silently resume a moving image');
  app.elements.cameraReset.fire('click');
  assert.equal(app.video.paused,false,'reset must resume the live camera before a new calibration');
  app.elements.cameraMeasureGate.fire('click');
@@ -131,10 +141,13 @@ test('an unexpectedly ended camera track clears stale state and allows a fresh p
 test('gate measurement is not transferred to the map when nonlinear uncertainty validation warns',async()=>{
  const app=makeHarness({nonlinearWarning:true});
  await app.elements.cameraStart.fire('click');
- app.elements.cameraCalibrate.fire('click');
- app.tapQuad();
- app.elements.cameraMeasureGate.fire('click');
- app.tapQuad();
+ for(let index=0;index<3;index++){
+  if(index)app.elements.cameraReset.fire('click');
+  app.elements.cameraCalibrate.fire('click');
+  app.tapQuad();
+  app.elements.cameraMeasureGate.fire('click');
+  app.tapQuad();
+ }
  assert.equal(app.registrationCalls,0);
  assert.match(app.elements.gateResult.textContent,/Нелинейная проверка неопределённости не прошла/);
  assert.match(app.elements.cameraStatus.textContent,/Ширина ворот не обновлена/);
