@@ -948,7 +948,7 @@
  }
 
 
- // Returns separate sampled center paths and RK4/SImpson path-length estimates for every tire footprint.
+ // Returns separate sampled center paths and RK4/Simpson path-length estimates for every tire footprint.
  // stepDistance is the tractor rear-axle reference distance; missing stepDistance permits sampled
  // chords only and never produces an integrated estimate.
  function wheelTireTrajectoryDiagnostics(path,params){
