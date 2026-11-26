@@ -2208,3 +2208,73 @@ test('per-wheel adaptive displacement rate uses the configured track of its own 
  const widerThirdAxleRate=measureRate(3.4);
  assert.ok(widerThirdAxleRate>commonRate);
 });
+
+
+test('vertical wheel clearance shifts component and obstacle heights along the configured road grade',()=>{
+ const p={
+  ...params,
+  vehicleVerticalProfiles:{
+   'tractor-front-wheel':{zMin:0,zMax:1},
+   'tractor-rear-wheel':{zMin:0,zMax:1},
+   'trailer-axle-1-wheel':{zMin:0,zMax:1},
+   'trailer-axle-2-wheel':{zMin:0,zMax:1},
+   'trailer-axle-3-wheel':{zMin:0,zMax:1}
+  }
+ };
+ const q={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
+ const target=physics.wheelFootprints(q,p,0).find(wheel=>wheel.name==='левое переднее колесо тягача');
+ assert.ok(target);
+ const obstacle={
+  name:'upslope vertical beam',
+  x:target.center.x+0.8,y:target.center.y-0.05,w:0.1,h:0.1,
+  zMin:1.2,zMax:1.4
+ };
+ const flat=planner.analyzeWheelTrajectoryClearance([q],[obstacle],p);
+ const uphill=planner.analyzeWheelTrajectoryClearance([q],[obstacle],{
+  ...p,
+  roadSurface:{
+   originX:target.center.x,originY:target.center.y,originZ:0,
+   gradeX:0.1,gradeY:0,
+   originZUncertainty:0,gradeXUncertainty:0,gradeYUncertainty:0,
+   surfaceResidualUncertainty:0
+  }
+ });
+ const flatWheel=flat.wheels.find(wheel=>wheel.name===target.name);
+ const uphillWheel=uphill.wheels.find(wheel=>wheel.name===target.name);
+ assert.ok(flatWheel&&uphillWheel);
+ assert.equal(flat.roadSurfaceStatus,'flat-reference-assumed');
+ assert.equal(uphill.roadSurfaceStatus,'configured-planar-surface-with-bounds');
+ assert.equal(flatWheel.minimumSampledPolygonDetail.roadSurfaceStatus,'flat-reference-assumed');
+ assert.equal(uphillWheel.minimumSampledPolygonDetail.roadSurfaceStatus,'configured-planar-surface-with-bounds');
+ assert.ok(uphillWheel.minimumSampledPolygonDetail.verticalGap>flatWheel.minimumSampledPolygonDetail.verticalGap);
+ assert.ok(uphillWheel.minimumSampledPolygonClearance>flatWheel.minimumSampledPolygonClearance);
+});
+
+test('downhill road grade reduces the modeled vertical separation and remains bounded',()=>{
+ const p={
+  ...params,
+  vehicleVerticalProfiles:{'tractor-front-wheel':{zMin:0,zMax:1}}
+ };
+ const q={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
+ const target=physics.wheelFootprints(q,p,0).find(wheel=>wheel.name==='левое переднее колесо тягача');
+ const obstacle={
+  name:'downhill vertical beam',
+  x:target.center.x+0.8,y:target.center.y-0.05,w:0.1,h:0.1,
+  zMin:1.2,zMax:1.4
+ };
+ const flat=planner.analyzeWheelTrajectoryClearance([q],[obstacle],p);
+ const downhill=planner.analyzeWheelTrajectoryClearance([q],[obstacle],{
+  ...p,
+  roadSurface:{
+   originX:target.center.x,originY:target.center.y,originZ:0,
+   gradeX:-0.1,gradeY:0,
+   originZUncertainty:0.01,gradeXUncertainty:0.002,gradeYUncertainty:0,
+   surfaceResidualUncertainty:0.01
+  }
+ });
+ const a=flat.wheels.find(wheel=>wheel.name===target.name);
+ const b=downhill.wheels.find(wheel=>wheel.name===target.name);
+ assert.ok(a&&b);
+ assert.ok(b.minimumSampledPolygonDetail.verticalGap<a.minimumSampledPolygonDetail.verticalGap);
+ assert.ok(b.minimumSampledPolygonDetail.verticalGap>=0);
+});
