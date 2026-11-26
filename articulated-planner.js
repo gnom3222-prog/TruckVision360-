@@ -877,10 +877,16 @@
      to:gear,
      at:'segment-start',
      dwellTimeModelled:false,
+     durationSeconds:null,
+     durationKnown:false,
+     timeStatus:'unknown',
+     requiresStopBeforeChange:gearTransitionKind==='gear-change',
+     requiresOperatorConfirmation:true,
+     confirmationMode:gearTransitionKind==='gear-change'?'explicit-playback-confirmation':'route-start',
      spatialSegmentUsesGear:segmentGear
     };
     segmentDiagnostics.push({
-     fromSample:index-1,toSample:index,stepDistance,
+     fromSample:index-1,toSample:index,stepDistance,distanceAlongRoute:segmentStartDistance,
      status:intermediateSampleStatus,endpointResidual,
      intervalCount,sampleCount:sampleFractions.length,
      sampleFractions,adaptiveCapReached,
@@ -895,6 +901,20 @@
    previousState=state;
    previousChecks=currentChecks;
   }
+  const temporalEvents=segmentDiagnostics.flatMap(segment=>{
+   const transition=segment.gearTransition;
+   if(!transition)return [];
+   return [{
+    type:transition.kind,
+    from:transition.from,to:transition.to,
+    segmentIndex:segment.toSample,
+    distanceAlongRoute:segment.distanceAlongRoute,
+    requiresStopBeforeChange:transition.requiresStopBeforeChange,
+    requiresOperatorConfirmation:transition.requiresOperatorConfirmation,
+    confirmationMode:transition.confirmationMode,
+    durationSeconds:null,durationKnown:false,timeStatus:'unknown'
+   }];
+  });
   const wheels=[...records.values()];
   const limitingWheel=wheels.reduce((best,wheel)=>
    Number.isFinite(wheel.minimumClearanceLowerBound)&&
@@ -908,6 +928,8 @@
    segmentsWithGearChangeAtStart,segmentsWithInitialGearSelection,
    segmentsWithSteeringChangeAtStart,segmentsWithInitialSteeringSelection,
    controlStartPosesAnalyzed,controlStartWheelChecks,
+   temporalEvents,totalDurationSeconds:null,timeModelComplete:false,
+   timeModelStatus:'incomplete-spatial-only; motion timing and gear-shift duration are not measured',
    intermediateSampleFractions:baselineIntermediateSampleFractions,
    segmentsAtAdaptiveSamplingCap,maxAdaptiveIntervalsUsed,maximumWheelCenterDisplacementBound,
    targetMaxWheelCenterDisplacementPerInterval,minAdaptiveIntervals,maxAdaptiveIntervals,
@@ -915,7 +937,7 @@
    intermediateSamplingMethod:'adaptive-rk4-samples-with-per-interval-circumscribed-envelope-lower-bound',
    envelope:'circumscribed-16-gon-around-rectangular-tire-footprint',
    method:'per-wheel center displacement rate bound refined by adaptive RK4 samples and half-interval envelope-distance bounds',
-   note:'Нижняя оценка использует модельную верхнюю границу скорости центра колеса на каждом интервале и минимум расстояний в его концах. Она применима только при согласованной RK4-реконструкции сегмента и корректных параметрах модели; при достижении лимита число интервалов ограничивается 64, что отражается в диагностике. Это не сертифицированная непрерывная проверка реального автопоезда.'
+   note:'Нижняя оценка использует модельную верхнюю границу скорости центра колеса на каждом интервале и минимум расстояний в его концах. Она применима только при согласованной RK4-реконструкции сегмента и корректных параметрах модели; при достижении лимита число интервалов ограничивается 64, что отражается в диагностике. События смены передачи представлены отдельно с неизвестной длительностью; это не временная модель и не сертифицированная непрерывная проверка реального автопоезда.'
   };
  }
 
