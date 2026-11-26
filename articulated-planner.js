@@ -459,19 +459,6 @@
     }
    }
    if(index>0){
-    const previousGear=previousState.gear===-1?-1:1;
-    const previousSteer=Number.isFinite(previousState.steer)?previousState.steer:0;
-    const previousGearKnown=previousState.gearKnown!==false;
-    const previousSteerKnown=previousState.steerKnown!==false;
-    const initialGearSelectionAtSegmentStart=!previousGearKnown;
-    const gearChangedAtSegmentStart=previousGearKnown&&previousGear!==gear;
-    const initialSteeringSelectionAtSegmentStart=!previousSteerKnown;
-    const steeringChangedAtSegmentStart=previousSteerKnown&&
-     Math.abs(norm(steer-previousSteer))>1e-9;
-    if(initialGearSelectionAtSegmentStart)segmentsWithInitialGearSelection++;
-    if(gearChangedAtSegmentStart)segmentsWithGearChangeAtStart++;
-    if(initialSteeringSelectionAtSegmentStart)segmentsWithInitialSteeringSelection++;
-    if(steeringChangedAtSegmentStart)segmentsWithSteeringChangeAtStart++;
     const stepDistance=state.stepDistance;
     if(!Number.isFinite(stepDistance)||stepDistance<=0){
      throw new Error('Route state '+index+' is missing its positive integration stepDistance; continuous per-part bound cannot be established.');
@@ -612,6 +599,19 @@
    }
    let segmentStartDistance=distanceAlongRoute,stepDistance=null;
    if(index>0){
+    const previousGear=previousState.gear===-1?-1:1;
+    const previousSteer=Number.isFinite(previousState.steer)?previousState.steer:0;
+    const previousGearKnown=previousState.gearKnown!==false;
+    const previousSteerKnown=previousState.steerKnown!==false;
+    const initialGearSelectionAtSegmentStart=!previousGearKnown;
+    const gearChangedAtSegmentStart=previousGearKnown&&previousGear!==gear;
+    const initialSteeringSelectionAtSegmentStart=!previousSteerKnown;
+    const steeringChangedAtSegmentStart=previousSteerKnown&&
+     Math.abs(norm(steer-previousSteer))>1e-9;
+    if(initialGearSelectionAtSegmentStart)segmentsWithInitialGearSelection++;
+    if(gearChangedAtSegmentStart)segmentsWithGearChangeAtStart++;
+    if(initialSteeringSelectionAtSegmentStart)segmentsWithInitialSteeringSelection++;
+    if(steeringChangedAtSegmentStart)segmentsWithSteeringChangeAtStart++;
     stepDistance=state.stepDistance;
     if(!Number.isFinite(stepDistance)||stepDistance<=0){
      throw new Error('Route state '+index+' is missing its positive integration stepDistance; per-wheel swept bound cannot be established.');
