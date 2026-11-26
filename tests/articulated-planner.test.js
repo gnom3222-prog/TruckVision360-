@@ -2175,3 +2175,24 @@ test('swept trailer displacement bound includes each axle track and asymmetric a
  assert.ok(widerThird.trailer>base.trailer,
   'a wider third axle track must expand the swept displacement envelope');
 });
+
+test('per-wheel adaptive displacement rate uses the configured track of its own trailer axle',()=>{
+ const measureRate=thirdAxleTrack=>{
+  const p={
+   ...params,trailerLength:13.6,trailerWidth:2.9,trailerAxleSpacing:1.3,
+   trailerTrack:2.79,trailerAxle3Track:thirdAxleTrack,tireLength:0.72,tireWidth:0.44
+  };
+  const steer=0.45,stepDistance=0.8;
+  const start={x:0,y:0,psi:0.25,psiT:-0.2,gear:1,steer,stepDistance:0};
+  const end=physics.rk4(start,0.7,steer,stepDistance/0.7,p);
+  const result=planner.analyzeWheelTrajectoryClearance(
+   [start,{...end,gear:1,steer,stepDistance}],
+   [{x:100,y:100,w:1,h:1,name:'distant reference obstacle'}],p
+  );
+  assert.equal(result.segmentsWithIntermediateKinematicSamples,1);
+  return result.segmentDiagnostics[0].maxWheelCenterRatePerMeter;
+ };
+ const commonRate=measureRate(2.79);
+ const widerThirdAxleRate=measureRate(3.4);
+ assert.ok(widerThirdAxleRate>commonRate);
+});
