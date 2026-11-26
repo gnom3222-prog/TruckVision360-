@@ -557,3 +557,17 @@ test('clearing repeat readings does not allow reuse of the same frozen frame',as
  assert.match(camera.elements.cameraStatus.textContent,/Этот кадр уже использован/);
  camera.fire('cameraStop','click');
 });
+
+test('camera gate repeatability requires explicit operator tolerances before collecting a reading',async()=>{
+ const camera=bootCamera();
+ camera.elements.cameraRepeatabilityWidthTolerance.value='';
+ await camera.fire('cameraStart','click');
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
+ assert.equal(camera.appliedRegistrations.length,0);
+ assert.match(camera.elements.cameraStatus.textContent,/операторские допуски разброса/);
+ assert.match(camera.elements.cameraRepeatabilityStatus.textContent,/Повторяемость не оценена/);
+ camera.fire('cameraStop','click');
+});
