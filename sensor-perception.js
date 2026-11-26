@@ -37,6 +37,7 @@
         !finite(range.zMin)||!finite(range.zMax)||range.zMin< -2||range.zMax>30||range.zMax<=range.zMin){
       errors.push(p+'.verticalRange должен содержать измеренные zMin/zMax в диапазоне −2…30 м.');
      }
+     if(!range||range.reference!=='map-ground')errors.push(p+'.verticalRange.reference должен явно указывать map-ground.');
      const uncertainty=range&&range.uncertainty!==undefined?range.uncertainty:0;
      if(!finite(uncertainty)||uncertainty<0||uncertainty>2){
       errors.push(p+'.verticalRange.uncertainty должен находиться в диапазоне 0–2 м.');
