@@ -9,12 +9,12 @@ const geometry=require('../camera-geometry.js');
 function bootCamera(options={}){
  const elements={},windowListeners={},documentListeners={};
  const context={clearRect(){},beginPath(){},moveTo(){},lineTo(){},closePath(){},stroke(){},arc(){},fill(){},fillText(){}};
- const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateWidthUncertainty','gateCenterX','gateCenterY','gateHeadingDeg','gateResult','cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg','cameraRepeatabilityWidthTolerance','cameraRepeatabilityHeightTolerance','cameraRepeatabilityStatus','cameraClearGateRepeats'];
+ const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateWidthUncertainty','gateCenterX','gateCenterY','gateHeadingDeg','gateResult','cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg','cameraObstacleRepeatabilityWidthTolerance','cameraObstacleRepeatabilityDepthTolerance','cameraObstacleRepeatabilityStatus','cameraClearObstacleRepeats','cameraRepeatabilityWidthTolerance','cameraRepeatabilityHeightTolerance','cameraRepeatabilityStatus','cameraClearGateRepeats'];
  for(const id of ids){
   elements[id]={
    id,value:({
     cameraReferenceWidth:'2.970',cameraReferenceHeight:'2.100',
-    cameraPointSigma:'2',cameraReferenceSigma:'2',cameraRepeatabilityWidthTolerance:'0.02',cameraRepeatabilityHeightTolerance:'0.02',gateWidth:'3.50',gateWidthUncertainty:'0',gateCenterX:'12',gateCenterY:'0',gateHeadingDeg:'90',cameraObstacleName:'Опорный столб',cameraObstacleX:'3',cameraObstacleY:'4',cameraObstacleHeading:'90',cameraObstaclePositionUncertaintyX:'0.10',cameraObstaclePositionUncertaintyY:'0.15',cameraObstacleHeadingUncertaintyDeg:'2'
+    cameraPointSigma:'2',cameraReferenceSigma:'2',cameraRepeatabilityWidthTolerance:'0.02',cameraRepeatabilityHeightTolerance:'0.02',gateWidth:'3.50',gateWidthUncertainty:'0',gateCenterX:'12',gateCenterY:'0',gateHeadingDeg:'90',cameraObstacleName:'Опорный столб',cameraObstacleX:'3',cameraObstacleY:'4',cameraObstacleHeading:'90',cameraObstaclePositionUncertaintyX:'0.10',cameraObstaclePositionUncertaintyY:'0.15',cameraObstacleHeadingUncertaintyDeg:'2',cameraObstacleRepeatabilityWidthTolerance:'0.02',cameraObstacleRepeatabilityDepthTolerance:'0.02'
    })[id]||'',
    textContent:'',style:{},listeners:{},width:0,height:0,
    videoWidth:id==='measureVideo'?640:0,
@@ -45,7 +45,7 @@ function bootCamera(options={}){
  const win={
   TruckVisionCameraGeometry:options.geometry||geometry,
   TruckVisionApplyGateRegistration:options.applyGateRegistration||((registration)=>{appliedRegistrations.push(registration);elements.gateWidth.value=registration.clearWidth.toFixed(2);elements.gateWidthUncertainty.value=registration.widthUncertaintyBound.toFixed(3);elements.gateCenterX.value=registration.centerX.toFixed(2);elements.gateCenterY.value=registration.centerY.toFixed(2);elements.gateHeadingDeg.value=registration.headingDeg.toFixed(2);return true;}),
-  TruckVisionAddCameraObstacle:options.addCameraObstacle||((measurement,anchor,heading,name,poseUncertainty)=>{obstacleRegistrations.push({measurement,anchor,heading,name,poseUncertainty});return true;}),
+  TruckVisionAddCameraObstacle:options.addCameraObstacle||((measurement,anchor,heading,name,poseUncertainty,repeatability)=>{obstacleRegistrations.push({measurement,anchor,heading,name,poseUncertainty,repeatability});return true;}),
   TruckVisionClearCameraObstacles:options.clearCameraObstacles||(()=>{clearCalls++;return true;}),
   addEventListener(type,fn){(windowListeners[type]??=[]).push(fn);}
  };
