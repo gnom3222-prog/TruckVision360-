@@ -2,6 +2,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const physics=require('../vehicle-physics.js');
+const planner=require('../articulated-planner.js');
 
 const params={
  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
@@ -87,4 +88,16 @@ test('auxiliary envelope uncertainty margin expands all sides of the measured re
  assert.ok(expandedBounds.maxX>nominalBounds.maxX);
  assert.ok(expandedBounds.minY<nominalBounds.minY);
  assert.ok(expandedBounds.maxY>nominalBounds.maxY);
+});
+
+test('swept displacement rates include protruding measured axle hardware envelopes',()=>{
+ const baseRates=planner.sweptDisplacementRatesPerMeter(0.24,params);
+ const p={...params,auxiliaryEnvelopes:[{
+  name:'Выносной кронштейн',anchor:'trailer-axle-1',
+  longitudinalOffset:0.4,lateralOffset:2.7,
+  length:1.2,width:0.8,uncertaintyMargin:0.1
+ }]};
+ const hardwareRates=planner.sweptDisplacementRatesPerMeter(0.24,p);
+ assert.ok(hardwareRates.trailer>baseRates.trailer,
+  'trailer swept bound must include every measured auxiliary-envelope corner');
 });
