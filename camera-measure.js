@@ -5,8 +5,30 @@ const say=s=>status.textContent=s,dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 function lockFrame(){if(frameLocked)return true;if(!stream||!v.videoWidth||!v.videoHeight)return false;v.pause();frameLocked=true;return true;}
 function resumeFrame(){if(!frameLocked)return;frameLocked=false;if(stream)v.play().catch(()=>say('Не удалось возобновить видеопоток. Выключите и снова включите камеру.'));}
 function draw(){if(!v.videoWidth)return;const w=v.videoWidth,h=v.videoHeight;if(c.width!==w||c.height!==h){if(fw&&(w!==fw||h!==fh)){Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];resumeFrame();say('Изменился размер видеокадра. Калибровка сброшена; повторите её.');}c.width=w;c.height=h;fw=w;fh=h;}c.style.left=v.offsetLeft+'px';c.style.top=v.offsetTop+'px';c.style.width=v.clientWidth+'px';c.style.height=v.clientHeight+'px';ctx.clearRect(0,0,w,h);if(pts.length){ctx.strokeStyle='#ffe082';ctx.fillStyle='#ffe082';ctx.lineWidth=Math.max(3,w/500);ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));if(pts.length===4)ctx.closePath();ctx.stroke();pts.forEach((p,i)=>{ctx.beginPath();ctx.arc(p.x,p.y,Math.max(8,w/160),0,7);ctx.fill();ctx.fillStyle='#081321';ctx.font='bold '+Math.max(16,w/40)+'px system-ui';ctx.fillText((mode==='reference'?['1','2','3','4']:['A','B','C','D'])[i],p.x+8,p.y-8);ctx.fillStyle='#ffe082';});}}
-async function start(){if(stream)return;if(!geometry){say('Модуль геометрии камеры не загрузился. Обновите страницу и повторите попытку.');return;}if(!isSecureContext||!navigator.mediaDevices?.getUserMedia){say('Камера доступна только на защищённой HTTPS-странице в Safari.');return;}try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});v.srcObject=stream;await v.play();Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;say('Камера включена. Установите прямоугольный эталон в ту же плоскость, что и объект. При нажатии «Калибровать» текущий кадр будет зафиксирован: отметьте эталон и объект на одном неподвижном изображении.');draw();}catch(e){
- stream?.getTracks().forEach(t=>t.stop());stream=null;v.srcObject=null;
+async function start(){if(stream)return;if(!geometry){say('Модуль геометрии камеры не загрузился. Обновите страницу и повторите попытку.');return;}if(!isSecureContext||!navigator.mediaDevices?.getUserMedia){say('Камера доступна только на защищённой HTTPS-странице в Safari.');return;}try{
+ stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});
+ const activeStream=stream;
+ const handleEnded=()=>{
+  if(stream!==activeStream)return;
+  stream=null;
+  v.pause();
+  v.srcObject=null;
+  Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;
+  ctx.clearRect(0,0,c.width,c.height);
+  say('Видеопоток камеры завершился или был прерван. Калибровка сброшена; нажмите «Включить камеру» и повторите измерение.');
+ };
+ for(const track of activeStream.getTracks()){
+  if(typeof track.addEventListener==='function')track.addEventListener('ended',handleEnded,{once:true});
+  else track.onended=handleEnded;
+ }
+ v.srcObject=activeStream;
+ await v.play();
+ if(stream!==activeStream)throw new Error('Видеопоток камеры завершился до запуска.');
+ Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;
+ say('Камера включена. Установите прямоугольный эталон в ту же плоскость, что и объект. При нажатии «Калибровать» текущий кадр будет зафиксирован: отметьте эталон и объект на одном неподвижном изображении.');
+ draw();
+}catch(e){
+ const failedStream=stream;stream=null;failedStream?.getTracks().forEach(t=>t.stop());v.srcObject=null;
  const messages={
   NotAllowedError:'Доступ к камере запрещён. Разрешите камеру для этого сайта в настройках Safari и нажмите «Включить камеру» ещё раз.',
   NotFoundError:'Камера не найдена. Проверьте, что устройство имеет доступную камеру.',
@@ -16,7 +38,7 @@ async function start(){if(stream)return;if(!geometry){say('Модуль геом
  };
  say(messages[e.name]||('Не удалось включить камеру: '+(e.message||e.name)));
 }}
-function stop(){v.pause();stream?.getTracks().forEach(t=>t.stop());stream=null;v.srcObject=null;Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;ctx.clearRect(0,0,c.width,c.height);say('Камера выключена. При следующем запуске нужна новая калибровка.');}
+function stop(){const activeStream=stream;stream=null;v.pause();activeStream?.getTracks().forEach(t=>t.stop());v.srcObject=null;Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;ctx.clearRect(0,0,c.width,c.height);say('Камера выключена. При следующем запуске нужна новая калибровка.');}
 function choose(m){
  if(!stream||!v.videoWidth){say('Сначала включите камеру.');return;}
  if((m==='gate'||m==='obstacle')&&!Hcal){say('Сначала выполните калибровку.');return;}
