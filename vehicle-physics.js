@@ -27,6 +27,8 @@
   tractorSteeringTrack:{min:1,max:3.5,optional:true},
   tractorRearTrack:{min:1,max:3.5,optional:true},
   trailerTrack:{min:1,max:4.5,optional:true},
+  tractorRearTireGroupWidth:{min:0,max:1.5,optional:true},
+  trailerTireGroupWidth:{min:0,max:1.5,optional:true},
   tireLength:{min:0.2,max:1.5,optional:true},
   tireWidth:{min:0.1,max:0.8,optional:true}
  });
@@ -103,17 +105,34 @@
    }
   }
 
-  // Wheel/track dimensions are calibration inputs, not Volvo factory specifications.
+  // Track and tire-group widths are calibration inputs, not factory specifications.
+  // A zero group width means the model falls back to one tire width per side.
   const frontTrack=params.tractorFrontTrack??2.05;
   const rearTrack=params.tractorRearTrack??2.05;
   const trailerTrack=params.trailerTrack??(Number.isFinite(params.trailerWidth)?params.trailerWidth+0.24:NaN);
   const tireWidth=params.tireWidth??0.44;
-  if([frontTrack,rearTrack,trailerTrack,tireWidth].every(Number.isFinite)){
-   if(frontTrack+tireWidth>3.2+1e-9||rearTrack+tireWidth>3.2+1e-9){
-    errors.push('tractorTrack/tireWidth: наружная ширина колёс тягача выходит за допустимую калибровочную оболочку 3,20 м.');
+  const rearGroupInput=params.tractorRearTireGroupWidth??0;
+  const trailerGroupInput=params.trailerTireGroupWidth??0;
+  const rearGroupWidth=rearGroupInput>0?rearGroupInput:tireWidth;
+  const trailerGroupWidth=trailerGroupInput>0?trailerGroupInput:tireWidth;
+  if(rearGroupInput>0&&rearGroupInput<tireWidth-1e-9){
+   errors.push('tractorRearTireGroupWidth: ширина группы не может быть меньше ширины одной шины.');
+  }
+  if(trailerGroupInput>0&&trailerGroupInput<tireWidth-1e-9){
+   errors.push('trailerTireGroupWidth: ширина группы не может быть меньше ширины одной шины.');
+  }
+  if([frontTrack,rearTrack,trailerTrack,tireWidth,rearGroupWidth,trailerGroupWidth].every(Number.isFinite)){
+   if(rearGroupInput>0&&rearGroupWidth>=rearTrack){
+    errors.push('tractorRearTireGroupWidth: левая и правая группы шин перекрываются при заданной колее.');
    }
-   if(Number.isFinite(params.trailerWidth)&&trailerTrack+tireWidth>params.trailerWidth+1.0+1e-9){
-    errors.push('trailerTrack/tireWidth: колёса выходят за допустимую калибровочную оболочку относительно ширины полуприцепа.');
+   if(trailerGroupInput>0&&trailerGroupWidth>=trailerTrack){
+    errors.push('trailerTireGroupWidth: левая и правая группы шин перекрываются при заданной колее.');
+   }
+   if(frontTrack+tireWidth>3.2+1e-9||rearTrack+rearGroupWidth>3.2+1e-9){
+    errors.push('tractorTrack/tireWidth/groupWidth: наружная ширина колёсных групп тягача выходит за калибровочную оболочку 3,20 м.');
+   }
+   if(Number.isFinite(params.trailerWidth)&&trailerTrack+trailerGroupWidth>params.trailerWidth+1.0+1e-9){
+    errors.push('trailerTrack/trailerTireGroupWidth: колёсные группы выходят за допустимую калибровочную оболочку относительно ширины полуприцепа.');
    }
   }
   return errors;
@@ -317,22 +336,29 @@
   return steer>0?{left:inner,right:outer}:{left:-outer,right:-inner};
  }
 
- // Build the ten calibrated rectangular tire footprints without re-validating the
- // complete vehicle parameter set on every planner node.
+ // Build ten axle-side tire envelopes. A configured group width represents the
+ // outer width of a dual-tire pair on one side, including the gap between tires.
+ // Without that input, the legacy single-tire-width fallback remains explicit.
  function buildWheelFootprints(q,params,steer=0){
   const frontTrack=params.tractorFrontTrack??2.05;
   const rearTrack=params.tractorRearTrack??2.05;
   const trailerTrack=params.trailerTrack??(params.trailerWidth+0.24);
   const tireLength=params.tireLength??0.72;
   const tireWidth=params.tireWidth??0.44;
+  const rearGroupConfigured=Number.isFinite(params.tractorRearTireGroupWidth)&&params.tractorRearTireGroupWidth>0;
+  const trailerGroupConfigured=Number.isFinite(params.trailerTireGroupWidth)&&params.trailerTireGroupWidth>0;
+  const rearGroupWidth=rearGroupConfigured?params.tractorRearTireGroupWidth:tireWidth;
+  const trailerGroupWidth=trailerGroupConfigured?params.trailerTireGroupWidth:tireWidth;
   const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
   const steeringAngles=frontWheelSteerAngles(steer,params);
   const wheels=[];
-  const add=(vehiclePart,axleIndex,side,center,heading,name)=>{
+  const add=(vehiclePart,axleIndex,side,center,heading,name,footprintWidth=tireWidth,footprintModel='single-tire-assumption')=>{
    wheels.push({
     vehiclePart,axleIndex,side,center,heading,name,
+    footprintWidth,footprintModel,
+    groupWidthConfigured:footprintModel==='configured-axle-side-group-envelope',
     polygon:bodyCorners(center,heading,
-     tireLength/2+uncertainty,-tireLength/2-uncertainty,tireWidth+2*uncertainty)
+     tireLength/2+uncertainty,-tireLength/2-uncertainty,footprintWidth+2*uncertainty)
    });
   };
   const [frontAxle,rearAxle]=tractorAxlePoints(q,params);
@@ -344,14 +370,16 @@
     sideName+' переднее колесо тягача');
    add('тягач',2,side>0?'left':'right',
     localPoint(rearAxle,q.psi,0,side*rearTrack/2),q.psi,
-    sideName+' заднее колесо тягача');
+    sideName+' заднее колесо тягача',rearGroupWidth,
+    rearGroupConfigured?'configured-axle-side-group-envelope':'single-tire-fallback');
   }
   trailerAxlePoints(q,params).forEach((axle,index)=>{
    for(const side of [1,-1]){
     const sideName=side>0?'левое':'правое';
     add('полуприцеп',index+1,side>0?'left':'right',
      localPoint(axle,q.psiT,0,side*trailerTrack/2),q.psiT,
-     sideName+' колесо '+(index+1)+'-й оси полуприцепа');
+     sideName+' колесо '+(index+1)+'-й оси полуприцепа',trailerGroupWidth,
+     trailerGroupConfigured?'configured-axle-side-group-envelope':'single-tire-fallback');
    }
   });
   return wheels;
@@ -486,7 +514,7 @@
  }
 
 
- // Returns sampled center tracks for all six trailer tires and all three axle centers.
+ // Returns sampled center tracks for six trailer axle-side tire groups and all three axle centers.
  // Left/right inner-side classification is relative to the direction of travel:
  // reverse gear swaps the vehicle-side label. Distances are chords between route samples.
  function trailerWheelTrajectoryDiagnostics(path,params){
@@ -512,7 +540,7 @@
   const offsets=trailerAxleOffsets(params);
   const makeTrack=side=>({
    side,
-   name:side==='center'?'центр оси':(side==='left'?'левое колесо':'правое колесо'),
+   name:side==='center'?'центр оси':(side==='left'?'левая группа шин':'правая группа шин'),
    points:[],
    sampledTravel:0,
    integratedTravelAccumulator:0,

@@ -201,7 +201,8 @@ test('kinematic uncertainty settings include Ackermann, axle tracks and tire dim
  const ids=[
   'trailerAxleSpacingUncertainty','tractorSteeringTrackUncertainty',
   'tractorFrontTrackUncertainty','tractorRearTrackUncertainty',
-  'trailerTrackUncertainty','tireLengthUncertainty','tireWidthUncertainty',
+  'trailerTrackUncertainty','tractorRearTireGroupWidthUncertainty','trailerTireGroupWidthUncertainty',
+  'tireLengthUncertainty','tireWidthUncertainty',
   'cabOffsetUncertainty','cabFrontUncertainty','cabRearUncertainty',
   'cabWidthUncertainty','mirrorOutboardUncertainty',
   'mirrorLongitudinalUncertainty','mirrorLengthUncertainty'
@@ -212,6 +213,10 @@ test('kinematic uncertainty settings include Ackermann, axle tracks and tire dim
  elements.tractorFrontTrackUncertainty.value='0.02';
  elements.tractorRearTrackUncertainty.value='0.02';
  elements.trailerTrackUncertainty.value='0.03';
+ elements.tractorRearTireGroupWidth.value='0.72';
+ elements.trailerTireGroupWidth.value='0.68';
+ elements.tractorRearTireGroupWidthUncertainty.value='0.02';
+ elements.trailerTireGroupWidthUncertainty.value='0.02';
  elements.tireLengthUncertainty.value='0.02';
  elements.tireWidthUncertainty.value='0.01';
  elements.cabOffsetUncertainty.value='0.05';
@@ -230,6 +235,8 @@ test('kinematic uncertainty settings include Ackermann, axle tracks and tire dim
   /tractorFrontTrackUncertainty:'tractorFrontTrack'/,
   /tractorRearTrackUncertainty:'tractorRearTrack'/,
   /trailerTrackUncertainty:'trailerTrack'/,
+  /tractorRearTireGroupWidthUncertainty:'tractorRearTireGroupWidth'/,
+  /trailerTireGroupWidthUncertainty:'trailerTireGroupWidth'/,
   /tireLengthUncertainty:'tireLength'/,
   /tireWidthUncertainty:'tireWidth'/,
   /cabOffsetUncertainty:'cabOffset'/,
@@ -240,6 +247,14 @@ test('kinematic uncertainty settings include Ackermann, axle tracks and tire dim
   /mirrorLongitudinalUncertainty:'mirrorLongitudinal'/,
   /mirrorLengthUncertainty:'mirrorLength'/
  ])assert.match(source,mapping);
+});
+
+test('tire-group uncertainty is rejected until a measured nominal group width is entered',()=>{
+ const {elements}=bootSimulator();
+ elements.tractorRearTireGroupWidthUncertainty.value='0.10';
+ elements.apply.onclick();
+ assert.match(elements.routeAdvice.textContent,/tractorRearTireGroupWidthUncertainty/);
+ assert.match(elements.routeAdvice.textContent,/сначала задайте измеренную номинальную ширину группы задних шин тягача/);
 });
 
 test('live assistant identifies the nearest vehicle part and named obstacle',()=>{

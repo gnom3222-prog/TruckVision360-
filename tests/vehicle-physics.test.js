@@ -473,6 +473,62 @@ test('trailer tire footprints are part of the collision envelope beyond the carg
  assert.ok(outerY>p.trailerWidth/2);
 });
 
+test('unconfigured rear and trailer tire groups explicitly use the single-tire fallback',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  tractorRearTrack:2.05,trailerTrack:2.79,tireLength:0.72,tireWidth:0.44
+ };
+ const wheels=physics.wheelFootprints({x:0,y:0,psi:0,psiT:0},p,0);
+ const rear=wheels.find(wheel=>wheel.name==='левое заднее колесо тягача');
+ const trailer=wheels.find(wheel=>wheel.name==='левое колесо 1-й оси полуприцепа');
+ assert.equal(rear.footprintModel,'single-tire-fallback');
+ assert.equal(trailer.footprintModel,'single-tire-fallback');
+ assert.equal(rear.groupWidthConfigured,false);
+ assert.equal(trailer.groupWidthConfigured,false);
+ near(rear.footprintWidth,0.44);
+ near(trailer.footprintWidth,0.44);
+});
+
+test('configured dual-tire group envelopes span the measured outer width on each axle side',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  tractorRearTrack:2.05,trailerTrack:2.79,tireLength:0.72,tireWidth:0.44,
+  tractorRearTireGroupWidth:0.72,trailerTireGroupWidth:0.68
+ };
+ const q={x:0,y:0,psi:0,psiT:0};
+ const wheels=physics.wheelFootprints(q,p,0);
+ const rear=wheels.find(wheel=>wheel.name==='левое заднее колесо тягача');
+ const trailer=wheels.find(wheel=>wheel.name==='левое колесо 1-й оси полуприцепа');
+ assert.equal(rear.footprintModel,'configured-axle-side-group-envelope');
+ assert.equal(trailer.footprintModel,'configured-axle-side-group-envelope');
+ assert.equal(rear.groupWidthConfigured,true);
+ assert.equal(trailer.groupWidthConfigured,true);
+ const trailerGroups=wheels.filter(wheel=>wheel.vehiclePart==='полуприцеп');
+ assert.equal(trailerGroups.length,6);
+ assert.ok(trailerGroups.every(wheel=>wheel.footprintWidth===0.68&&wheel.groupWidthConfigured));
+ near(Math.max(...rear.polygon.map(point=>point.y))-Math.min(...rear.polygon.map(point=>point.y)),0.72);
+ near(Math.max(...trailer.polygon.map(point=>point.y))-Math.min(...trailer.polygon.map(point=>point.y)),0.68);
+ const parts=physics.vehicleCollisionParts(q,p);
+ assert.ok(parts.find(part=>part.vehiclePart==='тягач').components.some(component=>component.name==='левое заднее колесо тягача'));
+ assert.ok(parts.find(part=>part.vehiclePart==='полуприцеп').components.some(component=>component.name==='левое колесо 1-й оси полуприцепа'));
+});
+
+test('tire group calibration rejects widths smaller than one tire, overlapping pairs, and excessive trailer width',()=>{
+ const base={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  tractorRearTrack:2.05,trailerTrack:2.79,tireWidth:0.44
+ };
+ assert.ok(physics.validateVehicleParams({...base,tractorRearTireGroupWidth:0.4})
+  .some(message=>message.includes('не может быть меньше ширины')));
+ assert.ok(physics.validateVehicleParams({...base,tractorRearTrack:1.4,tractorRearTireGroupWidth:1.4})
+  .some(message=>message.includes('группы шин перекрываются')));
+ assert.ok(physics.validateVehicleParams({...base,trailerTireGroupWidth:0.8})
+  .some(message=>message.includes('колёсные группы выходят')));
+});
+
 test('wheel calibration rejects an implausible track and tire-width combination',()=>{
  const p={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
@@ -484,7 +540,7 @@ test('wheel calibration rejects an implausible track and tire-width combination'
  assert.throws(()=>physics.wheelFootprints({x:0,y:0,psi:0,psiT:0},p),/Некорректные параметры колёс/);
 });
 
-test('trailer wheel trajectory diagnostics returns sampled centers for all six tires and three axle centers',()=>{
+test('trailer wheel trajectory diagnostics returns sampled centers for six axle-side groups and three axle centers',()=>{
  const p={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
   trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,

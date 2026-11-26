@@ -30,6 +30,8 @@ const cfg={
  tractorSteeringTrack:2.05,
  tractorRearTrack:2.05,
  trailerTrack:2.79,
+ tractorRearTireGroupWidth:0,
+ trailerTireGroupWidth:0,
  tireLength:0.72,
  tireWidth:0.44,
  trailerMass:30000,
@@ -61,6 +63,8 @@ const cfg={
  tractorFrontTrackUncertainty:0,
  tractorRearTrackUncertainty:0,
  trailerTrackUncertainty:0,
+ tractorRearTireGroupWidthUncertainty:0,
+ trailerTireGroupWidthUncertainty:0,
  tireLengthUncertainty:0,
  tireWidthUncertainty:0,
  cabOffsetUncertainty:0,
@@ -179,6 +183,8 @@ function readSettings(){
   tractorSteeringTrack:[1,3.5],
   tractorRearTrack:[1,3.5],
   trailerTrack:[1,4.5],
+  tractorRearTireGroupWidth:[0,1.5],
+  trailerTireGroupWidth:[0,1.5],
   tireLength:[0.2,1.5],
   tireWidth:[0.1,0.8],
   gateWidth:[1,20],
@@ -205,6 +211,8 @@ function readSettings(){
   tractorFrontTrackUncertainty:[0,1.25],
   tractorRearTrackUncertainty:[0,1.25],
   trailerTrackUncertainty:[0,1.5],
+  tractorRearTireGroupWidthUncertainty:[0,0.5],
+  trailerTireGroupWidthUncertainty:[0,0.5],
   tireLengthUncertainty:[0,0.5],
   tireWidthUncertainty:[0,0.3],
   cabOffsetUncertainty:[0,2],
@@ -236,6 +244,8 @@ function readSettings(){
   tractorFrontTrackUncertainty:'tractorFrontTrack',
   tractorRearTrackUncertainty:'tractorRearTrack',
   trailerTrackUncertainty:'trailerTrack',
+  tractorRearTireGroupWidthUncertainty:'tractorRearTireGroupWidth',
+  trailerTireGroupWidthUncertainty:'trailerTireGroupWidth',
   tireLengthUncertainty:'tireLength',
   tireWidthUncertainty:'tireWidth',
   cabOffsetUncertainty:'cabOffset',
@@ -258,6 +268,12 @@ function readSettings(){
    endpointErrors.forEach(message=>errors.push(uncertaintyKey+': крайнее значение '+parameterKey+'='+endpoint.toFixed(3)+' м: '+message));
   }
  }
+ if(candidate.tractorRearTireGroupWidth===0&&candidate.tractorRearTireGroupWidthUncertainty>0){
+  errors.push('tractorRearTireGroupWidthUncertainty: сначала задайте измеренную номинальную ширину группы задних шин тягача.');
+ }
+ if(candidate.trailerTireGroupWidth===0&&candidate.trailerTireGroupWidthUncertainty>0){
+  errors.push('trailerTireGroupWidthUncertainty: сначала задайте измеренную номинальную ширину группы шин полуприцепа.');
+ }
  if(errors.length)return {ok:false,changed:false,errors};
  const changed=Object.keys(cfg).some(key=>!Object.is(cfg[key],candidate[key]));
  Object.assign(cfg,candidate);
@@ -276,6 +292,8 @@ function vehicleParameterBoundsFromSettings(){
   tractorFrontTrackUncertainty:'tractorFrontTrack',
   tractorRearTrackUncertainty:'tractorRearTrack',
   trailerTrackUncertainty:'trailerTrack',
+  tractorRearTireGroupWidthUncertainty:'tractorRearTireGroupWidth',
+  trailerTireGroupWidthUncertainty:'trailerTireGroupWidth',
   tireLengthUncertainty:'tireLength',
   tireWidthUncertainty:'tireWidth',
   cabOffsetUncertainty:'cabOffset',
@@ -1138,7 +1156,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261125-22');
+   worker=new Worker('./planner-worker.js?v=20261126-1');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
