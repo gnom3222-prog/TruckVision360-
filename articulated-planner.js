@@ -381,23 +381,25 @@
   }
   const trailerFrontFromAxle=kingpinAxles+1.5+footprintUncertainty;
   const trailerRearFromAxle=kingpinAxles-(trailerLength-1.5+footprintUncertainty);
-  const trailerAxleSpacing=p.trailerAxleSpacing??1.3;
+  const trailerAxleOffsets=typeof rootPhysics.trailerAxleOffsets==='function'?
+   rootPhysics.trailerAxleOffsets(p):[(p.trailerAxleSpacing??1.3),0,-(p.trailerAxleSpacing??1.3)];
   const trailerWheelHalfLength=tireLength/2+footprintUncertainty;
-  const trailerWheelLongitudinals=[trailerAxleSpacing,0,-trailerAxleSpacing]
+  const trailerWheelLongitudinals=trailerAxleOffsets
    .flatMap(offset=>[offset-trailerWheelHalfLength,offset+trailerWheelHalfLength]);
   if(q&&(!Number.isFinite(q.psi)||!Number.isFinite(q.psiT))){
    throw new Error('Articulation state is invalid for swept-clearance checking.');
   }
   const hitchYawCoupling=hitchOffset*tractorYawPerMeter;
-  const trailerTrack=p.trailerTrack??(trailerWidth+0.24);
-  // Each axle may have its own measured tire-group envelope. The swept bound
-  // uses the widest effective group because it must cover every axle-side point.
+  // Every axle may have its own measured track and tire-group width. The swept
+  // envelope uses the largest combined outer width and all actual axle offsets.
+  const trailerAxleTracks=typeof rootPhysics.trailerAxleTracks==='function'?
+   rootPhysics.trailerAxleTracks(p):[p.trailerTrack??(trailerWidth+0.24),p.trailerTrack??(trailerWidth+0.24),p.trailerTrack??(trailerWidth+0.24)];
   const trailerAxleGroupWidths=typeof rootPhysics.trailerAxleTireGroupWidths==='function'?
    rootPhysics.trailerAxleTireGroupWidths(p):[trailerGroupWidth,trailerGroupWidth,trailerGroupWidth];
-  const maxTrailerGroupWidth=Math.max(...trailerAxleGroupWidths);
+  const maxTrailerOuterWidth=Math.max(...trailerAxleTracks.map((track,index)=>track+trailerAxleGroupWidths[index]));
   const trailerWidthWithUncertainty=Math.max(
    trailerWidth+2*footprintUncertainty,
-   trailerTrack+maxTrailerGroupWidth+2*footprintUncertainty
+   maxTrailerOuterWidth+2*footprintUncertainty
   );
   const trailerLongitudinalOffsets=[trailerFrontFromAxle,trailerRearFromAxle,...trailerWheelLongitudinals];
   let trailerPointRate=0;
@@ -540,10 +542,14 @@
    return Math.hypot(1+lateral*curvature,longitudinal*curvature);
   }
   if(wheel.vehiclePart==='полуприцеп'){
-   const spacing=p.trailerAxleSpacing??1.3;
-   const longitudinal=[spacing,0,-spacing][wheel.axleIndex-1];
+   const offsets=typeof rootPhysics.trailerAxleOffsets==='function'?
+    rootPhysics.trailerAxleOffsets(p):[(p.trailerAxleSpacing??1.3),0,-(p.trailerAxleSpacing??1.3)];
+   const longitudinal=offsets[wheel.axleIndex-1];
    if(!Number.isFinite(longitudinal))throw new Error('Trailer wheel axle index is invalid for swept-clearance analysis.');
-   const track=p.trailerTrack??(p.trailerWidth+0.24);
+   const tracks=typeof rootPhysics.trailerAxleTracks==='function'?
+    rootPhysics.trailerAxleTracks(p):[p.trailerTrack??(p.trailerWidth+0.24),p.trailerTrack??(p.trailerWidth+0.24),p.trailerTrack??(p.trailerWidth+0.24)];
+   const track=tracks[wheel.axleIndex-1];
+   if(!Number.isFinite(track)||track<=0)throw new Error('Trailer wheel track is invalid for swept-clearance analysis.');
    const lateral=(wheel.side==='left'?1:-1)*track/2;
    const couplingMagnitude=p.hitchOffset*curvature;
    let maximum=0;
@@ -2013,12 +2019,20 @@ function planAlternativesWithVehicleParameterBounds(options={}){
   trailerLength:[4,30],
   trailerWidth:[1.5,5],
   trailerAxleSpacing:[0.3,5],
+  trailerAxleSpacing12:[0.3,5],
+  trailerAxleSpacing23:[0.3,5],
   tractorSteeringTrack:[1,3.5],
   tractorFrontTrack:[1,3.5],
   tractorRearTrack:[1,3.5],
   trailerTrack:[1,4.5],
+  trailerAxle1Track:[1,4.5],
+  trailerAxle2Track:[1,4.5],
+  trailerAxle3Track:[1,4.5],
   tractorRearTireGroupWidth:[0,1.5],
   trailerTireGroupWidth:[0,1.5],
+  trailerAxle1TireGroupWidth:[0,1.5],
+  trailerAxle2TireGroupWidth:[0,1.5],
+  trailerAxle3TireGroupWidth:[0,1.5],
   tireLength:[0.2,1.5],
   tireWidth:[0.1,0.8],
   cabOffset:[0,6],

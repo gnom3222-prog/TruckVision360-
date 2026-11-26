@@ -199,8 +199,9 @@ test('negative measurement uncertainty blocks route playback instead of weakenin
 test('kinematic uncertainty settings include Ackermann, axle tracks and tire dimensions',()=>{
  const {elements}=bootSimulator();
  const ids=[
-  'trailerAxleSpacingUncertainty','tractorSteeringTrackUncertainty',
-  'tractorFrontTrackUncertainty','tractorRearTrackUncertainty',
+  'trailerAxleSpacingUncertainty','trailerAxleSpacing12Uncertainty','trailerAxleSpacing23Uncertainty',
+  'trailerAxle1TrackUncertainty','trailerAxle2TrackUncertainty','trailerAxle3TrackUncertainty',
+  'tractorSteeringTrackUncertainty','tractorFrontTrackUncertainty','tractorRearTrackUncertainty',
   'trailerTrackUncertainty','tractorRearTireGroupWidthUncertainty','trailerTireGroupWidthUncertainty',
   'tireLengthUncertainty','tireWidthUncertainty',
   'cabOffsetUncertainty','cabFrontUncertainty','cabRearUncertainty',
@@ -208,7 +209,18 @@ test('kinematic uncertainty settings include Ackermann, axle tracks and tire dim
   'mirrorLongitudinalUncertainty','mirrorLengthUncertainty'
  ];
  for(const id of ids)assert.equal(elements[id].value,'0',id+' should start as not-varied');
+ elements.trailerAxleSpacing.value='1.3';
+ elements.trailerAxleSpacing12.value='1.2';
+ elements.trailerAxleSpacing23.value='1.4';
+ elements.trailerAxle1Track.value='2.7';
+ elements.trailerAxle2Track.value='2.8';
+ elements.trailerAxle3Track.value='2.85';
  elements.trailerAxleSpacingUncertainty.value='0.02';
+ elements.trailerAxleSpacing12Uncertainty.value='0.02';
+ elements.trailerAxleSpacing23Uncertainty.value='0.02';
+ elements.trailerAxle1TrackUncertainty.value='0.02';
+ elements.trailerAxle2TrackUncertainty.value='0.02';
+ elements.trailerAxle3TrackUncertainty.value='0.02';
  elements.tractorSteeringTrackUncertainty.value='0.03';
  elements.tractorFrontTrackUncertainty.value='0.02';
  elements.tractorRearTrackUncertainty.value='0.02';
@@ -231,6 +243,11 @@ test('kinematic uncertainty settings include Ackermann, axle tracks and tire dim
  const source=fs.readFileSync(path.join(__dirname,'..','truckvision.js'),'utf8');
  for(const mapping of [
   /trailerAxleSpacingUncertainty:'trailerAxleSpacing'/,
+  /trailerAxleSpacing12Uncertainty:'trailerAxleSpacing12'/,
+  /trailerAxleSpacing23Uncertainty:'trailerAxleSpacing23'/,
+  /trailerAxle1TrackUncertainty:'trailerAxle1Track'/,
+  /trailerAxle2TrackUncertainty:'trailerAxle2Track'/,
+  /trailerAxle3TrackUncertainty:'trailerAxle3Track'/,
   /tractorSteeringTrackUncertainty:'tractorSteeringTrack'/,
   /tractorFrontTrackUncertainty:'tractorFrontTrack'/,
   /tractorRearTrackUncertainty:'tractorRearTrack'/,
@@ -856,4 +873,15 @@ test('virtual playback holds at the gear boundary until the explicit confirmatio
  assert.equal(elements.routeConfirmGear.hidden,true);
  assert.equal(elements.routeConfirmGear.disabled,true);
  assert.match(elements.routeAdvice.textContent,/Виртуальное переключение подтверждено для симуляции/);
+});
+
+
+test('per-axle uncertainty cannot be entered when the individual geometry field inherits a common value',()=>{
+ const {elements}=bootSimulator();
+ elements.trailerAxleSpacing12Uncertainty.value='0.02';
+ elements.trailerAxle1TrackUncertainty.value='0.02';
+ elements.apply.onclick();
+ assert.match(elements.routeAdvice.textContent,/сначала задайте индивидуальное измеренное значение/);
+ assert.match(elements.routeAdvice.textContent,/trailerAxleSpacing12/);
+ assert.match(elements.routeAdvice.textContent,/trailerAxle1Track/);
 });

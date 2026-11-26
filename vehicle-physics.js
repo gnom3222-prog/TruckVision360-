@@ -15,6 +15,8 @@
   trailerLength:{min:4,max:30},
   trailerWidth:{min:1.5,max:5},
   trailerAxleSpacing:{min:0.3,max:5,optional:true},
+  trailerAxleSpacing12:{min:0,max:5,optional:true},
+  trailerAxleSpacing23:{min:0,max:5,optional:true},
   footprintUncertainty:{min:0,max:1,optional:true},
   cabOffset:{min:0,max:6,optional:true},
   cabFront:{min:0.5,max:3.5,optional:true},
@@ -27,6 +29,9 @@
   tractorSteeringTrack:{min:1,max:3.5,optional:true},
   tractorRearTrack:{min:1,max:3.5,optional:true},
   trailerTrack:{min:1,max:4.5,optional:true},
+  trailerAxle1Track:{min:0,max:4.5,optional:true},
+  trailerAxle2Track:{min:0,max:4.5,optional:true},
+  trailerAxle3Track:{min:0,max:4.5,optional:true},
   tractorRearTireGroupWidth:{min:0,max:1.5,optional:true},
   trailerTireGroupWidth:{min:0,max:1.5,optional:true},
   trailerAxle1TireGroupWidth:{min:0,max:1.5,optional:true},
@@ -42,6 +47,27 @@
    params.trailerTireGroupWidth:tireWidth;
   return [1,2,3].map(index=>{
    const specific=params&&params['trailerAxle'+index+'TireGroupWidth'];
+   return Number.isFinite(specific)&&specific>0?specific:common;
+  });
+ }
+
+ function trailerAxleSpacings(params){
+  const common=Number.isFinite(params&&params.trailerAxleSpacing)&&params.trailerAxleSpacing>0?
+   params.trailerAxleSpacing:1.3;
+  return [
+   Number.isFinite(params&&params.trailerAxleSpacing12)&&params.trailerAxleSpacing12>0?
+    params.trailerAxleSpacing12:common,
+   Number.isFinite(params&&params.trailerAxleSpacing23)&&params.trailerAxleSpacing23>0?
+    params.trailerAxleSpacing23:common
+  ];
+ }
+
+ function trailerAxleTracks(params){
+  const common=Number.isFinite(params&&params.trailerTrack)&&params.trailerTrack>0?
+   params.trailerTrack:
+   (Number.isFinite(params&&params.trailerWidth)?params.trailerWidth+0.24:NaN);
+  return [1,2,3].map(index=>{
+   const specific=params&&params['trailerAxle'+index+'Track'];
    return Number.isFinite(specific)&&specific>0?specific:common;
   });
  }
@@ -90,21 +116,28 @@
     errors.push(key+': значение вне допустимого диапазона '+limits.min+'–'+limits.max+'.');
    }
   }
-  // The three axle centers must remain inside the trailer body's longitudinal envelope.
-  // The body extends 1.5 m ahead of the kingpin and trailerLength - 1.5 m behind it.
-  const spacing=params.trailerAxleSpacing===undefined||params.trailerAxleSpacing===null?
-   1.3:params.trailerAxleSpacing;
+  // The middle axle remains the equivalent kinematic reference. The two
+  // measured adjacent spacings place the outer axle centers independently.
+  const axleSpacings=trailerAxleSpacings(params);
+  [
+   ['trailerAxleSpacing12',params.trailerAxleSpacing12??0],
+   ['trailerAxleSpacing23',params.trailerAxleSpacing23??0]
+  ].forEach(([key,value])=>{
+   if(Number.isFinite(value)&&value>0&&value<0.3){
+    errors.push(key+': расстояние между соседними осями должно быть не меньше 0,30 м.');
+   }
+  });
   const validAxleEnvelope=Number.isFinite(params.kingpinAxles)&&
    params.kingpinAxles>=VEHICLE_PARAMETER_LIMITS.kingpinAxles.min&&
    params.kingpinAxles<=VEHICLE_PARAMETER_LIMITS.kingpinAxles.max&&
    Number.isFinite(params.trailerLength)&&
    params.trailerLength>=VEHICLE_PARAMETER_LIMITS.trailerLength.min&&
    params.trailerLength<=VEHICLE_PARAMETER_LIMITS.trailerLength.max&&
-   Number.isFinite(spacing)&&spacing>=0.3&&spacing<=5;
+   axleSpacings.every(spacing=>Number.isFinite(spacing)&&spacing>=0.3&&spacing<=5);
   if(validAxleEnvelope){
    const bodyFront=1.5;
    const bodyRear=-(params.trailerLength-1.5);
-   [spacing,0,-spacing].forEach((offset,index)=>{
+   trailerAxleOffsets(params).forEach((offset,index)=>{
     const position=-params.kingpinAxles+offset;
     if(position>bodyFront+1e-9||position<bodyRear-1e-9){
      errors.push('trailerAxleSpacing: продольное положение оси '+(index+1)+' выходит за границы кузова полуприцепа.');
@@ -147,21 +180,31 @@
   }
 
   // Track and tire-group widths are calibration inputs, not factory specifications.
-  // A zero group width means the model falls back to one tire width per side.
+  // A zero axle-specific value inherits the common track; a zero group width
+  // falls back to the single-tire envelope.
   const frontTrack=params.tractorFrontTrack??2.05;
   const rearTrack=params.tractorRearTrack??2.05;
-  const trailerTrack=params.trailerTrack??(Number.isFinite(params.trailerWidth)?params.trailerWidth+0.24:NaN);
   const tireWidth=params.tireWidth??0.44;
   const rearGroupInput=params.tractorRearTireGroupWidth??0;
-  const trailerGroupInput=params.trailerTireGroupWidth??0;
   const rearGroupWidth=rearGroupInput>0?rearGroupInput:tireWidth;
   const axleGroupInputs=[1,2,3].map(index=>params['trailerAxle'+index+'TireGroupWidth']??0);
   const axleGroupWidths=trailerAxleTireGroupWidths(params);
-  const maxTrailerGroupWidth=Math.max(...axleGroupWidths);
+  const axleTracks=trailerAxleTracks(params);
+  const hasIndividualTrailerTrack=[1,2,3].some(index=>(params['trailerAxle'+index+'Track']??0)>0);
+  const hasIndividualTrailerGroupWidth=axleGroupInputs.some(value=>value>0);
+  let commonTrailerEnvelopeErrorAdded=false;
+  const commonTrailerTrack=params.trailerTrack??(Number.isFinite(params.trailerWidth)?params.trailerWidth+0.24:NaN);
+  [1,2,3].forEach(index=>{
+   const key='trailerAxle'+index+'Track';
+   const value=params[key]??0;
+   if(Number.isFinite(value)&&value>0&&value<1){
+    errors.push(key+': колея оси должна быть не меньше 1,00 м.');
+   }
+  });
   if(rearGroupInput>0&&rearGroupInput<tireWidth-1e-9){
    errors.push('tractorRearTireGroupWidth: ширина группы не может быть меньше ширины одной шины.');
   }
-  if(trailerGroupInput>0&&trailerGroupInput<tireWidth-1e-9){
+  if((params.trailerTireGroupWidth??0)>0&&params.trailerTireGroupWidth<tireWidth-1e-9){
    errors.push('trailerTireGroupWidth: ширина группы не может быть меньше ширины одной шины.');
   }
   axleGroupInputs.forEach((value,index)=>{
@@ -169,23 +212,31 @@
     errors.push('trailerAxle'+(index+1)+'TireGroupWidth: ширина группы не может быть меньше ширины одной шины.');
    }
   });
-  if([frontTrack,rearTrack,trailerTrack,tireWidth,rearGroupWidth,...axleGroupWidths].every(Number.isFinite)){
-   if(rearGroupInput>0&&rearGroupWidth>=rearTrack){
+  if([frontTrack,rearTrack,commonTrailerTrack,tireWidth,rearGroupWidth,...axleGroupWidths,...axleTracks].every(Number.isFinite)){
+   if(rearGroupWidth>=rearTrack){
     errors.push('tractorRearTireGroupWidth: левая и правая группы шин перекрываются при заданной колее.');
    }
-   if(trailerGroupInput>0&&trailerGroupInput>=trailerTrack){
-    errors.push('trailerTireGroupWidth: левая и правая группы шин перекрываются при заданной колее.');
-   }
-   axleGroupInputs.forEach((value,index)=>{
-    if(value>0&&value>=trailerTrack){
-     errors.push('trailerAxle'+(index+1)+'TireGroupWidth: левая и правая группы шин перекрываются при заданной колее.');
+   axleTracks.forEach((track,index)=>{
+    const groupWidth=axleGroupWidths[index];
+    const widthInput=axleGroupInputs[index];
+    const widthKey=widthInput>0?'trailerAxle'+(index+1)+'TireGroupWidth':
+     ((params.trailerTireGroupWidth??0)>0?'trailerTireGroupWidth':'tireWidth');
+    if(groupWidth>=track){
+     errors.push(widthKey+': левая и правая группы шин '+(index+1)+'-й оси перекрываются при заданной колее.');
+    }
+    if(Number.isFinite(params.trailerWidth)&&track+groupWidth>params.trailerWidth+1.0+1e-9){
+     if(!hasIndividualTrailerTrack&&!hasIndividualTrailerGroupWidth){
+      if(!commonTrailerEnvelopeErrorAdded){
+       errors.push('trailerTrack/trailerTireGroupWidth: колёсные группы выходят за допустимую калибровочную оболочку относительно ширины полуприцепа.');
+       commonTrailerEnvelopeErrorAdded=true;
+      }
+     }else{
+      errors.push('trailerAxle'+(index+1)+'Track/trailerAxle'+(index+1)+'TireGroupWidth: наружная ширина колёсной группы выходит за допустимую калибровочную оболочку относительно ширины полуприцепа.');
+     }
     }
    });
    if(frontTrack+tireWidth>3.2+1e-9||rearTrack+rearGroupWidth>3.2+1e-9){
     errors.push('tractorTrack/tireWidth/groupWidth: наружная ширина колёсных групп тягача выходит за калибровочную оболочку 3,20 м.');
-   }
-   if(Number.isFinite(params.trailerWidth)&&trailerTrack+maxTrailerGroupWidth>params.trailerWidth+1.0+1e-9){
-    errors.push('trailerTrack/trailerTireGroupWidth: колёсные группы выходят за допустимую калибровочную оболочку относительно ширины полуприцепа.');
    }
   }
   return errors;
@@ -354,9 +405,8 @@
  }
 
  function trailerAxleOffsets(params){
-  const spacing=Number.isFinite(params.trailerAxleSpacing)&&params.trailerAxleSpacing>0?
-   params.trailerAxleSpacing:1.3;
-  return [spacing,0,-spacing];
+  const [spacing12,spacing23]=trailerAxleSpacings(params);
+  return [spacing12,0,-spacing23];
  }
 
  function trailerAxlePoints(q,params){
@@ -395,7 +445,7 @@
  function buildWheelFootprints(q,params,steer=0){
   const frontTrack=params.tractorFrontTrack??2.05;
   const rearTrack=params.tractorRearTrack??2.05;
-  const trailerTrack=params.trailerTrack??(params.trailerWidth+0.24);
+  const trailerTracks=trailerAxleTracks(params);
   const tireLength=params.tireLength??0.72;
   const tireWidth=params.tireWidth??0.44;
   const rearGroupConfigured=Number.isFinite(params.tractorRearTireGroupWidth)&&params.tractorRearTireGroupWidth>0;
@@ -427,6 +477,7 @@
     rearGroupConfigured?'configured-axle-side-group-envelope':'single-tire-fallback');
   }
   trailerAxlePoints(q,params).forEach((axle,index)=>{
+   const trailerTrack=trailerTracks[index];
    const specific=params['trailerAxle'+(index+1)+'TireGroupWidth'];
    const specificConfigured=Number.isFinite(specific)&&specific>0;
    const groupConfigured=specificConfigured||trailerGroupConfigured;
@@ -592,8 +643,8 @@
    return {q:state,gear,steer};
   };
   const states=Array.from(path,readState);
-  const track=params.trailerTrack??(params.trailerWidth+0.24);
-  if(!Number.isFinite(track)||track<=0)throw new Error('Колея полуприцепа для траектории колёс некорректна.');
+  const tracks=trailerAxleTracks(params);
+  if(!tracks.every(track=>Number.isFinite(track)&&track>0))throw new Error('Колея одной из осей полуприцепа для траектории колёс некорректна.');
   const offsets=trailerAxleOffsets(params);
   const makeTrack=side=>({
    side,
@@ -663,10 +714,10 @@
     routeDistance+=segmentDistance;
    }
    const axleCenters=trailerAxlePoints(state.q,params);
-   const currentTracks=axleCenters.map(center=>({
+   const currentTracks=axleCenters.map((center,axleIndex)=>({
     center,
-    left:localPoint(center,state.q.psiT,0,track/2),
-    right:localPoint(center,state.q.psiT,0,-track/2)
+    left:localPoint(center,state.q.psiT,0,tracks[axleIndex]/2),
+    right:localPoint(center,state.q.psiT,0,-tracks[axleIndex]/2)
    }));
    currentTracks.forEach((sample,axleIndex)=>{
     const axle=axles[axleIndex];
@@ -706,7 +757,8 @@
       endpointResidual.tractorHeading<=endpointTolerance.heading&&
       endpointResidual.trailerHeading<=endpointTolerance.heading;
      if(matchesPlannerState){
-      integratedByAxle=offsets.map(offset=>{
+      integratedByAxle=offsets.map((offset,axleIndex)=>{
+       const track=tracks[axleIndex];
        const speeds=reconstructed.map(q=>({
         center:wheelSpeedPerReferenceMetre(q,state.gear,state.steer,offset,0),
         left:wheelSpeedPerReferenceMetre(q,state.gear,state.steer,offset,track/2),
@@ -817,5 +869,5 @@
   };
  }
 
- return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,validateVehicleParams,validateTireGroupWidthUncertainty,trailerAxleTireGroupWidths,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
+ return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,validateVehicleParams,validateTireGroupWidthUncertainty,trailerAxleTireGroupWidths,trailerAxleSpacings,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
 });

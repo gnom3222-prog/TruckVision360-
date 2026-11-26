@@ -1079,10 +1079,14 @@ test('vehicle parameter bounds evaluate all endpoint combinations for one active
  assert.deepEqual(bounds,{wheelbase:{min:3.7999,max:3.8}});
 });
 
-test('vehicle parameter bounds pairwise covering array checks every endpoint pair for seven active dimensions',()=>{
+test('vehicle parameter bounds pairwise covering array includes per-axle spacing, track and tire-group widths',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
+ const calibratedParams={
+  ...params,trailerAxleSpacing12:1.3,trailerAxle2Track:2.11,
+  trailerAxle1TireGroupWidth:0.5,trailerAxle2TireGroupWidth:0.5,trailerAxle3TireGroupWidth:0.5
+ };
  let target={...start};
- for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.24,0.05/0.7,params);
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.24,0.05/0.7,calibratedParams);
  const bounds={
   wheelbase:{min:3.799,max:3.801},
   hitchOffset:{min:0.574,max:0.576},
@@ -1090,11 +1094,16 @@ test('vehicle parameter bounds pairwise covering array checks every endpoint pai
   trailerLength:{min:13.599,max:13.601},
   trailerWidth:{min:2.549,max:2.551},
   trailerAxleSpacing:{min:1.299,max:1.301},
+  trailerAxleSpacing12:{min:1.299,max:1.301},
+  trailerAxle2Track:{min:2.109,max:2.111},
+  trailerAxle1TireGroupWidth:{min:0.499,max:0.501},
+  trailerAxle2TireGroupWidth:{min:0.499,max:0.501},
+  trailerAxle3TireGroupWidth:{min:0.499,max:0.501},
   tractorSteeringTrack:{min:2.049,max:2.051}
  };
  const result=planner.planAlternativesWithVehicleParameterBounds({
   start,goal:{x:target.x,y:target.y,heading:target.psi},
-  params,obstacles:[],integrate,
+  params:calibratedParams,obstacles:[],integrate,
   alternativeMaxExpansions:1200,
   positionTolerance:0.05,headingTolerance:0.02,
   maxTerminalArticulation:0.5,minClearance:0.30,
@@ -1108,7 +1117,8 @@ test('vehicle parameter bounds pairwise covering array checks every endpoint pai
  const sensitivity=result.parameterSensitivity;
  assert.equal(sensitivity.status,'stable-across-pairwise-endpoint-scenarios');
  assert.equal(sensitivity.coverage,'pairwise-endpoint-covering-array');
- assert.equal(sensitivity.testedScenarioCount,9);
+ assert.equal(sensitivity.testedScenarioCount,17);
+ assert.equal(sensitivity.scenarioCount,17);
  assert.equal(sensitivity.midpointScenarioCount,0);
  assert.equal(sensitivity.testedMidpointScenarioCount,0);
  assert.equal(sensitivity.interiorCoverage,'one-factor-midpoints');
@@ -2160,4 +2170,41 @@ test('per-axle trailer tire widths are used by individual clearance and swept bo
   ...base,trailerAxle1TireGroupWidth:0.74
  });
  assert.ok(calibratedRate.trailer>baselineRate.trailer);
+});
+
+test('swept trailer displacement bound includes each axle track and asymmetric axle offsets',()=>{
+ const q={x:0,y:0,psi:0.32,psiT:-0.14};
+ const baseParams={
+  ...params,trailerWidth:2.9,
+  trailerAxle1Track:2.2,trailerAxle2Track:2.2,trailerAxle3Track:2.2
+ };
+ const base=planner.sweptDisplacementRatesPerMeter(0.24,baseParams,q,0.05);
+ const widerThird=planner.sweptDisplacementRatesPerMeter(
+  0.24,{...baseParams,trailerAxle3Track:3.2},q,0.05
+ );
+ assert.ok(widerThird.trailer>base.trailer,
+  'a wider third axle track must expand the swept displacement envelope');
+});
+
+test('per-wheel adaptive displacement rate uses the configured track of its own trailer axle',()=>{
+ const measureRate=thirdAxleTrack=>{
+  const p={
+   ...params,trailerLength:13.6,trailerWidth:2.9,trailerAxleSpacing:1.3,
+   trailerTrack:2.79,trailerAxle3Track:thirdAxleTrack,tireLength:0.72,tireWidth:0.44
+  };
+  const steer=0.45,stepDistance=0.8;
+  const start={x:0,y:0,psi:0.25,psiT:-0.2,gear:1,steer,stepDistance:0};
+  const end=physics.rk4(start,0.7,steer,stepDistance/0.7,p);
+  const result=planner.analyzeWheelTrajectoryClearance(
+   [start,{...end,gear:1,steer,stepDistance}],
+   [{x:100,y:100,w:1,h:1,name:'distant reference obstacle'}],p
+  );
+  assert.equal(result.segmentsWithIntermediateKinematicSamples,1);
+  const wheel=result.wheels.find(item=>item.name==='левое колесо 3-й оси полуприцепа');
+  assert.ok(wheel&&wheel.limitingDetail);
+  return wheel.limitingDetail.displacementRate;
+ };
+ const commonRate=measureRate(2.79);
+ const widerThirdAxleRate=measureRate(3.4);
+ assert.ok(widerThirdAxleRate>commonRate);
 });
