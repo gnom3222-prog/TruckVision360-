@@ -12,6 +12,7 @@
  const MAX_QUAD_EDGE_SPREAD_RATIO=0.05;
  const MAX_QUAD_ANGLE_ERROR_DEG=5;
  const MAX_QUAD_DIAGONAL_SPREAD_RATIO=0.05;
+ const NONLINEAR_UNCERTAINTY_WARNING_RATIO=0.25;
 
  function validQuad(q,minArea=1000,minEdge=20){
   if(!Array.isArray(q)||q.length!==4||q.some(p=>!p||!Number.isFinite(p.x)||!Number.isFinite(p.y)))return false;
@@ -377,10 +378,10 @@
   const nonlinearMismatchHeight=nonlinearSensitivityAvailable?relativeMismatch(sigmaHeight,nonlinearSigmaHeight):null;
   const nonlinearWarningReasons=[];
   if(!nonlinearSensitivityAvailable)nonlinearWarningReasons.push('finite-perturbation-unavailable');
-  if(nonlinearSensitivityAvailable&&Math.max(nonlinearMismatchWidth,nonlinearMismatchHeight)>0.25){
+  if(nonlinearSensitivityAvailable&&Math.max(nonlinearMismatchWidth,nonlinearMismatchHeight)>NONLINEAR_UNCERTAINTY_WARNING_RATIO){
    nonlinearWarningReasons.push('linearized-and-finite-sensitivity-disagree');
   }
-  if(nonlinearSensitivityAvailable&&maxAxisAsymmetryRatio>0.25){
+  if(nonlinearSensitivityAvailable&&maxAxisAsymmetryRatio>NONLINEAR_UNCERTAINTY_WARNING_RATIO){
    nonlinearWarningReasons.push('asymmetric-one-sigma-response');
   }
   return {
@@ -478,6 +479,7 @@
  return Object.freeze({
   validQuad,solve,homography,map,measureQuad,estimateUncertainty,registerGateOnMap,quadShapeDiagnostics,
   MAX_CONDITION_ESTIMATE,CONDITION_WARNING_ESTIMATE,
-  MAX_QUAD_EDGE_SPREAD_RATIO,MAX_QUAD_ANGLE_ERROR_DEG,MAX_QUAD_DIAGONAL_SPREAD_RATIO
+  MAX_QUAD_EDGE_SPREAD_RATIO,MAX_QUAD_ANGLE_ERROR_DEG,MAX_QUAD_DIAGONAL_SPREAD_RATIO,
+  NONLINEAR_UNCERTAINTY_WARNING_RATIO
  });
 });
