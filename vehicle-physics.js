@@ -497,7 +497,7 @@
    const baseHeading=isTractor?q.psi:q.psiT;
    const heading=norm(baseHeading+(entry.headingOffsetDeg??0)*Math.PI/180);
    const center=localPoint(anchor,heading,entry.longitudinalOffset??0,entry.lateralOffset??0);
-   const margin=entry.uncertaintyMargin??0;
+   const margin=(entry.uncertaintyMargin??0)+(Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0);
    return {
     name:entry.name.trim(),
     anchor:entry.anchor,
