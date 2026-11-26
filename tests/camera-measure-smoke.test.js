@@ -343,7 +343,7 @@ test('camera obstacle registration requires explicit map coordinates and heading
  await camera.fire('cameraMeasureObstacle','click');
  await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
  assert.equal(camera.obstacleRegistrations.length,0);
- assert.match(camera.elements.cameraStatus.textContent,/Введите координаты центра и направление препятствия/);
+ assert.match(camera.elements.cameraStatus.textContent,/Введите название, центр X\\/Y и направление препятствия/);
  camera.fire('cameraStop','click');
 });
 
