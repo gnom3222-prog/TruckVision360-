@@ -2,6 +2,17 @@
 const $=id=>document.getElementById(id),v=$('measureVideo'),c=$('measureOverlay'),ctx=c.getContext('2d'),status=$('cameraStatus'),geometry=window.TruckVisionCameraGeometry;
 let stream=null,streamRequestId=0,startPending=false,mode=null,pts=[],Hcal=null,referencePoints=null,referenceWidth=0,referenceHeight=0,fw=0,fh=0,frameLocked=false;
 const say=s=>status.textContent=s,dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function readMeasurementUncertainty(){
+ const pointText=$('cameraPointSigma').value.trim();
+ const referenceText=$('cameraReferenceSigma').value.trim();
+ if(!pointText||!referenceText)throw new Error('Введите положительную неопределённость отметки угла и погрешность размера эталона. Пустые поля не считаются нулевой погрешностью.');
+ const sigmaPixels=Number(pointText),referenceSigmaMm=Number(referenceText);
+ if(!Number.isFinite(sigmaPixels)||sigmaPixels<0.5||sigmaPixels>20||
+    !Number.isFinite(referenceSigmaMm)||referenceSigmaMm<0.1||referenceSigmaMm>50){
+  throw new Error('Допуски измерения должны быть в пределах 0,5–20 px для отметки угла и 0,1–50 мм для размера эталона.');
+ }
+ return {sigmaPixels,sigmaReference:referenceSigmaMm/1000};
+}
 function lockFrame(){if(frameLocked)return true;if(!stream||!v.videoWidth||!v.videoHeight)return false;v.pause();frameLocked=true;return true;}
 function resumeFrame(){if(!frameLocked)return;frameLocked=false;if(stream)v.play().catch(()=>say('Не удалось возобновить видеопоток. Выключите и снова включите камеру.'));}
 function draw(){if(!v.videoWidth)return;const w=v.videoWidth,h=v.videoHeight;if(c.width!==w||c.height!==h){if(fw&&(w!==fw||h!==fh)){Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];resumeFrame();say('Изменился размер видеокадра. Калибровка сброшена; повторите её.');}c.width=w;c.height=h;fw=w;fh=h;}c.style.left=v.offsetLeft+'px';c.style.top=v.offsetTop+'px';c.style.width=v.clientWidth+'px';c.style.height=v.clientHeight+'px';ctx.clearRect(0,0,w,h);if(pts.length){ctx.strokeStyle='#ffe082';ctx.fillStyle='#ffe082';ctx.lineWidth=Math.max(3,w/500);ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));if(pts.length===4)ctx.closePath();ctx.stroke();pts.forEach((p,i)=>{ctx.beginPath();ctx.arc(p.x,p.y,Math.max(8,w/160),0,7);ctx.fill();ctx.fillStyle='#081321';ctx.font='bold '+Math.max(16,w/40)+'px system-ui';ctx.fillText((mode==='reference'?['1','2','3','4']:['A','B','C','D'])[i],p.x+8,p.y-8);ctx.fillStyle='#ffe082';});}}
