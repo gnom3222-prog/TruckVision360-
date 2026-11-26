@@ -1994,10 +1994,12 @@ function updateRoutePlayback(){
  if(routePlayback.currentGear!==gear){
   if(Math.abs(speed)>0.02){
    drive=0;braking=true;steer=0;$('steer').value='0';
+   $('routeAdvice').textContent='Переключение передачи: торможение до модельной скорости не выше 0,02 м/с. Движение возобновится после остановки; задержка КПП и сцепления не моделируется.';
    return;
   }
   routePlayback.currentGear=gear;
   braking=false;
+  $('routeAdvice').textContent='Передача изменена после модельной остановки. Время переключения КПП и сцепления не моделируется.';
  }
  let nearest=Infinity;
  for(let i=Math.max(1,index-8);i<Math.min(plannedRoute.length,index+18);i++){
