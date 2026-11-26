@@ -709,7 +709,7 @@
      // segment. Check the new tire headings before integrating any distance.
      const controlStartFootprints=rootPhysics.wheelFootprints(previousState,p,segmentSteer);
      if(controlStartFootprints.length!==10){
-      throw new Error('Control-start wheel geometry must contain exactly ten footprints.');
+      throw new Error('Control-start wheel geometry must contain exactly ten axle-side footprint groups.');
      }
      for(const wheel of controlStartFootprints){
       let polygonDistance=Infinity,polygonObstacle=null;
@@ -795,9 +795,11 @@
         intermediateState,p,segmentSteer
        );
        if(intermediateFootprints.length!==10){
-        throw new Error('Intermediate wheel geometry must contain exactly ten footprints.');
+        throw new Error('Intermediate wheel geometry must contain exactly ten axle-side footprint groups.');
        }
        for(const wheel of intermediateFootprints){
+        const footprintWidth=Number.isFinite(wheel.footprintWidth)?wheel.footprintWidth:tireWidth;
+        const tireRadius=Math.hypot(tireLength/2+uncertainty,footprintWidth/2+uncertainty);
         const envelope=wheelEnvelopePolygon(wheel.center,tireRadius);
         let envelopeDistance=Infinity,envelopeObstacle=null;
         let polygonDistance=Infinity,polygonObstacle=null;
