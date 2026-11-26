@@ -109,7 +109,7 @@ test('camera permission is requested only on tap; measurement reports uncertaint
   await camera.tap(gatePoints);
  }
  assert.match(camera.elements.gateResult.textContent,/оценка чувствительности/);
- assert.match(camera.elements.gateResult.textContent,/Повторяемость по 3 независимым кадрам/);
+ assert.match(camera.elements.gateResult.textContent,/Повторяемость по 3 отдельным кадрам/);
  assert.match(camera.elements.cameraStatus.textContent,/1σ/);
  assert.ok(Number(camera.elements.gateWidth.value)>1);
  assert.notEqual(camera.elements.gateWidth.value,'3.50','successful registration must replace the previous gate width');
