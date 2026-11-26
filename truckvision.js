@@ -2559,6 +2559,7 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,
     repeatability.widthEnvelopeBound>=repeatability.meanWidth-0.05||
     repeatability.heightEnvelopeBound>=repeatability.meanHeight-0.05||
     repeatability.meanWidth<0.08||repeatability.meanHeight<0.08||
+    typeof name!=='string'||!name.trim()||name.trim().length>48||
     !anchor||![anchor.x,anchor.y,headingRadians].every(Number.isFinite)||
     Math.abs(anchor.x)>100||Math.abs(anchor.y)>100||
     Math.abs(headingRadians)>Math.PI+1e-9||
