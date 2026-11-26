@@ -46,6 +46,7 @@ const cfg={
  trailerAxle3TireCenterSpacing:0,
  tireLength:0.72,
  tireWidth:0.44,
+ auxiliaryEnvelopes:[],
  trailerMass:30000,
  mu:0.7,
  crr:0.008,
@@ -188,6 +189,17 @@ window.TruckVisionClearPerceptionFrame=()=>{
 function readSettings(){
  const candidate={...cfg};
  for(const key of Object.keys(candidate)){
+  if(key==='auxiliaryEnvelopes'){
+   const input=$('auxiliaryEnvelopes');
+   if(input){
+    try{
+     candidate[key]=JSON.parse(String(input.value||'[]'));
+    }catch(error){
+     return {ok:false,changed:false,errors:['auxiliaryEnvelopes: введите корректный JSON-массив измеренных оболочек.']};
+    }
+   }
+   continue;
+  }
   const input=$(key);
   if(input){
    if(String(input.value).trim()==='')return {ok:false,changed:false,errors:[key+': поле не должно быть пустым.']};
@@ -340,7 +352,8 @@ function readSettings(){
  }
  physics.validateTireGroupWidthUncertainty(candidate).forEach(message=>errors.push(message));
  if(errors.length)return {ok:false,changed:false,errors};
- const changed=Object.keys(cfg).some(key=>!Object.is(cfg[key],candidate[key]));
+ const changed=Object.keys(cfg).some(key=>Array.isArray(cfg[key])?
+  JSON.stringify(cfg[key])!==JSON.stringify(candidate[key]):!Object.is(cfg[key],candidate[key]));
  Object.assign(cfg,candidate);
  return {ok:true,changed,errors:[]};
 }
@@ -1073,6 +1086,11 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
  const score=gearChanges*1.2+(steeringChanges+initialSteeringActions)*0.4+(reverseDistance>0?1.5:0)+(articulationWarning?3:maxBeta>30?1.5:0)+
   (effectiveClearance<0.35?4:effectiveClearance<0.75?2:effectiveClearance<1.5?1:0)+(!reached?3:0)+(collision?8:0);
  const reasons=[];
+ if(Array.isArray(cfg.auxiliaryEnvelopes)&&cfg.auxiliaryEnvelopes.length){
+  reasons.push('дополнительные измеренные оболочки осевых узлов: '+cfg.auxiliaryEnvelopes.length+'; их размеры и опорные точки заданы вручную');
+ }else{
+  reasons.push('оболочки ступиц, подвески и кронштейнов не откалиброваны и не входят отдельно в проверку столкновений');
+ }
  if(reverseDistance>0)reasons.push('задний ход: '+reverseSegments+' участков, '+reverseDistance.toFixed(1)+' м');
  if(gearChanges)reasons.push('переключений передачи: '+gearChanges);
  if(steeringChanges)reasons.push('изменений рулевого режима: '+steeringChanges);

@@ -139,6 +139,64 @@
   return errors;
  }
 
+
+ const AUXILIARY_ENVELOPE_ANCHORS=Object.freeze([
+  'tractor-front-axle','tractor-rear-axle',
+  'trailer-axle-1','trailer-axle-2','trailer-axle-3'
+ ]);
+
+ function validateAuxiliaryEnvelopes(envelopes){
+  const errors=[];
+  if(envelopes===undefined)return errors;
+  if(!Array.isArray(envelopes)){
+   return ['Дополнительные оболочки осевых узлов должны быть массивом JSON.'];
+  }
+  if(envelopes.length>32){
+   errors.push('Допускается не более 32 дополнительных оболочек осевых узлов.');
+  }
+  const names=new Set();
+  envelopes.forEach((entry,index)=>{
+   const prefix='Дополнительная оболочка '+(index+1)+': ';
+   if(!entry||typeof entry!=='object'||Array.isArray(entry)){
+    errors.push(prefix+'ожидается объект с измеренными размерами.');
+    return;
+   }
+   if(typeof entry.name!=='string'||!entry.name.trim()||entry.name.trim().length>80){
+    errors.push(prefix+'задайте название длиной от 1 до 80 символов.');
+   }else{
+    const normalized=entry.name.trim().toLocaleLowerCase();
+    if(names.has(normalized))errors.push(prefix+'название должно быть уникальным.');
+    names.add(normalized);
+   }
+   if(!AUXILIARY_ENVELOPE_ANCHORS.includes(entry.anchor)){
+    errors.push(prefix+'неизвестная опорная ось.');
+   }
+   const longitudinalOffset=entry.longitudinalOffset??0;
+   const lateralOffset=entry.lateralOffset??0;
+   const headingOffsetDeg=entry.headingOffsetDeg??0;
+   const uncertaintyMargin=entry.uncertaintyMargin??0;
+   if(!Number.isFinite(longitudinalOffset)||Math.abs(longitudinalOffset)>5){
+    errors.push(prefix+'продольное смещение должно находиться в диапазоне ±5 м.');
+   }
+   if(!Number.isFinite(lateralOffset)||Math.abs(lateralOffset)>3){
+    errors.push(prefix+'поперечное смещение должно находиться в диапазоне ±3 м.');
+   }
+   if(!Number.isFinite(headingOffsetDeg)||Math.abs(headingOffsetDeg)>180){
+    errors.push(prefix+'угловое смещение должно находиться в диапазоне ±180°.');
+   }
+   if(!Number.isFinite(entry.length)||entry.length<0.05||entry.length>5){
+    errors.push(prefix+'длина должна быть измеренным числом от 0,05 до 5 м.');
+   }
+   if(!Number.isFinite(entry.width)||entry.width<0.05||entry.width>5){
+    errors.push(prefix+'ширина должна быть измеренным числом от 0,05 до 5 м.');
+   }
+   if(!Number.isFinite(uncertaintyMargin)||uncertaintyMargin<0||uncertaintyMargin>1){
+    errors.push(prefix+'запас неопределённости должен находиться в диапазоне 0–1 м.');
+   }
+  });
+  return errors;
+ }
+
  function validateVehicleParams(params){
   const errors=[];
   if(!params||typeof params!=='object'){
@@ -293,6 +351,7 @@
     errors.push('tractorTrack/tireWidth/groupWidth: наружная ширина колёсных групп тягача выходит за калибровочную оболочку 3,20 м.');
    }
   }
+  errors.push(...validateAuxiliaryEnvelopes(params.auxiliaryEnvelopes));
   return errors;
  }
 
@@ -420,6 +479,36 @@
   });
  }
 
+
+ // User-measured non-tire hardware boxes (hub, brake chamber, suspension arm, etc.).
+ // Each box is anchored to an axle reference and expanded by its stated margin.
+ function auxiliaryEnvelopePolygons(q,params){
+  const envelopes=params&&params.auxiliaryEnvelopes;
+  const errors=validateAuxiliaryEnvelopes(envelopes);
+  if(errors.length)throw new Error('Некорректные дополнительные оболочки: '+errors.join(' '));
+  if(!Array.isArray(envelopes)||envelopes.length===0)return [];
+  const tractorAxles=tractorAxlePoints(q,params);
+  const trailerAxles=trailerAxlePoints(q,params);
+  return envelopes.map(entry=>{
+   const isTractor=entry.anchor.startsWith('tractor-');
+   const anchor=entry.anchor==='tractor-front-axle'?tractorAxles[0]:
+    (entry.anchor==='tractor-rear-axle'?tractorAxles[1]:
+     trailerAxles[Number(entry.anchor.slice(-1))-1]);
+   const baseHeading=isTractor?q.psi:q.psiT;
+   const heading=norm(baseHeading+(entry.headingOffsetDeg??0)*Math.PI/180);
+   const center=localPoint(anchor,heading,entry.longitudinalOffset??0,entry.lateralOffset??0);
+   const margin=(entry.uncertaintyMargin??0)+(Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0);
+   return {
+    name:entry.name.trim(),
+    anchor:entry.anchor,
+    vehiclePart:isTractor?'тягач':'полуприцеп',
+    componentType:'measured-auxiliary-envelope',
+    uncertaintyMargin:margin,
+    polygon:bodyCorners(center,heading,entry.length/2+margin,-entry.length/2-margin,entry.width+2*margin)
+   };
+  });
+ }
+
  // Collision components are grouped into the same three driver-facing parts.
  // Mirrors are separate cab components, so their nearest obstacle can be named.
  function vehicleCollisionParts(q,params,steer=Number.isFinite(q&&q.steer)?q.steer:0){
@@ -429,10 +518,16 @@
   const bodies=vehiclePolygons(q,params);
   const mirrors=mirrorPolygons(q,params);
   const wheels=buildWheelFootprints(q,params,steer);
+  const auxiliary=auxiliaryEnvelopePolygons(q,params);
   const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
   const tractorWheelComponents=wheels.filter(wheel=>
    wheel.vehiclePart==='тягач'&&polygonOutsideEnvelope(
     wheel.polygon,q,q.psi,5+uncertainty,-1.2-uncertainty,2.55+2*uncertainty
+   )
+  );
+  const tractorAuxiliaryComponents=auxiliary.filter(component=>
+   component.vehiclePart==='тягач'&&polygonOutsideEnvelope(
+    component.polygon,q,q.psi,5+uncertainty,-1.2-uncertainty,2.55+2*uncertainty
    )
   );
   const hitch=hitchPoint(q,params);
@@ -442,10 +537,17 @@
     -(params.trailerLength-1.5+uncertainty),params.trailerWidth+2*uncertainty
    )
   );
+  const trailerAuxiliaryComponents=auxiliary.filter(component=>
+   component.vehiclePart==='полуприцеп'&&polygonOutsideEnvelope(
+    component.polygon,hitch,q.psiT,1.5+uncertainty,
+    -(params.trailerLength-1.5+uncertainty),params.trailerWidth+2*uncertainty
+   )
+  );
   return [
    {vehiclePart:'тягач',bodyIndex:0,components:[
     {name:'основной контур тягача',polygon:bodies[0]},
-    ...tractorWheelComponents.map(wheel=>({name:wheel.name,polygon:wheel.polygon}))
+    ...tractorWheelComponents.map(wheel=>({name:wheel.name,polygon:wheel.polygon})),
+    ...tractorAuxiliaryComponents.map(component=>({name:component.name,polygon:component.polygon,componentType:component.componentType}))
    ]},
    {vehiclePart:'кабина',bodyIndex:1,components:[
     {name:'кабина',polygon:bodies[1]},
@@ -453,7 +555,8 @@
    ]},
    {vehiclePart:'полуприцеп',bodyIndex:2,components:[
     {name:'кузов полуприцепа',polygon:bodies[2]},
-    ...trailerWheelComponents.map(wheel=>({name:wheel.name,polygon:wheel.polygon}))
+    ...trailerWheelComponents.map(wheel=>({name:wheel.name,polygon:wheel.polygon})),
+    ...trailerAuxiliaryComponents.map(component=>({name:component.name,polygon:component.polygon,componentType:component.componentType}))
    ]}
   ];
  }
@@ -1177,5 +1280,5 @@
   };
  }
 
- return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,validateVehicleParams,validateTireGroupWidthUncertainty,trailerAxleTireGroupWidths,trailerAxleTireCenterSpacings,trailerAxleSpacings,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,wheelTireTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
+ return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,validateVehicleParams,validateTireGroupWidthUncertainty,validateAuxiliaryEnvelopes,auxiliaryEnvelopePolygons,trailerAxleTireGroupWidths,trailerAxleTireCenterSpacings,trailerAxleSpacings,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,wheelTireTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
 });

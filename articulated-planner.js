@@ -359,11 +359,41 @@
   );
   // Bound each tire corner by distance to its axle center plus the tire's
   // circumscribed radius; this remains conservative for any steer orientation.
-  const tractorRadius=Math.max(
+  let tractorRadius=Math.max(
    Math.hypot(5+footprintUncertainty,(2.55+2*footprintUncertainty)/2),
    Math.hypot(wheelbase,tractorFrontTrack/2)+tractorWheelCornerRadius,
    Math.hypot(0,tractorRearTrack/2)+tractorWheelCornerRadius
   );
+  const auxiliaryEnvelopes=Array.isArray(p.auxiliaryEnvelopes)?p.auxiliaryEnvelopes:[];
+  const hardwareTrailerAxleOffsets=typeof rootPhysics.trailerAxleOffsets==='function'?
+   rootPhysics.trailerAxleOffsets(p):[(p.trailerAxleSpacing??1.3),0,-(p.trailerAxleSpacing??1.3)];
+  const auxiliaryTrailerSweepPoints=[];
+  for(const entry of auxiliaryEnvelopes){
+   const margin=(entry.uncertaintyMargin??0)+footprintUncertainty;
+   const halfLength=entry.length/2+margin;
+   const halfWidth=entry.width/2+margin;
+   const heading=(entry.headingOffsetDeg??0)*Math.PI/180;
+   const c=Math.cos(heading),s=Math.sin(heading);
+   const baseLongitudinal=entry.anchor==='tractor-front-axle'?wheelbase:
+    (entry.anchor==='tractor-rear-axle'?0:
+     hardwareTrailerAxleOffsets[Number(entry.anchor.slice(-1))-1]);
+   for(const longitudinalSign of [-1,1]){
+    for(const lateralSign of [-1,1]){
+     const localLongitudinal=(entry.longitudinalOffset??0)+
+      c*longitudinalSign*halfLength-s*lateralSign*halfWidth;
+     const localLateral=(entry.lateralOffset??0)+
+      s*longitudinalSign*halfLength+c*lateralSign*halfWidth;
+     if(entry.anchor.startsWith('tractor-')){
+      tractorRadius=Math.max(tractorRadius,Math.hypot(baseLongitudinal+localLongitudinal,localLateral));
+     }else{
+      auxiliaryTrailerSweepPoints.push({
+       longitudinal:baseLongitudinal+localLongitudinal,
+       lateral:localLateral
+      });
+     }
+    }
+   }
+  }
   const cabOffset=p.cabOffset??2.1;
   const cabFront=p.cabFront??1.35;
   const cabWidth=p.cabWidth??2.25;
@@ -404,20 +434,26 @@
    maxTrailerOuterWidth+2*footprintUncertainty
   );
   const trailerLongitudinalOffsets=[trailerFrontFromAxle,trailerRearFromAxle,...trailerWheelLongitudinals];
+  const trailerSweepPoints=[];
+  for(const longitudinal of trailerLongitudinalOffsets){
+   for(const lateral of [-trailerWidthWithUncertainty/2,trailerWidthWithUncertainty/2]){
+    trailerSweepPoints.push({longitudinal,lateral});
+   }
+  }
+  trailerSweepPoints.push(...auxiliaryTrailerSweepPoints);
   let trailerPointRate=0;
   for(const coupling of [-hitchYawCoupling,hitchYawCoupling]){
-   for(const longitudinal of trailerLongitudinalOffsets){
-    for(const lateral of [-trailerWidthWithUncertainty/2,trailerWidthWithUncertainty/2]){
-     const m11=1+coupling*lateral/kingpinAxles;
-     const m12=coupling-lateral/kingpinAxles;
-     const m21=-coupling*longitudinal/kingpinAxles;
-     const m22=longitudinal/kingpinAxles;
-     const column1=m11*m11+m21*m21;
-     const column2=m12*m12+m22*m22;
-     const cross=m11*m12+m21*m22;
-     const largestEigenvalue=0.5*(column1+column2+Math.hypot(column1-column2,2*cross));
-     trailerPointRate=Math.max(trailerPointRate,Math.sqrt(Math.max(0,largestEigenvalue)));
-    }
+   for(const point of trailerSweepPoints){
+    const longitudinal=point.longitudinal,lateral=point.lateral;
+    const m11=1+coupling*lateral/kingpinAxles;
+    const m12=coupling-lateral/kingpinAxles;
+    const m21=-coupling*longitudinal/kingpinAxles;
+    const m22=longitudinal/kingpinAxles;
+    const column1=m11*m11+m21*m21;
+    const column2=m12*m12+m22*m22;
+    const cross=m11*m12+m21*m22;
+    const largestEigenvalue=0.5*(column1+column2+Math.hypot(column1-column2,2*cross));
+    trailerPointRate=Math.max(trailerPointRate,Math.sqrt(Math.max(0,largestEigenvalue)));
    }
   }
   return {
