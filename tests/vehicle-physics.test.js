@@ -1069,7 +1069,10 @@ function makeSuspensionTravelConfig(point=makeSuspensionTravelPoint()){
 const suspensionGeometryParams={
  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
- tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.11
+ tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.11,
+ wheelbaseUncertainty:0.02,tractorFrontTrackUncertainty:0.02,
+ tractorRearTrackUncertainty:0.02,trailerAxleSpacingUncertainty:0.02,
+ trailerTrackUncertainty:0.02
 };
 
 test('suspension travel requires every axle side and explicit compression, rebound, and uncertainty',()=>{
@@ -1105,9 +1108,9 @@ test('bounded rigid-plane suspension envelope includes heave pitch and roll over
 test('independent trailer axle support intervals produce different vertical envelopes',()=>{
  const q={x:0,y:0,psi:0,psiT:0};
  const polygon=physics.vehiclePolygons(q,suspensionGeometryParams)[2];
- const first=makeSuspensionTravelConfig(makeSuspensionTravelPoint(0,0,0));
+ const first=makeSuspensionTravelConfig(makeSuspensionTravelPoint(0,0,0.001));
  first.trailer.axle1.left.compression=0.06;
- const third=makeSuspensionTravelConfig(makeSuspensionTravelPoint(0,0,0));
+ const third=makeSuspensionTravelConfig(makeSuspensionTravelPoint(0,0,0.001));
  third.trailer.axle3.left.compression=0.06;
  const firstRange=physics.suspensionTravelDisplacementRange(
   polygon,q,{...suspensionGeometryParams,suspensionTravel:first},'trailer'
@@ -1169,7 +1172,7 @@ test('auxiliary envelopes move with suspension only when body attachment is expl
 });
 
 test('suspension travel rejects derived pitch or roll slopes outside the linearized model bound',()=>{
- const config=makeSuspensionTravelConfig(makeSuspensionTravelPoint(0,0,0));
+ const config=makeSuspensionTravelConfig(makeSuspensionTravelPoint(0,0,0.001));
  config.trailer.axle1.left.compression=0.25;
  config.trailer.axle1.right.rebound=0.25;
  config.trailer.axle1.left.uncertainty=0.05;
