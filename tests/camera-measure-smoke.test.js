@@ -539,7 +539,7 @@ test('camera refuses a repeat capture until the video time advances',async()=>{
  await camera.tap(gatePoints);
  camera.fire('cameraReset','click');
  await camera.fire('cameraCalibrate','click');
- assert.match(camera.elements.cameraStatus.textContent,/дождитесь следующего видеокадра/);
+ assert.match(camera.elements.cameraStatus.textContent,/Дождитесь следующего видеокадра/);
  assert.equal(camera.elements.measureVideo.paused,false);
  camera.fire('cameraStop','click');
 });
