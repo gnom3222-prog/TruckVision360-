@@ -2026,3 +2026,59 @@ test('per-wheel clearance checks the stationary steering-control pose before the
  assert.equal(wheel.minimumIntermediatePolygonDetail.sampleFraction,0);
  assert.ok(Math.abs(wheel.minimumIntermediatePolygonDetail.distanceAlongRoute)<1e-12);
 });
+
+
+test('wheel trajectory diagnostics expose in-route gear changes as untimed stop-and-confirm events',()=>{
+ const start={
+  x:0,y:0,psi:0,psiT:0,gear:1,steer:0,
+  gearKnown:true,steerKnown:true,stepDistance:0
+ };
+ const step=0.25;
+ const reverse=physics.rk4(start,-0.7,0,step/0.7,params);
+ const states=[
+  start,
+  {...reverse,gear:-1,steer:0,gearKnown:true,steerKnown:true,stepDistance:step}
+ ];
+ const result=planner.analyzeWheelTrajectoryClearance(states,[],params);
+ assert.equal(result.segmentsWithGearChangeAtStart,1);
+ assert.equal(result.temporalEvents.length,1);
+ const event=result.temporalEvents[0];
+ assert.equal(event.type,'gear-change');
+ assert.equal(event.from,1);
+ assert.equal(event.to,-1);
+ assert.equal(event.segmentIndex,1);
+ assert.equal(event.requiresStopBeforeChange,true);
+ assert.equal(event.requiresOperatorConfirmation,true);
+ assert.equal(event.confirmationMode,'explicit-playback-confirmation');
+ assert.equal(event.durationSeconds,null);
+ assert.equal(event.durationKnown,false);
+ assert.equal(event.timeStatus,'unknown');
+ assert.equal(result.totalDurationSeconds,null);
+ assert.equal(result.timeModelComplete,false);
+});
+
+test('unknown initial gear is represented as route-start selection, not a timed shift',()=>{
+ const start={
+  x:0,y:0,psi:0,psiT:0,gear:1,steer:0,
+  gearKnown:false,steerKnown:false,stepDistance:0
+ };
+ const step=0.25;
+ const reverse=physics.rk4(start,-0.7,0,step/0.7,params);
+ const states=[
+  start,
+  {...reverse,gear:-1,steer:0,gearKnown:true,steerKnown:true,stepDistance:step}
+ ];
+ const result=planner.analyzeWheelTrajectoryClearance(states,[],params);
+ assert.equal(result.segmentsWithInitialGearSelection,1);
+ assert.equal(result.segmentsWithGearChangeAtStart,0);
+ assert.equal(result.temporalEvents.length,1);
+ const event=result.temporalEvents[0];
+ assert.equal(event.type,'initial-gear-selection');
+ assert.equal(event.from,null);
+ assert.equal(event.to,-1);
+ assert.equal(event.requiresStopBeforeChange,false);
+ assert.equal(event.requiresOperatorConfirmation,true);
+ assert.equal(event.confirmationMode,'route-start');
+ assert.equal(event.durationSeconds,null);
+ assert.equal(event.durationKnown,false);
+});
