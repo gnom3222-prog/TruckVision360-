@@ -356,6 +356,8 @@ test('camera gate registration activates a measured lintel only with explicit th
  elements.gateLintelFloorUncertainty.value='0.02';
  elements.gateLintelThickness.value='0.25';
  elements.gateLintelThicknessUncertainty.value='0.01';
+ elements.gateLintelSpan.value='4.6';
+ elements.gateLintelSpanUncertainty.value='0.1';
  elements.gateLintelDepth.value='0.45';
  elements.gateLintelDepthUncertainty.value='0.02';
  const applied=windowObject.TruckVisionApplyGateRegistration({
