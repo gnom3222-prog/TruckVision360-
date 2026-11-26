@@ -520,7 +520,8 @@
    });
   };
   const addDualPair=(vehiclePart,axleIndex,side,groupCenter,heading,baseName,centerSpacing)=>{
-   const outerOffset=side*centerSpacing/2;
+   const sideSign=side==='left'?1:-1;
+   const outerOffset=sideSign*centerSpacing/2;
    const innerOffset=-outerOffset;
    add(vehiclePart,axleIndex,side,localPoint(groupCenter,heading,0,outerOffset),heading,
     baseName+' — наружная покрышка',tireWidth,'explicit-dual-tire-pair',
