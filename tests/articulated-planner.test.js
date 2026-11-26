@@ -2169,7 +2169,7 @@ test('per-axle trailer tire widths are used by individual clearance and swept bo
 test('swept trailer displacement bound includes each axle track and asymmetric axle offsets',()=>{
  const q={x:0,y:0,psi:0.32,psiT:-0.14};
  const baseParams={
-  ...params,
+  ...params,trailerWidth:2.9,
   trailerAxle1Track:2.2,trailerAxle2Track:2.2,trailerAxle3Track:2.2
  };
  const base=planner.sweptDisplacementRatesPerMeter(0.24,baseParams,q,0.05);
