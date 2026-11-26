@@ -2190,7 +2190,9 @@ test('per-wheel adaptive displacement rate uses the configured track of its own 
    [{x:100,y:100,w:1,h:1,name:'distant reference obstacle'}],p
   );
   assert.equal(result.segmentsWithIntermediateKinematicSamples,1);
-  return result.segmentDiagnostics[0].maxWheelCenterRatePerMeter;
+  const wheel=result.wheels.find(item=>item.name==='левое колесо 3-й оси полуприцепа');
+  assert.ok(wheel&&wheel.limitingDetail);
+  return wheel.limitingDetail.displacementRate;
  };
  const commonRate=measureRate(2.79);
  const widerThirdAxleRate=measureRate(3.4);
