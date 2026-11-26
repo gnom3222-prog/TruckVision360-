@@ -302,7 +302,7 @@ test('measured gate height is exposed only as an optional overhead lintel input'
  for(const id of [
   'gateLintelEnabled','gateLintelClearHeight','gateLintelCameraHeightUncertainty',
   'gateLintelFloorUncertainty','gateLintelThickness','gateLintelThicknessUncertainty',
-  'gateLintelDepth','gateLintelDepthUncertainty'
+  'gateLintelSpan','gateLintelSpanUncertainty','gateLintelDepth','gateLintelDepthUncertainty'
  ]){
   assert.match(html,new RegExp('id="'+id+'"'),'missing lintel control '+id);
  }
