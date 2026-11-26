@@ -353,6 +353,7 @@ test('camera registration atomically applies measured gate pose and enables jamb
 test('camera gate registration activates a measured lintel only with explicit thickness and depth',()=>{
  const {elements,windowObject}=bootSimulator();
  elements.gateLintelEnabled.checked=true;
+ elements.gateLintelAlignmentConfirmed.checked=true;
  elements.gateLintelFloorUncertainty.value='0.02';
  elements.gateLintelThickness.value='0.25';
  elements.gateLintelThicknessUncertainty.value='0.01';
@@ -374,6 +375,7 @@ test('camera gate registration activates a measured lintel only with explicit th
 test('camera gate registration rejects an enabled lintel without measured beam dimensions',()=>{
  const {elements,windowObject}=bootSimulator();
  elements.gateLintelEnabled.checked=true;
+ elements.gateLintelAlignmentConfirmed.checked=true;
  const before=elements.gateWidth.value;
  const applied=windowObject.TruckVisionApplyGateRegistration({
   centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08,
