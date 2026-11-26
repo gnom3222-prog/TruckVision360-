@@ -889,7 +889,7 @@
       for(const current of currentChecks){
        const previous=previousByName.get(current.wheel.name);
        if(!previous)throw new Error('Wheel identity changed between adjacent route states.');
-       const rate=wheelCenterDisplacementRatePerMeter(current.wheel,p,previousState,state);
+       const rate=wheelCenterDisplacementRatePerMeter(current.wheel,p,previousState,state)*roadSurfaceSpatialRateScale(p);
        if(!Number.isFinite(rate)||rate<0)throw new Error('Wheel displacement-rate bound is invalid.');
        ratesByWheel.set(current.wheel.name,rate);
        maxWheelRate=Math.max(maxWheelRate,rate);
