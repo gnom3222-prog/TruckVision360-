@@ -502,8 +502,9 @@
   if(!Number.isFinite(sigmaWidth)||sigmaWidth<0||sigmaWidth>25){
    throw new Error('Оценка 1σ ширины должна быть конечной и неотрицательной.');
   }
-  // Convert the camera's local 1σ sensitivity into a clearly-labelled 2σ
-  // screening envelope. This is not a deterministic bound or a safety claim.
+  // A single frame uses a local 2σ screening approximation. A repeated series
+  // uses the observed deviations plus each frame's own 2σ sensitivity; shared
+  // reference-size error is not reduced by averaging. Neither is a hard bound.
   const widthUncertaintyBound=repeatability?repeatability.widthEnvelopeBound:2*sigmaWidth;
   if(widthUncertaintyBound>2){
    throw new Error('Оболочка неопределённости ширины превышает поддерживаемый предел 2 м. Измерение нельзя переносить на карту.');
