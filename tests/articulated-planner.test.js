@@ -2333,7 +2333,7 @@ test('per-wheel swept lower-bound rate includes the configured road-surface grad
 });
 
 
-function suspensionPoint(compression=0,rebound=0.08,uncertainty=0){
+function suspensionPoint(compression=0,rebound=0.08,uncertainty=0.005){
  return {compression,rebound,uncertainty};
 }
 function calibratedSuspension(){
@@ -2349,6 +2349,11 @@ test('vertical clearance includes bounded suspension heave pitch and roll envelo
  const obstacle=[{name:'overhead beam',x:2.1,y:0,w:0.1,h:0.1,zMin:2.24,zMax:2.30,zUncertainty:0}];
  const base={
   ...params,
+  wheelbaseUncertainty:0.02,
+  tractorFrontTrackUncertainty:0.02,
+  tractorRearTrackUncertainty:0.02,
+  trailerAxleSpacingUncertainty:0.02,
+  trailerTrackUncertainty:0.02,
   vehicleVerticalProfiles:{
    'tractor-body':{zMin:0.4,zMax:0.8},
    'tractor-cab':{zMin:2.0,zMax:2.2},
