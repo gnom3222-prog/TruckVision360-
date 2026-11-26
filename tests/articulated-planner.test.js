@@ -1929,3 +1929,100 @@ test('adaptive per-wheel interval lower bounds stay below dense reverse high-art
    JSON.stringify({wheel:wheel.name,lowerBound:wheel.minimumClearanceLowerBound,denseReference}));
  }
 });
+
+test('planner marks the initial transmission and steering inputs as unknown until the first control is selected',()=>{
+ const result=planner.plan({
+  start:{x:0,y:0,psi:0,psiT:0},
+  goal:{x:2,y:0},params,obstacles:[],integrate,maxExpansions:2000
+ });
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.states[0].gearKnown,false);
+ assert.equal(result.states[0].steerKnown,false);
+});
+
+test('per-wheel clearance treats the first reverse selection as an unknown initial control, not a measured gear change',()=>{
+ const p={...params,footprintUncertainty:0.02};
+ const start={
+  x:0,y:0,psi:0.12,psiT:-0.08,gear:1,steer:0,
+  gearKnown:false,steerKnown:false,stepDistance:0
+ };
+ const stepDistance=0.18,steer=0.18;
+ const end=physics.rk4(start,-0.7,steer,stepDistance/0.7,p);
+ const result=planner.analyzeWheelTrajectoryClearance([
+  start,{...end,gear:-1,steer,stepDistance}
+ ],[{x:50,y:50,w:0.2,h:0.2,name:'initial-selection far obstacle'}],p);
+ const segment=result.segmentDiagnostics[0];
+ assert.equal(segment.status,'rk4-adaptive-intermediate-samples');
+ assert.equal(segment.gearTransition.kind,'initial-gear-selection');
+ assert.equal(segment.gearTransition.from,null);
+ assert.equal(segment.gearTransition.to,-1);
+ assert.equal(segment.gearChangedAtSegmentStart,false);
+ assert.equal(result.segmentsWithGearChangeAtStart,0);
+ assert.equal(result.segmentsWithInitialGearSelection,1);
+ assert.ok(segment.endpointResidual.position<=1e-8);
+ assert.ok(Math.abs(result.distanceAlongRoute-stepDistance)<1e-12);
+});
+
+test('per-wheel clearance reconstructs both directions of an in-route gear change from the shared pose',()=>{
+ const p={...params,footprintUncertainty:0.02};
+ const stepDistance=0.2,steer=0.16;
+ const farObstacle={x:50,y:50,w:0.2,h:0.2,name:'gear-boundary far obstacle'};
+ for(const [fromGear,toGear] of [[1,-1],[-1,1]]){
+  const start={
+   x:0,y:0,psi:0.2,psiT:-0.15,gear:fromGear,steer,
+   gearKnown:true,steerKnown:true,stepDistance:0
+  };
+  const end=physics.rk4(start,toGear*0.7,steer,stepDistance/0.7,p);
+  const wrongDirection=physics.rk4(start,fromGear*0.7,steer,stepDistance/0.7,p);
+  assert.ok(Math.hypot(end.x-wrongDirection.x,end.y-wrongDirection.y)>0.1);
+  const result=planner.analyzeWheelTrajectoryClearance([
+   start,{...end,gear:toGear,steer,stepDistance}
+  ],[farObstacle],p);
+  const segment=result.segmentDiagnostics[0];
+  assert.equal(segment.status,'rk4-adaptive-intermediate-samples');
+  assert.equal(segment.gearChangedAtSegmentStart,true);
+  assert.deepEqual(segment.gearTransition,{
+   kind:'gear-change',from:fromGear,to:toGear,at:'segment-start',
+   dwellTimeModelled:false,spatialSegmentUsesGear:toGear
+  });
+  assert.equal(segment.motionModel,'constant-control-spatial-segment; gear-change dwell not modelled');
+  assert.ok(segment.endpointResidual.position<=1e-8);
+  assert.equal(result.segmentsWithGearChangeAtStart,1);
+  assert.ok(Math.abs(result.distanceAlongRoute-stepDistance)<1e-12);
+ }
+});
+
+test('per-wheel clearance checks the stationary steering-control pose before the following segment moves',()=>{
+ const p={...params,footprintUncertainty:0.01};
+ const start={
+  x:0,y:0,psi:0,psiT:0,gear:1,steer:0,
+  gearKnown:true,steerKnown:true,stepDistance:0
+ };
+ const steer=0.55,stepDistance=0.02;
+ const target=physics.wheelFootprints(start,p,steer).find(wheel=>
+  wheel.name==='левое переднее колесо тягача'
+ );
+ assert.ok(target);
+ const outerCorner=target.polygon.reduce((best,point)=>point.y>best.y?point:best);
+ const obstacle={
+  x:outerCorner.x,y:outerCorner.y,w:0.01,h:0.01,
+  name:'steering-control-start post'
+ };
+ const oldPose=planner.analyzeWheelTrajectoryClearance([start],[obstacle],p);
+ const oldWheel=oldPose.wheels.find(wheel=>wheel.name===target.name);
+ assert.ok(oldWheel.minimumSampledPolygonClearance>0);
+ const end=physics.rk4(start,0.7,steer,stepDistance/0.7,p);
+ const result=planner.analyzeWheelTrajectoryClearance([
+  start,{...end,gear:1,steer,stepDistance}
+ ],[obstacle],p);
+ const segment=result.segmentDiagnostics[0];
+ const wheel=result.wheels.find(item=>item.name===target.name);
+ assert.equal(segment.steeringChangedAtSegmentStart,true);
+ assert.equal(segment.controlStartPoseChecked,true);
+ assert.equal(result.controlStartPosesAnalyzed,1);
+ assert.equal(result.controlStartWheelChecks,10);
+ assert.ok(wheel.minimumIntermediatePolygonClearance<=1e-9);
+ assert.equal(wheel.minimumIntermediatePolygonDetail.controlStartPose,true);
+ assert.equal(wheel.minimumIntermediatePolygonDetail.sampleFraction,0);
+ assert.ok(Math.abs(wheel.minimumIntermediatePolygonDetail.distanceAlongRoute)<1e-12);
+});
