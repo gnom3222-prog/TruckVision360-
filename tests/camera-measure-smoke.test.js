@@ -29,6 +29,7 @@ function bootCamera(options={}){
   };
  }
  let permissionRequests=0,trackStops=0,clearCalls=0;
+ const mediaTracks=[];
  const appliedRegistrations=[],obstacleRegistrations=[];
  const win={
   TruckVisionCameraGeometry:options.geometry||geometry,
@@ -40,7 +41,18 @@ function bootCamera(options={}){
  const sandbox={
   window:win,
   document:{getElementById:id=>elements[id]},
-  navigator:{mediaDevices:{getUserMedia:async()=>{permissionRequests++;if(options.permissionError){const error=new Error('camera permission error');error.name=options.permissionError;throw error;}return{getTracks:()=>[{stop(){trackStops++;}}]};}}},
+  navigator:{mediaDevices:{getUserMedia:async()=>{
+   permissionRequests++;
+   if(options.permissionError){const error=new Error('camera permission error');error.name=options.permissionError;throw error;}
+   const listeners={};
+   const track={
+    stop(){trackStops++;},
+    addEventListener(type,fn){(listeners[type]??=[]).push(fn);},
+    emit(type){for(const fn of listeners[type]||[])fn();}
+   };
+   mediaTracks.push(track);
+   return{getTracks:()=>[track]};
+  }}},
   isSecureContext:options.secureContext!==false,
   console
  };
@@ -50,7 +62,13 @@ function bootCamera(options={}){
  const tap=async points=>{
   for(const p of points)fire('measureOverlay','pointerdown',{clientX:p.x,clientY:p.y});
  };
- return {elements,windowListeners,fire,tap,appliedRegistrations,obstacleRegistrations,get clearCalls(){return clearCalls;},get permissionRequests(){return permissionRequests;},get trackStops(){return trackStops;}};
+ return {
+  elements,windowListeners,fire,tap,appliedRegistrations,obstacleRegistrations,
+  endTrack(index=mediaTracks.length-1){mediaTracks[index]?.emit('ended');},
+  get clearCalls(){return clearCalls;},
+  get permissionRequests(){return permissionRequests;},
+  get trackStops(){return trackStops;}
+ };
 }
 
 test('camera permission is requested only on tap; measurement reports uncertainty and orientation invalidates calibration',async()=>{
@@ -266,4 +284,35 @@ test('camera obstacle registration requires explicit bounded map-pose uncertaint
  assert.equal(camera.obstacleRegistrations.length,0);
  assert.match(camera.elements.cameraStatus.textContent,/Допуски привязки должны быть/);
  camera.fire('cameraStop','click');
+});
+
+
+test('ended iPhone camera track clears calibration and requires a new explicit permission tap',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ assert.equal(camera.permissionRequests,1);
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
+ assert.match(camera.elements.cameraStatus.textContent,/Плоскость откалибрована/);
+ camera.endTrack();
+ assert.match(camera.elements.cameraStatus.textContent,/Видеопоток камеры завершился или был прерван/);
+ assert.equal(camera.elements.measureVideo.srcObject??null,null);
+ await camera.fire('cameraStart','click');
+ assert.equal(camera.permissionRequests,2,'after an ended track the next start must request permission again');
+ camera.fire('cameraStop','click');
+ assert.equal(camera.trackStops,1,'the replacement stream must be stopped normally');
+});
+
+test('pagehide stops the active camera stream and invalidates the frozen calibration',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
+ assert.match(camera.elements.cameraStatus.textContent,/Плоскость откалибрована/);
+ camera.windowListeners.pagehide[0]();
+ assert.equal(camera.trackStops,1,'pagehide must release the active media track');
+ assert.equal(camera.elements.measureVideo.srcObject??null,null);
+ assert.match(camera.elements.cameraStatus.textContent,/Камера выключена/);
+ camera.fire('cameraMeasureGate','click');
+ assert.match(camera.elements.cameraStatus.textContent,/Сначала включите камеру/);
 });
