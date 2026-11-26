@@ -33,8 +33,8 @@ test('planner worker imports match the current page physics and planner versions
  const html=read('index.html');
  const worker=read('planner-worker.js');
  for(const file of ['vehicle-physics.js','articulated-planner.js']){
-  const pageUrl=html.match(new RegExp('<script\\s+src=["\\']('+file+'\\?v=[^"\\']+)["\\']'));
-  const workerUrl=worker.match(new RegExp('["\\'](\\./'+file+'\\?v=[^"\\']+)["\\']'));
+  const pageUrl=html.match(new RegExp(`<script\\s+src=["'](${file}\\?v=[^"']+)["']`));
+  const workerUrl=worker.match(new RegExp(`["'](\\./${file}\\?v=[^"']+)["']`));
   assert.ok(pageUrl,'Page must version '+file);
   assert.ok(workerUrl,'Worker must version '+file);
   assert.equal('./'+pageUrl[1],workerUrl[1]);
