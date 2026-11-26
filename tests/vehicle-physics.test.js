@@ -1000,3 +1000,17 @@ test('per-tire integrated estimates are withheld when RK4 endpoint reconstructio
  assert.ok(result.tires.every(tire=>tire.integratedTravelEstimate===null));
  assert.ok(result.segments[0].endpointResidual.trailerHeading>1e-6);
 });
+
+
+test('coarse per-tire Simpson path estimates converge toward a dense RK4 reference',()=>{
+ const coarse=physics.wheelTireTrajectoryDiagnostics(makeTirePath(1,0.28,30,0.1),tirePathParams);
+ const fine=physics.wheelTireTrajectoryDiagnostics(makeTirePath(1,0.28,300,0.01),tirePathParams);
+ assert.equal(coarse.integratedTravelComplete,true);
+ assert.equal(fine.integratedTravelComplete,true);
+ const fineByName=new Map(fine.tires.map(tire=>[tire.name,tire.integratedTravelEstimate]));
+ const errors=coarse.tires.map(tire=>Math.abs(
+  tire.integratedTravelEstimate-fineByName.get(tire.name)
+ ));
+ assert.ok(errors.every(Number.isFinite));
+ assert.ok(Math.max(...errors)<1e-6,'refined route sampling should closely match each tire-center path integral');
+});
