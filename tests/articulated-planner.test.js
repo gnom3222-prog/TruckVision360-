@@ -2278,3 +2278,56 @@ test('downhill road grade reduces the modeled vertical separation and remains bo
  assert.ok(b.minimumSampledPolygonDetail.verticalGap<a.minimumSampledPolygonDetail.verticalGap);
  assert.ok(b.minimumSampledPolygonDetail.verticalGap>=0);
 });
+
+
+test('swept displacement bounds include vertical motion induced by road grade and grade uncertainty',()=>{
+ const base={...params};
+ const flat=planner.sweptDisplacementRatesPerMeter(0.2,base);
+ const graded=planner.sweptDisplacementRatesPerMeter(0.2,{
+  ...base,
+  roadSurface:{
+   originX:0,originY:0,originZ:0,gradeX:0.12,gradeY:-0.04,
+   originZUncertainty:0.01,gradeXUncertainty:0.01,gradeYUncertainty:0.005,
+   surfaceResidualUncertainty:0.02
+  }
+ });
+ assert.ok(graded.roadSurfaceGradientBound>Math.hypot(0.12,-0.04));
+ assert.ok(graded.roadSurfaceRateScale>1);
+ assert.ok(graded.tractor>flat.tractor);
+ assert.ok(graded.cab>flat.cab);
+ assert.ok(graded.trailer>flat.trailer);
+});
+
+test('per-wheel swept lower-bound rate includes the configured road-surface gradient',()=>{
+ const p={
+  ...params,
+  vehicleVerticalProfiles:{
+   'tractor-front-wheel':{zMin:0,zMax:1},
+   'tractor-rear-wheel':{zMin:0,zMax:1},
+   'trailer-axle-1-wheel':{zMin:0,zMax:1},
+   'trailer-axle-2-wheel':{zMin:0,zMax:1},
+   'trailer-axle-3-wheel':{zMin:0,zMax:1}
+  }
+ };
+ const start={x:0,y:0,psi:0.2,psiT:0.1,gear:1,steer:0.2,stepDistance:0};
+ const distance=0.5,steer=0.2;
+ const end=physics.rk4(start,0.7,steer,distance/0.7,p);
+ const obstacle={x:100,y:100,w:1,h:1,zMin:0,zMax:1,name:'distant reference obstacle'};
+ const flat=planner.analyzeWheelTrajectoryClearance(
+  [start,{...end,gear:1,steer,stepDistance:distance}],[obstacle],p
+ );
+ const graded=planner.analyzeWheelTrajectoryClearance(
+  [start,{...end,gear:1,steer,stepDistance:distance}],[obstacle],{
+   ...p,
+   roadSurface:{
+    originX:0,originY:0,originZ:0,gradeX:0.1,gradeY:0,
+    originZUncertainty:0,gradeXUncertainty:0.01,gradeYUncertainty:0,
+    surfaceResidualUncertainty:0
+   }
+  }
+ );
+ const flatWheel=flat.wheels.find(wheel=>wheel.name==='левое переднее колесо тягача');
+ const gradedWheel=graded.wheels.find(wheel=>wheel.name==='левое переднее колесо тягача');
+ assert.ok(flatWheel&&gradedWheel);
+ assert.ok(gradedWheel.limitingDetail.displacementRate>flatWheel.limitingDetail.displacementRate);
+});
