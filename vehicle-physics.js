@@ -171,6 +171,10 @@
    if(!AUXILIARY_ENVELOPE_ANCHORS.includes(entry.anchor)){
     errors.push(prefix+'неизвестная опорная ось.');
    }
+   const suspensionAttachment=entry.suspensionAttachment??'axle';
+   if(!['axle','tractor-body','trailer-body'].includes(suspensionAttachment)){
+    errors.push(prefix+'suspensionAttachment должен быть axle, tractor-body или trailer-body.');
+   }
    const longitudinalOffset=entry.longitudinalOffset??0;
    const lateralOffset=entry.lateralOffset??0;
    const headingOffsetDeg=entry.headingOffsetDeg??0;
@@ -312,7 +316,9 @@
   return {
    min:range.min+elevation.min,
    max:range.max+elevation.max,
-   roadSurfaceStatus:elevation.status
+   roadSurfaceStatus:elevation.status,
+   ...(range.suspensionStatus?{suspensionStatus:range.suspensionStatus}:{}),
+   ...(range.suspensionDisplacement?{suspensionDisplacement:range.suspensionDisplacement}:{})
   };
  }
 
@@ -327,6 +333,166 @@
    'trailer-axle-'+axleIndex+'-wheel';
   const sharedKey=vehiclePart==='тягач'?'tractor-wheel':'trailer-wheel';
   return vehicleVerticalRange(params,specificKey)||vehicleVerticalRange(params,sharedKey);
+ }
+ 
+ const SUSPENSION_TRAVEL_MAX_SLOPE=0.25;
+ const SUSPENSION_AXLE_KEYS=Object.freeze({
+  tractor:['front','rear'],
+  trailer:['axle1','axle2','axle3']
+ });
+ function suspensionSupportDefinitions(params,vehiclePart){
+  if(vehiclePart==='tractor'){
+   return [
+    {key:'front',x:params.wheelbase,track:params.tractorFrontTrack??2.05},
+    {key:'rear',x:0,track:params.tractorRearTrack??2.05}
+   ];
+  }
+  const offsets=trailerAxleOffsets(params),tracks=trailerAxleTracks(params);
+  return offsets.map((x,index)=>({key:'axle'+(index+1),x,track:tracks[index]}));
+ }
+ function suspensionSupportIntervals(config,params,vehiclePart){
+  const group=config[vehiclePart];
+  return suspensionSupportDefinitions(params,vehiclePart).flatMap(axle=>
+   ['left','right'].map(side=>{
+    const point=group[axle.key][side];
+    const uncertainty=point.uncertainty;
+    return {
+     axle:axle.key,side,x:axle.x,y:(side==='left'?1:-1)*axle.track/2,
+     track:axle.track,
+     min:-(point.compression+uncertainty),
+     max:point.rebound+uncertainty
+    };
+   })
+  );
+ }
+ function suspensionPoseCoefficientBounds(config,params,vehiclePart){
+  const definitions=suspensionSupportDefinitions(params,vehiclePart);
+  const supports=suspensionSupportIntervals(config,params,vehiclePart);
+  const hMin=supports.reduce((sum,point)=>sum+point.min,0)/supports.length;
+  const hMax=supports.reduce((sum,point)=>sum+point.max,0)/supports.length;
+  const xCenter=definitions.reduce((sum,axle)=>sum+axle.x,0)/definitions.length;
+  const pitchPair=vehiclePart==='tractor'?
+   {first:'front',last:'rear',distance:params.wheelbase}:
+   {first:'axle1',last:'axle3',distance:definitions[0].x-definitions[2].x};
+  let pitchMin=Infinity,pitchMax=-Infinity;
+  for(const side of ['left','right']){
+   const first=supports.find(point=>point.axle===pitchPair.first&&point.side===side);
+   const last=supports.find(point=>point.axle===pitchPair.last&&point.side===side);
+   if(!first||!last||!Number.isFinite(pitchPair.distance)||pitchPair.distance<=0)return null;
+   pitchMin=Math.min(pitchMin,(first.min-last.max)/pitchPair.distance);
+   pitchMax=Math.max(pitchMax,(first.max-last.min)/pitchPair.distance);
+  }
+  let rollMin=Infinity,rollMax=-Infinity;
+  for(const axle of definitions){
+   const left=supports.find(point=>point.axle===axle.key&&point.side==='left');
+   const right=supports.find(point=>point.axle===axle.key&&point.side==='right');
+   if(!left||!right||!Number.isFinite(axle.track)||axle.track<=0)return null;
+   rollMin=Math.min(rollMin,(left.min-right.max)/axle.track);
+   rollMax=Math.max(rollMax,(left.max-right.min)/axle.track);
+  }
+  return {hMin,hMax,pitchMin,pitchMax,rollMin,rollMax,xCenter,supports};
+ }
+ function validateSuspensionTravel(config,params){
+  const errors=[];
+  if(config===undefined||config===null)return errors;
+  if(!config||typeof config!=='object'||Array.isArray(config)){
+   return ['suspensionTravel должен быть JSON-объектом или null.'];
+  }
+  for(const group of ['tractor','trailer']){
+   if(!config[group]||typeof config[group]!=='object'||Array.isArray(config[group])){
+    errors.push('suspensionTravel.'+group+' должен содержать измеренные опорные точки.');
+    continue;
+   }
+   for(const axleKey of SUSPENSION_AXLE_KEYS[group]){
+    const axle=config[group][axleKey];
+    if(!axle||typeof axle!=='object'||Array.isArray(axle)){
+     errors.push('suspensionTravel.'+group+'.'+axleKey+' должен содержать левую и правую стороны.');
+     continue;
+    }
+    for(const side of ['left','right']){
+     const point=axle[side],prefix='suspensionTravel.'+group+'.'+axleKey+'.'+side+'.';
+     if(!point||typeof point!=='object'||Array.isArray(point)){
+      errors.push(prefix+'ожидается объект compression/rebound/uncertainty.');
+      continue;
+     }
+     for(const key of ['compression','rebound','uncertainty']){
+      if(!Number.isFinite(point[key])){
+       errors.push(prefix+key+' должен быть явно измеренным конечным числом.');
+      }
+     }
+     const limits={compression:[0,0.25],rebound:[0,0.25],uncertainty:[0,0.05]};
+     for(const [key,[min,max]] of Object.entries(limits)){
+      const value=point[key];
+      if(Number.isFinite(value)&&(value<min||value>max)){
+       errors.push(prefix+key+' должен находиться в диапазоне '+min+'–'+max+' м.');
+      }
+     }
+    }
+   }
+  }
+  if(errors.length===0&&params&&Number.isFinite(params.wheelbase)&&Number.isFinite(params.trailerLength)){
+   for(const group of ['tractor','trailer']){
+    const bounds=suspensionPoseCoefficientBounds(config,params,group);
+    if(!bounds){
+     errors.push('suspensionTravel.'+group+': невозможно построить опорную плоскость по измеренной геометрии осей.');
+     continue;
+    }
+    const maxSlope=Math.max(
+     Math.abs(bounds.pitchMin),Math.abs(bounds.pitchMax),
+     Math.abs(bounds.rollMin),Math.abs(bounds.rollMax)
+    );
+    if(maxSlope>SUSPENSION_TRAVEL_MAX_SLOPE+1e-9){
+     errors.push('suspensionTravel.'+group+': расчётный наклон опорной плоскости превышает 0,25; линейная модель малых перемещений неприменима.');
+    }
+   }
+  }
+  return errors;
+ }
+ function suspensionTravelStatus(params){
+  const config=params&&params.suspensionTravel;
+  if(config===undefined||config===null)return 'suspension-travel-unconfigured';
+  return validateSuspensionTravel(config,params).length?
+   'invalid-suspension-travel-config':'bounded-rigid-plane-support-envelope';
+ }
+ function suspensionTravelDisplacementRange(polygon,q,params,vehiclePart){
+  if(!params||params.suspensionTravel===undefined||params.suspensionTravel===null)return null;
+  if(vehiclePart!=='tractor'&&vehiclePart!=='trailer')throw new Error('Неизвестная часть автопоезда для проверки подвески.');
+  const errors=validateSuspensionTravel(params.suspensionTravel,params);
+  if(errors.length)throw new Error('Некорректные диапазоны хода подвески: '+errors.join(' '));
+  if(!Array.isArray(polygon)||polygon.length<3||!q||
+     ![q.x,q.y,q.psi,q.psiT].every(Number.isFinite))return null;
+  const bounds=suspensionPoseCoefficientBounds(params.suspensionTravel,params,vehiclePart);
+  if(!bounds)return null;
+  const origin=vehiclePart==='tractor'?{x:q.x,y:q.y}:axlePoint(q,params);
+  const heading=vehiclePart==='tractor'?q.psi:q.psiT;
+  const c=Math.cos(heading),s=Math.sin(heading),lower=[],upper=[];
+  for(const point of polygon){
+   const dx=point.x-origin.x,dy=point.y-origin.y;
+   const localX=dx*c+dy*s-bounds.xCenter;
+   const localY=-dx*s+dy*c;
+   const pitchLow=Math.min(bounds.pitchMin*localX,bounds.pitchMax*localX);
+   const pitchHigh=Math.max(bounds.pitchMin*localX,bounds.pitchMax*localX);
+   const rollLow=Math.min(bounds.rollMin*localY,bounds.rollMax*localY);
+   const rollHigh=Math.max(bounds.rollMin*localY,bounds.rollMax*localY);
+   lower.push(bounds.hMin+pitchLow+rollLow);
+   upper.push(bounds.hMax+pitchHigh+rollHigh);
+  }
+  return {
+   min:Math.min(...lower),max:Math.max(...upper),
+   status:'bounded-rigid-plane-support-envelope',
+   model:'independent-support-intervals-linearized-rigid-plane'
+  };
+ }
+ function applySuspensionTravelToVerticalRange(range,polygon,q,params,vehiclePart){
+  if(!range)return null;
+  const displacement=suspensionTravelDisplacementRange(polygon,q,params,vehiclePart);
+  if(!displacement)return range;
+  return {
+   min:range.min+displacement.min,
+   max:range.max+displacement.max,
+   suspensionStatus:displacement.status,
+   suspensionDisplacement:{min:displacement.min,max:displacement.max}
+  };
  }
 
  function validateVehicleParams(params){
@@ -486,6 +652,7 @@
   errors.push(...validateAuxiliaryEnvelopes(params.auxiliaryEnvelopes));
   errors.push(...validateVehicleVerticalProfiles(params.vehicleVerticalProfiles));
   errors.push(...validateRoadSurface(params.roadSurface));
+  errors.push(...validateSuspensionTravel(params.suspensionTravel,params));
   return errors;
  }
 
@@ -606,10 +773,11 @@
   const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
   return [1,-1].map((side,index)=>{
    const center=localPoint(q,q.psi,longitudinal,side*(cabWidth/2+outboard/2));
+   const polygon=bodyCorners(center,q.psi,length/2+uncertainty,-length/2-uncertainty,outboard+2*uncertainty);
    return {
     name:index===0?'левое зеркало':'правое зеркало',
-    polygon:bodyCorners(center,q.psi,length/2+uncertainty,-length/2-uncertainty,outboard+2*uncertainty),
-    verticalRange:vehicleVerticalRange(params,'mirror')
+    polygon,
+    verticalRange:applySuspensionTravelToVerticalRange(vehicleVerticalRange(params,'mirror'),polygon,q,params,'tractor')
    };
   });
  }
@@ -633,16 +801,24 @@
    const heading=norm(baseHeading+(entry.headingOffsetDeg??0)*Math.PI/180);
    const center=localPoint(anchor,heading,entry.longitudinalOffset??0,entry.lateralOffset??0);
    const margin=(entry.uncertaintyMargin??0)+(Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0);
+   const polygon=bodyCorners(center,heading,entry.length/2+margin,-entry.length/2-margin,entry.width+2*margin);
+   const suspensionAttachment=entry.suspensionAttachment??'axle';
+   const verticalRange=entry.zMin!==undefined?verticalRangeFromProfile({
+    zMin:entry.zMin,zMax:entry.zMax,uncertaintyMargin:entry.verticalUncertaintyMargin??0
+   }):null;
+   const attachedVerticalRange=suspensionAttachment==='tractor-body'?
+    applySuspensionTravelToVerticalRange(verticalRange,polygon,q,params,'tractor'):
+    (suspensionAttachment==='trailer-body'?
+     applySuspensionTravelToVerticalRange(verticalRange,polygon,q,params,'trailer'):verticalRange);
    return {
     name:entry.name.trim(),
     anchor:entry.anchor,
     vehiclePart:isTractor?'тягач':'полуприцеп',
     componentType:'measured-auxiliary-envelope',
     uncertaintyMargin:margin,
-    verticalRange:entry.zMin!==undefined?verticalRangeFromProfile({
-     zMin:entry.zMin,zMax:entry.zMax,uncertaintyMargin:entry.verticalUncertaintyMargin??0
-    }):null,
-    polygon:bodyCorners(center,heading,entry.length/2+margin,-entry.length/2-margin,entry.width+2*margin)
+    suspensionAttachment,
+    verticalRange:attachedVerticalRange,
+    polygon
    };
   });
  }
@@ -681,18 +857,21 @@
     -(params.trailerLength-1.5+uncertainty),params.trailerWidth+2*uncertainty
    ))
   );
+  const tractorBodyRange=applySuspensionTravelToVerticalRange(vehicleVerticalRange(params,'tractor-body'),bodies[0],q,params,'tractor');
+  const tractorCabRange=applySuspensionTravelToVerticalRange(vehicleVerticalRange(params,'tractor-cab'),bodies[1],q,params,'tractor');
+  const trailerBodyRange=applySuspensionTravelToVerticalRange(vehicleVerticalRange(params,'trailer-body'),bodies[2],q,params,'trailer');
   return [
    {vehiclePart:'тягач',bodyIndex:0,components:[
-    {name:'основной контур тягача',polygon:bodies[0],verticalRange:vehicleVerticalRange(params,'tractor-body')},
+    {name:'основной контур тягача',polygon:bodies[0],verticalRange:tractorBodyRange},
     ...tractorWheelComponents.map(wheel=>({name:wheel.name,polygon:wheel.polygon,verticalRange:wheel.verticalRange})),
     ...tractorAuxiliaryComponents.map(component=>({name:component.name,polygon:component.polygon,componentType:component.componentType,verticalRange:component.verticalRange}))
    ]},
    {vehiclePart:'кабина',bodyIndex:1,components:[
-    {name:'кабина',polygon:bodies[1],verticalRange:vehicleVerticalRange(params,'tractor-cab')},
+    {name:'кабина',polygon:bodies[1],verticalRange:tractorCabRange},
     ...mirrors
    ]},
    {vehiclePart:'полуприцеп',bodyIndex:2,components:[
-    {name:'кузов полуприцепа',polygon:bodies[2],verticalRange:vehicleVerticalRange(params,'trailer-body')},
+    {name:'кузов полуприцепа',polygon:bodies[2],verticalRange:trailerBodyRange},
     ...trailerWheelComponents.map(wheel=>({name:wheel.name,polygon:wheel.polygon,verticalRange:wheel.verticalRange})),
     ...trailerAuxiliaryComponents.map(component=>({name:component.name,polygon:component.polygon,componentType:component.componentType,verticalRange:component.verticalRange}))
    ]}
@@ -1419,5 +1598,5 @@
   };
  }
 
- return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,VEHICLE_VERTICAL_PROFILE_KEYS,validateRoadSurface,roadSurfaceElevationRange,verticalRangeOnRoadSurface,validateVehicleParams,validateTireGroupWidthUncertainty,validateAuxiliaryEnvelopes,validateVehicleVerticalProfiles,verticalRangeFromProfile,vehicleVerticalRange,auxiliaryEnvelopePolygons,trailerAxleTireGroupWidths,trailerAxleTireCenterSpacings,trailerAxleSpacings,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,wheelTireTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
+ return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,VEHICLE_VERTICAL_PROFILE_KEYS,validateRoadSurface,roadSurfaceElevationRange,verticalRangeOnRoadSurface,validateSuspensionTravel,suspensionTravelStatus,suspensionTravelDisplacementRange,validateVehicleParams,validateTireGroupWidthUncertainty,validateAuxiliaryEnvelopes,validateVehicleVerticalProfiles,verticalRangeFromProfile,vehicleVerticalRange,auxiliaryEnvelopePolygons,trailerAxleTireGroupWidths,trailerAxleTireCenterSpacings,trailerAxleSpacings,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,wheelTireTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
 });
