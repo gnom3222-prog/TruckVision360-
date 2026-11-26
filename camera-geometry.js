@@ -297,14 +297,111 @@
     epsilon,sigmaReferenceHeight
    );
   }
+
+  // Cross-check the first-order estimate with finite +/-1σ perturbations of
+  // each independent input separately. This is axis-wise sensitivity analysis,
+  // not a joint Monte Carlo sample and not a deterministic error bound.
+  let finiteVarianceWidth=0,finiteVarianceHeight=0;
+  let maxAxisAsymmetryRatio=0,nonlinearSensitivityChecks=0;
+  let nonlinearSensitivityFailure=null;
+  const addFinitePerturbation=(plus,minus)=>{
+   const plusWidth=plus.width-base.width,minusWidth=minus.width-base.width;
+   const plusHeight=plus.height-base.height,minusHeight=minus.height-base.height;
+   finiteVarianceWidth+=(plusWidth*plusWidth+minusWidth*minusWidth)/2;
+   finiteVarianceHeight+=(plusHeight*plusHeight+minusHeight*minusHeight)/2;
+   const asymmetryWidth=Math.abs(plusWidth+minusWidth)/
+    Math.max(Math.abs(plusWidth)+Math.abs(minusWidth),1e-12);
+   const asymmetryHeight=Math.abs(plusHeight+minusHeight)/
+    Math.max(Math.abs(plusHeight)+Math.abs(minusHeight),1e-12);
+   maxAxisAsymmetryRatio=Math.max(maxAxisAsymmetryRatio,asymmetryWidth,asymmetryHeight);
+   nonlinearSensitivityChecks++;
+  };
+  const checkFinitePerturbation=(plusOptions,minusOptions)=>{
+   try{
+    addFinitePerturbation(
+     measureQuad(plusOptions.referencePoints,plusOptions.referenceWidth,plusOptions.referenceHeight,plusOptions.measuredPoints),
+     measureQuad(minusOptions.referencePoints,minusOptions.referenceWidth,minusOptions.referenceHeight,minusOptions.measuredPoints)
+    );
+   }catch(error){
+    if(!nonlinearSensitivityFailure)nonlinearSensitivityFailure=error&&error.message?error.message:'sigma-perturbation-invalid';
+   }
+  };
+  if(sigmaPixels>0){
+   for(let i=0;i<4;i++){
+    for(const axis of ['x','y']){
+     const refPlus=referencePoints.map(p=>({...p}));
+     const refMinus=referencePoints.map(p=>({...p}));
+     refPlus[i][axis]+=sigmaPixels;
+     refMinus[i][axis]-=sigmaPixels;
+     checkFinitePerturbation(
+      {referencePoints:refPlus,referenceWidth,referenceHeight,measuredPoints},
+      {referencePoints:refMinus,referenceWidth,referenceHeight,measuredPoints}
+     );
+     const gatePlus=measuredPoints.map(p=>({...p}));
+     const gateMinus=measuredPoints.map(p=>({...p}));
+     gatePlus[i][axis]+=sigmaPixels;
+     gateMinus[i][axis]-=sigmaPixels;
+     checkFinitePerturbation(
+      {referencePoints,referenceWidth,referenceHeight,measuredPoints:gatePlus},
+      {referencePoints,referenceWidth,referenceHeight,measuredPoints:gateMinus}
+     );
+    }
+   }
+  }
+  if(sigmaReferenceWidth>0){
+   checkFinitePerturbation(
+    {referencePoints,referenceWidth:referenceWidth+sigmaReferenceWidth,referenceHeight,measuredPoints},
+    {referencePoints,referenceWidth:referenceWidth-sigmaReferenceWidth,referenceHeight,measuredPoints}
+   );
+  }
+  if(sigmaReferenceHeight>0){
+   checkFinitePerturbation(
+    {referencePoints,referenceWidth,referenceHeight:referenceHeight+sigmaReferenceHeight,measuredPoints},
+    {referencePoints,referenceWidth,referenceHeight:referenceHeight-sigmaReferenceHeight,measuredPoints}
+   );
+  }
+  const sigmaWidth=Math.sqrt(varianceWidth),sigmaHeight=Math.sqrt(varianceHeight);
+  const nonlinearSensitivityAvailable=nonlinearSensitivityFailure===null&&nonlinearSensitivityChecks>0;
+  const nonlinearSigmaWidth=nonlinearSensitivityAvailable?Math.sqrt(finiteVarianceWidth):null;
+  const nonlinearSigmaHeight=nonlinearSensitivityAvailable?Math.sqrt(finiteVarianceHeight):null;
+  const relativeMismatch=(linearized,finite)=>{
+   if(!Number.isFinite(finite))return Infinity;
+   return Math.abs(finite-linearized)/Math.max(Math.abs(finite),Math.abs(linearized),1e-9);
+  };
+  const nonlinearSigmaRatioWidth=nonlinearSensitivityAvailable?
+   (sigmaWidth>1e-12?nonlinearSigmaWidth/sigmaWidth:(nonlinearSigmaWidth<=1e-12?1:Infinity)):null;
+  const nonlinearSigmaRatioHeight=nonlinearSensitivityAvailable?
+   (sigmaHeight>1e-12?nonlinearSigmaHeight/sigmaHeight:(nonlinearSigmaHeight<=1e-12?1:Infinity)):null;
+  const nonlinearMismatchWidth=nonlinearSensitivityAvailable?relativeMismatch(sigmaWidth,nonlinearSigmaWidth):null;
+  const nonlinearMismatchHeight=nonlinearSensitivityAvailable?relativeMismatch(sigmaHeight,nonlinearSigmaHeight):null;
+  const nonlinearWarningReasons=[];
+  if(!nonlinearSensitivityAvailable)nonlinearWarningReasons.push('finite-perturbation-unavailable');
+  if(nonlinearSensitivityAvailable&&Math.max(nonlinearMismatchWidth,nonlinearMismatchHeight)>0.25){
+   nonlinearWarningReasons.push('linearized-and-finite-sensitivity-disagree');
+  }
+  if(nonlinearSensitivityAvailable&&maxAxisAsymmetryRatio>0.25){
+   nonlinearWarningReasons.push('asymmetric-one-sigma-response');
+  }
   return {
    ...base,
-   sigmaWidth:Math.sqrt(varianceWidth),
-   sigmaHeight:Math.sqrt(varianceHeight),
-   uncertaintyModel:'linearized-independent-coordinate-errors'
+   sigmaWidth,
+   sigmaHeight,
+   uncertaintyModel:'linearized-independent-coordinate-errors',
+   nonlinearSensitivityModel:'axiswise-one-sigma-finite-perturbations',
+   nonlinearSensitivityAvailable,
+   nonlinearSensitivityChecks,
+   nonlinearSensitivityFailure,
+   nonlinearSigmaWidth,
+   nonlinearSigmaHeight,
+   nonlinearSigmaRatioWidth,
+   nonlinearSigmaRatioHeight,
+   nonlinearMismatchWidth,
+   nonlinearMismatchHeight,
+   maxAxisAsymmetryRatio,
+   nonlinearWarning:nonlinearWarningReasons.length>0,
+   nonlinearWarningReasons
   };
  }
-
  function registerGateOnMap(measurement,anchor,headingRadians){
   if(!measurement||!Array.isArray(measurement.points)||measurement.points.length!==4||
      !Number.isFinite(measurement.width)||measurement.width<=0||measurement.width>50){
