@@ -459,6 +459,19 @@
     }
    }
    if(index>0){
+    const previousGear=previousState.gear===-1?-1:1;
+    const previousSteer=Number.isFinite(previousState.steer)?previousState.steer:0;
+    const previousGearKnown=previousState.gearKnown!==false;
+    const previousSteerKnown=previousState.steerKnown!==false;
+    const initialGearSelectionAtSegmentStart=!previousGearKnown;
+    const gearChangedAtSegmentStart=previousGearKnown&&previousGear!==gear;
+    const initialSteeringSelectionAtSegmentStart=!previousSteerKnown;
+    const steeringChangedAtSegmentStart=previousSteerKnown&&
+     Math.abs(norm(steer-previousSteer))>1e-9;
+    if(initialGearSelectionAtSegmentStart)segmentsWithInitialGearSelection++;
+    if(gearChangedAtSegmentStart)segmentsWithGearChangeAtStart++;
+    if(initialSteeringSelectionAtSegmentStart)segmentsWithInitialSteeringSelection++;
+    if(steeringChangedAtSegmentStart)segmentsWithSteeringChangeAtStart++;
     const stepDistance=state.stepDistance;
     if(!Number.isFinite(stepDistance)||stepDistance<=0){
      throw new Error('Route state '+index+' is missing its positive integration stepDistance; continuous per-part bound cannot be established.');
@@ -572,6 +585,9 @@
   let segmentsWithIntermediateKinematicSamples=0,segmentsWithoutIntermediateKinematicSamples=0;
   let segmentsSkippedForNoObstacles=0,intermediateSamplesAnalyzed=0;
   let segmentsAtAdaptiveSamplingCap=0,maxAdaptiveIntervalsUsed=0;
+  let segmentsWithGearChangeAtStart=0,segmentsWithInitialGearSelection=0;
+  let segmentsWithSteeringChangeAtStart=0,segmentsWithInitialSteeringSelection=0;
+  let controlStartPosesAnalyzed=0,controlStartWheelChecks=0;
   let maximumWheelCenterDisplacementBound=0;
   const targetMaxWheelCenterDisplacementPerInterval=0.05;
   const minAdaptiveIntervals=4,maxAdaptiveIntervals=64;
@@ -580,7 +596,8 @@
   const segmentDiagnostics=[];
   const snapshot=state=>({
    x:state.x,y:state.y,psi:state.psi,psiT:state.psiT,
-   gear:state.gear===-1?-1:1,steer:state.steer===undefined?0:state.steer
+   gear:state.gear===-1?-1:1,steer:state.steer===undefined?0:state.steer,
+   gearKnown:state.gearKnown!==false,steerKnown:state.steerKnown!==false
   });
   for(let index=0;index<states.length;index++){
    const state=states[index];
@@ -677,14 +694,46 @@
       }
      }
     };
+    const segmentGear=gear,segmentSteer=steer;
+    let controlStartPoseChecked=false;
+    if(prepared.length>0&&
+       (initialSteeringSelectionAtSegmentStart||steeringChangedAtSegmentStart)){
+     // Steering is selected at the stationary start boundary of this spatial
+     // segment. Check the new tire headings before integrating any distance.
+     const controlStartFootprints=rootPhysics.wheelFootprints(previousState,p,segmentSteer);
+     if(controlStartFootprints.length!==10){
+      throw new Error('Control-start wheel geometry must contain exactly ten footprints.');
+     }
+     for(const wheel of controlStartFootprints){
+      let polygonDistance=Infinity,polygonObstacle=null;
+      for(const obstacle of prepared){
+       const gap=polyDist(wheel.polygon,obstacle.poly);
+       if(gap<polygonDistance){polygonDistance=gap;polygonObstacle=obstacle.name;}
+      }
+      const record=records.get(wheel.name);
+      if(!record)throw new Error('Wheel identity changed during control-start pose checking.');
+      if(polygonDistance<record.minimumIntermediatePolygonClearance){
+       record.minimumIntermediatePolygonClearance=polygonDistance;
+       record.minimumIntermediatePolygonDetail=Number.isFinite(polygonDistance)?{
+        obstacle:polygonObstacle,
+        state:snapshot({...previousState,gear:segmentGear,steer:segmentSteer,gearKnown:true,steerKnown:true}),
+        distanceAlongRoute:segmentStartDistance,sampleFraction:0,controlStartPose:true
+       }:null;
+      }
+     }
+     controlStartPoseChecked=true;
+     controlStartPosesAnalyzed++;
+     controlStartWheelChecks+=controlStartFootprints.length;
+    }
     if(prepared.length===0){
      intermediateSampleStatus='skipped-no-obstacles';
      segmentsSkippedForNoObstacles++;
     }else if(typeof rootPhysics.rk4==='function'){
-     // Reconstruct the planner segment with its active gear and steering input.
+     // A gear change is an instantaneous control boundary in this spatial model:
+     // the following segment uses its destination gear from the shared start pose.
+     // Stop time, clutch engagement and drivetrain transients are not modelled.
      // Intermediate samples are accepted only when the reconstructed endpoint
      // matches the actual route node within the documented numerical tolerance.
-     const segmentGear=gear,segmentSteer=steer;
      const segmentDt=stepDistance/0.7;
      const reconstructedEnd=rootPhysics.rk4(
       previousState,segmentGear*0.7,segmentSteer,segmentDt,p
@@ -820,11 +869,25 @@
      segmentsWithoutIntermediateKinematicSamples++;
      applyFullSegmentFallbackBound('rk4-unavailable');
     }
+    const gearTransitionKind=initialGearSelectionAtSegmentStart?
+     'initial-gear-selection':gearChangedAtSegmentStart?'gear-change':'none';
+    const gearTransition=gearTransitionKind==='none'?null:{
+     kind:gearTransitionKind,
+     from:previousGearKnown?previousGear:null,
+     to:gear,
+     at:'segment-start',
+     dwellTimeModelled:false,
+     spatialSegmentUsesGear:segmentGear
+    };
     segmentDiagnostics.push({
      fromSample:index-1,toSample:index,stepDistance,
      status:intermediateSampleStatus,endpointResidual,
      intervalCount,sampleCount:sampleFractions.length,
      sampleFractions,adaptiveCapReached,
+     gearChangedAtSegmentStart,initialGearSelectionAtSegmentStart,
+     steeringChangedAtSegmentStart,initialSteeringSelectionAtSegmentStart,
+     gearTransition,controlStartPoseChecked,
+     motionModel:'constant-control-spatial-segment; gear-change dwell not modelled',
      maxWheelCenterDisplacementPerInterval:maxCenterDisplacementPerInterval,
      maxWheelCenterRatePerMeter:maxWheelRate
     });
@@ -842,6 +905,9 @@
    minimumClearanceLowerBound:limitingWheel?limitingWheel.minimumClearanceLowerBound:Infinity,
    segmentsWithIntermediateKinematicSamples,segmentsWithoutIntermediateKinematicSamples,
    segmentsSkippedForNoObstacles,intermediateSamplesAnalyzed,
+   segmentsWithGearChangeAtStart,segmentsWithInitialGearSelection,
+   segmentsWithSteeringChangeAtStart,segmentsWithInitialSteeringSelection,
+   controlStartPosesAnalyzed,controlStartWheelChecks,
    intermediateSampleFractions:baselineIntermediateSampleFractions,
    segmentsAtAdaptiveSamplingCap,maxAdaptiveIntervalsUsed,maximumWheelCenterDisplacementBound,
    targetMaxWheelCenterDisplacementPerInterval,minAdaptiveIntervals,maxAdaptiveIntervals,
@@ -1046,7 +1112,8 @@
   }
   const chain=[];for(let n=finish;n&&n.parent;n=n.parent)chain.push(n);
   chain.reverse();
-  const states=[{x:start.x,y:start.y,psi:start.psi,psiT:start.psiT,gear:1,steer:0,stepDistance:0}];
+  const states=[{x:start.x,y:start.y,psi:start.psi,psiT:start.psiT,
+   gear:1,steer:0,gearKnown:false,steerKnown:false,stepDistance:0}];
   for(const n of chain)states.push(...n.samples);
   let pathMinimum=startClearance;
   let minimumClearanceDetail=startDetail;
