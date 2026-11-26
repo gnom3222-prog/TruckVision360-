@@ -1018,3 +1018,35 @@ test('per-axle uncertainty cannot be entered when the individual geometry field 
  assert.match(elements.routeAdvice.textContent,/trailerAxleSpacing12/);
  assert.match(elements.routeAdvice.textContent,/trailerAxle1Track/);
 });
+
+test('camera obstacle vertical range is enabled only after a valid road-surface calibration is applied',()=>{
+ const {elements,windowObject}=bootSimulator();
+ const surface={
+  originX:0,originY:0,originZ:0,gradeX:0.01,gradeY:-0.005,
+  originZUncertainty:0.01,gradeXUncertainty:0.001,gradeYUncertainty:0.001,
+  surfaceResidualUncertainty:0.01
+ };
+ elements.roadSurface.value=JSON.stringify(surface);
+ elements.apply.onclick();
+ assert.doesNotMatch(elements.routeAdvice.textContent,/Параметры не применены/);
+ const measurement={
+  width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01,
+  conditioningWarning:false,shapeWarning:false,
+  nonlinearSensitivityAvailable:true,nonlinearWarning:false
+ };
+ const readings=[
+  {width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01},
+  {width:2.005,height:1.004,sigmaWidth:0.012,sigmaHeight:0.012},
+  {width:1.998,height:0.998,sigmaWidth:0.011,sigmaHeight:0.011}
+ ];
+ const repeatability=cameraGeometry.summarizeRepeatability(readings,{widthTolerance:0.02,heightTolerance:0.02});
+ const verticalMeasurement={
+  height:2.5,heightUncertainty:0.03,baseDatumUncertainty:0.02,totalUncertainty:0.05,
+  datum:'local-road-surface',source:'manual-independent-measurement',confirmed:true
+ };
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(
+  measurement,{x:3,y:4},Math.PI/2,'Опорный столб',
+  {positionX:0.1,positionY:0.15,headingDeg:2},repeatability,verticalMeasurement
+ ),true);
+ assert.match(windowObject.TruckVisionCameraObstacleVerticalStatus,/Вертикальный диапазон привязан к откалиброванной плоскости дороги/);
+});
