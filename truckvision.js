@@ -1776,6 +1776,26 @@ function drawRoute(){
 
  drawLine(plannedRoute,'#ffe082',4,[9,6]);
 
+ // Overlay the sampled center paths of individual tire footprints.
+ const tireTracks=routeAssessment?.tireTrajectory?.tires||[];
+ tireTracks.forEach(track=>{
+  if(!Array.isArray(track.points)||track.points.length<2)return;
+  ctx.beginPath();
+  track.points.forEach((point,index)=>{
+   const screen=toScreen(point);
+   if(index===0)ctx.moveTo(screen.x,screen.y);
+   else ctx.lineTo(screen.x,screen.y);
+  });
+  const axleColors=['#81c784','#ffb74d','#ce93d8'];
+  ctx.strokeStyle=track.vehiclePart==='тягач'?'#4fc3f7':axleColors[(track.axleIndex-1)%axleColors.length];
+  ctx.lineWidth=1.35;
+  ctx.globalAlpha=0.72;
+  ctx.setLineDash(track.pairPosition==='inner'?[3,3]:[]);
+  ctx.stroke();
+ });
+ ctx.setLineDash([]);
+ ctx.globalAlpha=1;
+
  const swept=routeAssessment&&routeAssessment.sweptClearanceDetail;
  if(swept&&swept.kind==='segment-lower-bound'&&swept.from&&swept.to){
   drawLine([swept.from,swept.to],'#ff8585',3,[4,4]);
@@ -1874,6 +1894,8 @@ function fitSceneCamera(){
  add(vehicleCollisionParts(state).flatMap(group=>group.components.map(component=>component.polygon)));
  if(showObstacles)sceneObstacles().forEach(o=>add(obstaclePolygon(o)));
  if(plannedRoute.length>1)plannedRoute.forEach(p=>points.push({x:p.x,y:p.y}));
+ const tireTracks=routeAssessment?.tireTrajectory?.tires||[];
+ tireTracks.forEach(track=>track.points?.forEach(point=>points.push({x:point.x,y:point.y})));
  if(!points.length)return;
  const xs=points.map(p=>p.x),ys=points.map(p=>p.y);
  const minX=Math.min(...xs)-2.5,maxX=Math.max(...xs)+2.5;
