@@ -300,6 +300,22 @@ test('camera-measured obstacle is registered only after three distinct frames an
  camera.fire('cameraStop','click');
 });
 
+test('stopping the camera clears a partial obstacle repeatability series',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ await measureObstacleFrame(camera,null);
+ assert.match(camera.elements.cameraObstacleRepeatabilityStatus.textContent,/1\/3 отдельных кадров/);
+ camera.fire('cameraStop','click');
+ assert.match(camera.elements.cameraObstacleRepeatabilityStatus.textContent,/Повторяемость препятствия не оценена/);
+ assert.equal(camera.obstacleRegistrations.length,0);
+ await camera.fire('cameraStart','click');
+ camera.setVideoTime(0.2);
+ await measureObstacleFrame(camera,null);
+ assert.match(camera.elements.cameraObstacleRepeatabilityStatus.textContent,/1\/3 отдельных кадров/);
+ assert.equal(camera.obstacleRegistrations.length,0);
+ camera.fire('cameraStop','click');
+});
+
 test('camera obstacle measurement cannot reuse one frozen frame',async()=>{
  const camera=bootCamera();
  await camera.fire('cameraStart','click');
