@@ -174,6 +174,10 @@
    const suspensionAttachment=entry.suspensionAttachment??'axle';
    if(!['axle','tractor-body','trailer-body'].includes(suspensionAttachment)){
     errors.push(prefix+'suspensionAttachment должен быть axle, tractor-body или trailer-body.');
+   }else if(suspensionAttachment==='tractor-body'&&!String(entry.anchor||'').startsWith('tractor-')){
+    errors.push(prefix+'tractor-body допускается только для оболочки, привязанной к оси тягача.');
+   }else if(suspensionAttachment==='trailer-body'&&!String(entry.anchor||'').startsWith('trailer-')){
+    errors.push(prefix+'trailer-body допускается только для оболочки, привязанной к оси полуприцепа.');
    }
    const longitudinalOffset=entry.longitudinalOffset??0;
    const lateralOffset=entry.lateralOffset??0;
