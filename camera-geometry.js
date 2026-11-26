@@ -12,6 +12,7 @@
  const MAX_QUAD_EDGE_SPREAD_RATIO=0.05;
  const MAX_QUAD_ANGLE_ERROR_DEG=5;
  const MAX_QUAD_DIAGONAL_SPREAD_RATIO=0.05;
+ const NONLINEAR_UNCERTAINTY_WARNING_RATIO=0.25;
 
  function validQuad(q,minArea=1000,minEdge=20){
   if(!Array.isArray(q)||q.length!==4||q.some(p=>!p||!Number.isFinite(p.x)||!Number.isFinite(p.y)))return false;
@@ -297,31 +298,116 @@
     epsilon,sigmaReferenceHeight
    );
   }
+
+  // Cross-check the first-order estimate with finite +/-1σ perturbations of
+  // each independent input separately. This is axis-wise sensitivity analysis,
+  // not a joint Monte Carlo sample and not a deterministic error bound.
+  let finiteVarianceWidth=0,finiteVarianceHeight=0;
+  let maxAxisEvenShiftWidth=0,maxAxisEvenShiftHeight=0,nonlinearSensitivityChecks=0;
+  let nonlinearSensitivityFailure=null;
+  const addFinitePerturbation=(plus,minus)=>{
+   const plusWidth=plus.width-base.width,minusWidth=minus.width-base.width;
+   const plusHeight=plus.height-base.height,minusHeight=minus.height-base.height;
+   finiteVarianceWidth+=(plusWidth*plusWidth+minusWidth*minusWidth)/2;
+   finiteVarianceHeight+=(plusHeight*plusHeight+minusHeight*minusHeight)/2;
+   maxAxisEvenShiftWidth=Math.max(maxAxisEvenShiftWidth,Math.abs(plusWidth+minusWidth)/2);
+   maxAxisEvenShiftHeight=Math.max(maxAxisEvenShiftHeight,Math.abs(plusHeight+minusHeight)/2);
+   nonlinearSensitivityChecks++;
+  };
+  const checkFinitePerturbation=(plusOptions,minusOptions)=>{
+   try{
+    addFinitePerturbation(
+     measureQuad(plusOptions.referencePoints,plusOptions.referenceWidth,plusOptions.referenceHeight,plusOptions.measuredPoints),
+     measureQuad(minusOptions.referencePoints,minusOptions.referenceWidth,minusOptions.referenceHeight,minusOptions.measuredPoints)
+    );
+   }catch(error){
+    if(!nonlinearSensitivityFailure)nonlinearSensitivityFailure=error&&error.message?error.message:'sigma-perturbation-invalid';
+   }
+  };
+  if(sigmaPixels>0){
+   for(let i=0;i<4;i++){
+    for(const axis of ['x','y']){
+     const refPlus=referencePoints.map(p=>({...p}));
+     const refMinus=referencePoints.map(p=>({...p}));
+     refPlus[i][axis]+=sigmaPixels;
+     refMinus[i][axis]-=sigmaPixels;
+     checkFinitePerturbation(
+      {referencePoints:refPlus,referenceWidth,referenceHeight,measuredPoints},
+      {referencePoints:refMinus,referenceWidth,referenceHeight,measuredPoints}
+     );
+     const gatePlus=measuredPoints.map(p=>({...p}));
+     const gateMinus=measuredPoints.map(p=>({...p}));
+     gatePlus[i][axis]+=sigmaPixels;
+     gateMinus[i][axis]-=sigmaPixels;
+     checkFinitePerturbation(
+      {referencePoints,referenceWidth,referenceHeight,measuredPoints:gatePlus},
+      {referencePoints,referenceWidth,referenceHeight,measuredPoints:gateMinus}
+     );
+    }
+   }
+  }
+  if(sigmaReferenceWidth>0){
+   checkFinitePerturbation(
+    {referencePoints,referenceWidth:referenceWidth+sigmaReferenceWidth,referenceHeight,measuredPoints},
+    {referencePoints,referenceWidth:referenceWidth-sigmaReferenceWidth,referenceHeight,measuredPoints}
+   );
+  }
+  if(sigmaReferenceHeight>0){
+   checkFinitePerturbation(
+    {referencePoints,referenceWidth,referenceHeight:referenceHeight+sigmaReferenceHeight,measuredPoints},
+    {referencePoints,referenceWidth,referenceHeight:referenceHeight-sigmaReferenceHeight,measuredPoints}
+   );
+  }
+  const sigmaWidth=Math.sqrt(varianceWidth),sigmaHeight=Math.sqrt(varianceHeight);
+  const nonlinearSensitivityAvailable=nonlinearSensitivityFailure===null&&nonlinearSensitivityChecks>0;
+  const nonlinearSigmaWidth=nonlinearSensitivityAvailable?Math.sqrt(finiteVarianceWidth):null;
+  const nonlinearSigmaHeight=nonlinearSensitivityAvailable?Math.sqrt(finiteVarianceHeight):null;
+  const maxAxisAsymmetryRatio=nonlinearSensitivityAvailable?Math.max(
+   maxAxisEvenShiftWidth/Math.max(sigmaWidth,nonlinearSigmaWidth,1e-9),
+   maxAxisEvenShiftHeight/Math.max(sigmaHeight,nonlinearSigmaHeight,1e-9)
+  ):null;
+  const relativeMismatch=(linearized,finite)=>{
+   if(!Number.isFinite(finite))return Infinity;
+   return Math.abs(finite-linearized)/Math.max(Math.abs(finite),Math.abs(linearized),1e-9);
+  };
+  const nonlinearSigmaRatioWidth=nonlinearSensitivityAvailable?
+   (sigmaWidth>1e-12?nonlinearSigmaWidth/sigmaWidth:(nonlinearSigmaWidth<=1e-12?1:Infinity)):null;
+  const nonlinearSigmaRatioHeight=nonlinearSensitivityAvailable?
+   (sigmaHeight>1e-12?nonlinearSigmaHeight/sigmaHeight:(nonlinearSigmaHeight<=1e-12?1:Infinity)):null;
+  const nonlinearMismatchWidth=nonlinearSensitivityAvailable?relativeMismatch(sigmaWidth,nonlinearSigmaWidth):null;
+  const nonlinearMismatchHeight=nonlinearSensitivityAvailable?relativeMismatch(sigmaHeight,nonlinearSigmaHeight):null;
+  const nonlinearWarningReasons=[];
+  if(!nonlinearSensitivityAvailable)nonlinearWarningReasons.push('finite-perturbation-unavailable');
+  if(nonlinearSensitivityAvailable&&Math.max(nonlinearMismatchWidth,nonlinearMismatchHeight)>NONLINEAR_UNCERTAINTY_WARNING_RATIO){
+   nonlinearWarningReasons.push('linearized-and-finite-sensitivity-disagree');
+  }
+  if(nonlinearSensitivityAvailable&&maxAxisAsymmetryRatio>NONLINEAR_UNCERTAINTY_WARNING_RATIO){
+   nonlinearWarningReasons.push('asymmetric-one-sigma-response');
+  }
   return {
    ...base,
-   sigmaWidth:Math.sqrt(varianceWidth),
-   sigmaHeight:Math.sqrt(varianceHeight),
-   uncertaintyModel:'linearized-independent-coordinate-errors'
+   sigmaWidth,
+   sigmaHeight,
+   uncertaintyModel:'linearized-independent-coordinate-errors',
+   nonlinearSensitivityModel:'axiswise-one-sigma-finite-perturbations',
+   nonlinearSensitivityAvailable,
+   nonlinearSensitivityChecks,
+   nonlinearSensitivityFailure,
+   nonlinearSigmaWidth,
+   nonlinearSigmaHeight,
+   nonlinearSigmaRatioWidth,
+   nonlinearSigmaRatioHeight,
+   nonlinearMismatchWidth,
+   nonlinearMismatchHeight,
+   maxAxisAsymmetryRatio,
+   nonlinearWarning:nonlinearWarningReasons.length>0,
+   nonlinearWarningReasons
   };
  }
-
  function registerGateOnMap(measurement,anchor,headingRadians){
   if(!measurement||!Array.isArray(measurement.points)||measurement.points.length!==4||
      !Number.isFinite(measurement.width)||measurement.width<=0||measurement.width>50){
    throw new Error('Измерение ворот должно содержать четыре угла и положительную конечную ширину.');
-  }
-  const sigmaWidth=measurement.sigmaWidth??0;
-  if(!Number.isFinite(sigmaWidth)||sigmaWidth<0||sigmaWidth>25){
-   throw new Error('Оценка 1σ ширины должна быть конечной и неотрицательной.');
-  }
-  // Convert the camera's local 1σ sensitivity into a clearly-labelled 2σ
-  // screening envelope. This is not a deterministic bound or a safety claim.
-  const widthUncertaintyBound=2*sigmaWidth;
-  if(widthUncertaintyBound>2){
-   throw new Error('Оболочка неопределённости ширины превышает поддерживаемый предел 2 м. Измерение нельзя переносить на карту.');
-  }
-  if(widthUncertaintyBound>=measurement.width-0.05){
-   throw new Error('Неопределённость ширины сопоставима с самим проёмом. Измерение нельзя переносить на карту.');
   }
   if(!anchor||!Number.isFinite(anchor.x)||!Number.isFinite(anchor.y)||
      Math.abs(anchor.x)>10000||Math.abs(anchor.y)>10000||!Number.isFinite(headingRadians)){
@@ -338,6 +424,22 @@
   }
   if(Math.abs(measurement.width-derivedWidth)>Math.max(0.01,derivedWidth*0.01)){
    throw new Error('Ширина измерения не совпадает с шириной, рассчитанной по четырём углам. Повторите измерение.');
+  }
+  if(measurement.nonlinearSensitivityAvailable!==true||measurement.nonlinearWarning===true){
+   throw new Error('Нелинейная проверка неопределённости не пройдена. Повторите калибровку с более крупным эталоном и устойчивым ракурсом; измерение нельзя переносить на карту.');
+  }
+  const sigmaWidth=measurement.sigmaWidth;
+  if(!Number.isFinite(sigmaWidth)||sigmaWidth<0||sigmaWidth>25){
+   throw new Error('Оценка 1σ ширины должна быть конечной и неотрицательной.');
+  }
+  // Convert the camera's local 1σ sensitivity into a clearly-labelled 2σ
+  // screening envelope. This is not a deterministic bound or a safety claim.
+  const widthUncertaintyBound=2*sigmaWidth;
+  if(widthUncertaintyBound>2){
+   throw new Error('Оболочка неопределённости ширины превышает поддерживаемый предел 2 м. Измерение нельзя переносить на карту.');
+  }
+  if(widthUncertaintyBound>=measurement.width-0.05){
+   throw new Error('Неопределённость ширины сопоставима с самим проёмом. Измерение нельзя переносить на карту.');
   }
   const leftMid={
    x:(points[0].x+points[3].x)/2,
@@ -362,7 +464,10 @@
    widthSigma:sigmaWidth,
    widthUncertaintyBound,
    widthUncertaintyMultiplier:2,
-   widthUncertaintyModel:sigmaWidth>0?'2-sigma-normal-approximation':'not-provided',
+   widthUncertaintyModel:'2-sigma-normal-approximation',
+   nonlinearSensitivityModel:measurement.nonlinearSensitivityModel,
+   nonlinearMismatchWidth:measurement.nonlinearMismatchWidth,
+   maxAxisAsymmetryRatio:measurement.maxAxisAsymmetryRatio,
    openingStart:{x:anchor.x-half*ux,y:anchor.y-half*uy},
    openingEnd:{x:anchor.x+half*ux,y:anchor.y+half*uy},
    sourceAxisLength,
@@ -374,6 +479,7 @@
  return Object.freeze({
   validQuad,solve,homography,map,measureQuad,estimateUncertainty,registerGateOnMap,quadShapeDiagnostics,
   MAX_CONDITION_ESTIMATE,CONDITION_WARNING_ESTIMATE,
-  MAX_QUAD_EDGE_SPREAD_RATIO,MAX_QUAD_ANGLE_ERROR_DEG,MAX_QUAD_DIAGONAL_SPREAD_RATIO
+  MAX_QUAD_EDGE_SPREAD_RATIO,MAX_QUAD_ANGLE_ERROR_DEG,MAX_QUAD_DIAGONAL_SPREAD_RATIO,
+  NONLINEAR_UNCERTAINTY_WARNING_RATIO
  });
 });
