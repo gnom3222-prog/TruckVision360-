@@ -153,6 +153,36 @@ test('unknown internal wheel height cannot be hidden by a measured body height p
 test('route assessment preserves vertical intervals while retaining the explicit obstacle-check gate',()=>{
  const app=fs.readFileSync(path.resolve(__dirname,'../truckvision.js'),'utf8');
  assert.match(app,/const routeObstacles=showObstacles\?sceneObstacles\(\):\[\]/);
- assert.match(app,/Автопроезд не запущен: сначала включите отображение и проверку препятствий/);
+ assert.match(app,/Автопроезд заблокирован: сначала включите отображение и проверку препятствий/);
  assert.match(app,/zMin:obstacle\.zMin,zMax:obstacle\.zMax,zUncertainty:obstacle\.zUncertainty\?\?0/);
+});
+
+
+test('measured mirror height is propagated as its own cab collision component',()=>{
+ const p={...params,mirrorOutboard:0.45,vehicleVerticalProfiles:{
+  ...allProfiles,mirror:{zMin:1.9,zMax:3.8,uncertaintyMargin:0.1}
+ }};
+ const parts=physics.vehicleCollisionParts(pose,p,0,true);
+ const cab=parts.find(part=>part.vehiclePart==='кабина');
+ const mirror=cab.components.find(component=>component.name==='левое зеркало');
+ assert.ok(mirror);
+ assert.deepEqual(mirror.verticalRange,{min:1.8,max:3.9});
+});
+
+test('unknown mirror height is not inferred from the cab height profile',()=>{
+ const p={...params,mirrorOutboard:0.45,vehicleVerticalProfiles:{
+  'tractor-body':{zMin:0.2,zMax:3.0},
+  'tractor-cab':{zMin:0.3,zMax:3.5}
+ }};
+ const parts=physics.vehicleCollisionParts(pose,p,0,true);
+ const cab=parts.find(part=>part.vehiclePart==='кабина');
+ const mirror=cab.components.find(component=>component.name==='левое зеркало');
+ assert.ok(mirror);
+ assert.equal(mirror.verticalRange,null);
+ const center=mirror.polygon.reduce((sum,point)=>({x:sum.x+point.x/4,y:sum.y+point.y/4}),{x:0,y:0});
+ const obstacle={name:'Балка у зеркала без профиля',x:center.x,y:center.y,w:0.1,h:0.1,zMin:4.0,zMax:4.2};
+ const result=planner.clearance(pose,[obstacle],p);
+ assert.equal(result.distance,0);
+ assert.equal(result.verticalStatus,'vehicle-height-unverified');
+ assert.ok(result.verticalUnverifiedCount>0);
 });
