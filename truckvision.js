@@ -19,6 +19,8 @@ const cfg={
  trailerWidth:2.55,
  kingpinAxles:8,
  trailerAxleSpacing:1.3,
+ trailerAxleSpacing12:0,
+ trailerAxleSpacing23:0,
  cabOffset:2.1,
  cabFront:1.35,
  cabRear:0.9,
@@ -30,6 +32,9 @@ const cfg={
  tractorSteeringTrack:2.05,
  tractorRearTrack:2.05,
  trailerTrack:2.79,
+ trailerAxle1Track:0,
+ trailerAxle2Track:0,
+ trailerAxle3Track:0,
  tractorRearTireGroupWidth:0,
  trailerTireGroupWidth:0,
  trailerAxle1TireGroupWidth:0,
@@ -62,10 +67,15 @@ const cfg={
  trailerLengthUncertainty:0,
  trailerWidthUncertainty:0,
  trailerAxleSpacingUncertainty:0,
+ trailerAxleSpacing12Uncertainty:0,
+ trailerAxleSpacing23Uncertainty:0,
  tractorSteeringTrackUncertainty:0,
  tractorFrontTrackUncertainty:0,
  tractorRearTrackUncertainty:0,
  trailerTrackUncertainty:0,
+ trailerAxle1TrackUncertainty:0,
+ trailerAxle2TrackUncertainty:0,
+ trailerAxle3TrackUncertainty:0,
  tractorRearTireGroupWidthUncertainty:0,
  trailerTireGroupWidthUncertainty:0,
  trailerAxle1TireGroupWidthUncertainty:0,
@@ -189,6 +199,11 @@ function readSettings(){
   tractorSteeringTrack:[1,3.5],
   tractorRearTrack:[1,3.5],
   trailerTrack:[1,4.5],
+  trailerAxle1Track:[0,4.5],
+  trailerAxle2Track:[0,4.5],
+  trailerAxle3Track:[0,4.5],
+  trailerAxleSpacing12:[0,5],
+  trailerAxleSpacing23:[0,5],
   tractorRearTireGroupWidth:[0,1.5],
   trailerTireGroupWidth:[0,1.5],
   trailerAxle1TireGroupWidth:[0,1.5],
@@ -216,6 +231,11 @@ function readSettings(){
   trailerLengthUncertainty:[0,5],
   trailerWidthUncertainty:[0,1.5],
   trailerAxleSpacingUncertainty:[0,2],
+  trailerAxleSpacing12Uncertainty:[0,2],
+  trailerAxleSpacing23Uncertainty:[0,2],
+  trailerAxle1TrackUncertainty:[0,1.5],
+  trailerAxle2TrackUncertainty:[0,1.5],
+  trailerAxle3TrackUncertainty:[0,1.5],
   tractorSteeringTrackUncertainty:[0,1.25],
   tractorFrontTrackUncertainty:[0,1.25],
   tractorRearTrackUncertainty:[0,1.25],
@@ -252,6 +272,11 @@ function readSettings(){
   trailerLengthUncertainty:'trailerLength',
   trailerWidthUncertainty:'trailerWidth',
   trailerAxleSpacingUncertainty:'trailerAxleSpacing',
+  trailerAxleSpacing12Uncertainty:'trailerAxleSpacing12',
+  trailerAxleSpacing23Uncertainty:'trailerAxleSpacing23',
+  trailerAxle1TrackUncertainty:'trailerAxle1Track',
+  trailerAxle2TrackUncertainty:'trailerAxle2Track',
+  trailerAxle3TrackUncertainty:'trailerAxle3Track',
   tractorSteeringTrackUncertainty:'tractorSteeringTrack',
   tractorFrontTrackUncertainty:'tractorFrontTrack',
   tractorRearTrackUncertainty:'tractorRearTrack',
@@ -275,6 +300,14 @@ function readSettings(){
   const uncertainty=candidate[uncertaintyKey];
   if(!Number.isFinite(uncertainty)||uncertainty<0)continue;
   if(uncertainty===0)continue;
+  const fallbackOnlyParameters=new Set([
+   'trailerAxleSpacing12','trailerAxleSpacing23',
+   'trailerAxle1Track','trailerAxle2Track','trailerAxle3Track'
+  ]);
+  if(fallbackOnlyParameters.has(parameterKey)&&candidate[parameterKey]===0){
+   errors.push(uncertaintyKey+': сначала задайте индивидуальное измеренное значение '+parameterKey+'.');
+   continue;
+  }
   const dimensionLimits=physics.VEHICLE_PARAMETER_LIMITS[parameterKey];
   const lower=dimensionLimits?Math.max(dimensionLimits.min,candidate[parameterKey]-uncertainty):candidate[parameterKey]-uncertainty;
   const upper=dimensionLimits?Math.min(dimensionLimits.max,candidate[parameterKey]+uncertainty):candidate[parameterKey]+uncertainty;
@@ -298,6 +331,11 @@ function vehicleParameterBoundsFromSettings(){
   trailerLengthUncertainty:'trailerLength',
   trailerWidthUncertainty:'trailerWidth',
   trailerAxleSpacingUncertainty:'trailerAxleSpacing',
+  trailerAxleSpacing12Uncertainty:'trailerAxleSpacing12',
+  trailerAxleSpacing23Uncertainty:'trailerAxleSpacing23',
+  trailerAxle1TrackUncertainty:'trailerAxle1Track',
+  trailerAxle2TrackUncertainty:'trailerAxle2Track',
+  trailerAxle3TrackUncertainty:'trailerAxle3Track',
   tractorSteeringTrackUncertainty:'tractorSteeringTrack',
   tractorFrontTrackUncertainty:'tractorFrontTrack',
   tractorRearTrackUncertainty:'tractorRearTrack',
