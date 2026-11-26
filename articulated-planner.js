@@ -347,8 +347,13 @@
   const tractorRearTrack=p.tractorRearTrack??2.05;
   const tireLength=p.tireLength??0.72;
   const tireWidth=p.tireWidth??0.44;
+  const tractorRearGroupWidth=Number.isFinite(p.tractorRearTireGroupWidth)&&p.tractorRearTireGroupWidth>0?
+   p.tractorRearTireGroupWidth:tireWidth;
+  const trailerGroupWidth=Number.isFinite(p.trailerTireGroupWidth)&&p.trailerTireGroupWidth>0?
+   p.trailerTireGroupWidth:tireWidth;
   const tractorWheelCornerRadius=Math.hypot(
-   tireLength/2+footprintUncertainty,tireWidth/2+footprintUncertainty
+   tireLength/2+footprintUncertainty,
+   Math.max(tireWidth,tractorRearGroupWidth)/2+footprintUncertainty
   );
   // Bound each tire corner by distance to its axle center plus the tire's
   // circumscribed radius; this remains conservative for any steer orientation.
@@ -389,7 +394,7 @@
   // must be included in the trailer point-motion bound.
   const trailerWidthWithUncertainty=Math.max(
    trailerWidth+2*footprintUncertainty,
-   trailerTrack+tireWidth+2*footprintUncertainty
+   trailerTrack+trailerGroupWidth+2*footprintUncertainty
   );
   const trailerLongitudinalOffsets=[trailerFrontFromAxle,trailerRearFromAxle,...trailerWheelLongitudinals];
   let trailerPointRate=0;
@@ -566,7 +571,6 @@
   const prepared=obstacles.map(obstacle=>({poly:obstaclePoly(obstacle),name:obstacle.name||'препятствие'}));
   const uncertainty=Number.isFinite(p.footprintUncertainty)?p.footprintUncertainty:0;
   const tireLength=p.tireLength??0.72,tireWidth=p.tireWidth??0.44;
-  const tireRadius=Math.hypot(tireLength/2+uncertainty,tireWidth/2+uncertainty);
   const records=new Map();
   let previousState=null,previousChecks=null,distanceAlongRoute=0;
   let segmentsWithIntermediateKinematicSamples=0,segmentsWithoutIntermediateKinematicSamples=0;
@@ -611,8 +615,10 @@
     distanceAlongRoute+=stepDistance;
    }
    const footprints=rootPhysics.wheelFootprints(state,p,steer);
-   if(footprints.length!==10)throw new Error('Per-wheel geometry must contain exactly ten wheel footprints.');
+   if(footprints.length!==10)throw new Error('Per-wheel geometry must contain exactly ten axle-side footprint groups.');
    const currentChecks=footprints.map(wheel=>{
+    const footprintWidth=Number.isFinite(wheel.footprintWidth)?wheel.footprintWidth:tireWidth;
+    const tireRadius=Math.hypot(tireLength/2+uncertainty,footprintWidth/2+uncertainty);
     const envelope=wheelEnvelopePolygon(wheel.center,tireRadius);
     let envelopeDistance=Infinity,envelopeObstacle=null;
     let polygonDistance=Infinity,polygonObstacle=null;
@@ -626,6 +632,7 @@
     if(!record){
      record={
       name:wheel.name,vehiclePart:wheel.vehiclePart,axleIndex:wheel.axleIndex,side:wheel.side,
+      footprintWidth,footprintModel:wheel.footprintModel||'legacy-single-tire-fallback',
       minimumSampledPolygonClearance:Infinity,minimumSampledPolygonDetail:null,
       minimumSampledEnvelopeClearance:Infinity,minimumSampledEnvelopeDetail:null,
       minimumIntermediatePolygonClearance:Infinity,minimumIntermediatePolygonDetail:null,
@@ -653,7 +660,7 @@
       obstacle:envelopeObstacle,state:snapshot(state),distanceAlongRoute
      }:null;
     }
-    return {wheel,envelopeDistance,envelopeObstacle,polygonDistance,polygonObstacle};
+    return {wheel,envelopeDistance,envelopeObstacle,polygonDistance,polygonObstacle,tireRadius};
    });
    if(index>0){
     const previousGear=previousState.gear===-1?-1:1;
@@ -2005,6 +2012,8 @@ function planAlternativesWithVehicleParameterBounds(options={}){
   tractorFrontTrack:[1,3.5],
   tractorRearTrack:[1,3.5],
   trailerTrack:[1,4.5],
+  tractorRearTireGroupWidth:[0,1.5],
+  trailerTireGroupWidth:[0,1.5],
   tireLength:[0.2,1.5],
   tireWidth:[0.1,0.8],
   cabOffset:[0,6],
