@@ -801,13 +801,13 @@ test('virtual playback holds at the gear boundary until the explicit confirmatio
   x:0,y:0,psi:0,psiT:0,gear:1,steer:0,
   gearKnown:true,steerKnown:true,stepDistance:0
  };
- const step=0.5;
- const forward=physics.rk4(start,0.7,0,step/0.7,p);
- const reverse=physics.rk4(forward,-0.7,0,step/0.7,p);
+ const forwardStep=2.0,reverseStep=1.0;
+ const forward=physics.rk4(start,0.7,0,forwardStep/0.7,p);
+ const reverse=physics.rk4(forward,-0.7,0,reverseStep/0.7,p);
  const states=[
   start,
-  {...forward,gear:1,steer:0,gearKnown:true,steerKnown:true,stepDistance:step},
-  {...reverse,gear:-1,steer:0,gearKnown:true,steerKnown:true,stepDistance:step}
+  {...forward,gear:1,steer:0,gearKnown:true,steerKnown:true,stepDistance:forwardStep},
+  {...reverse,gear:-1,steer:0,gearKnown:true,steerKnown:true,stepDistance:reverseStep}
  ];
  const simulator=bootSimulator({workerResult:routeControlBoundaryWorkerResult(states)});
  const {elements,frames}=simulator;
