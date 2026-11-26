@@ -254,14 +254,14 @@
     errors.push(key+': колея оси должна быть не меньше 1,00 м.');
    }
   });
-  if(rearGroupInput>0&&rearGroupInput<tireWidth-1e-9){
+  if(rearPairSpacing<=0&&rearGroupInput>0&&rearGroupInput<tireWidth-1e-9){
    errors.push('tractorRearTireGroupWidth: ширина группы не может быть меньше ширины одной шины.');
   }
   if((params.trailerTireGroupWidth??0)>0&&params.trailerTireGroupWidth<tireWidth-1e-9){
    errors.push('trailerTireGroupWidth: ширина группы не может быть меньше ширины одной шины.');
   }
   axleGroupInputs.forEach((value,index)=>{
-   if(value>0&&value<tireWidth-1e-9){
+   if(axlePairSpacings[index]<=0&&value>0&&value<tireWidth-1e-9){
     errors.push('trailerAxle'+(index+1)+'TireGroupWidth: ширина группы не может быть меньше ширины одной шины.');
    }
   });
