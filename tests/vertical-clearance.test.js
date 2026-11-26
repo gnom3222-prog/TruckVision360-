@@ -1,6 +1,8 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
 const physics=require('../vehicle-physics.js');
 const planner=require('../articulated-planner.js');
 
@@ -146,4 +148,11 @@ test('unknown internal wheel height cannot be hidden by a measured body height p
  assert.equal(result.distance,0);
  assert.equal(result.verticalStatus,'vehicle-height-unverified');
  assert.ok(result.verticalUnverifiedCount>0);
+});
+
+test('route assessment never disables obstacle checks when map visibility is toggled off',()=>{
+ const app=fs.readFileSync(path.resolve(__dirname,'../truckvision.js'),'utf8');
+ assert.match(app,/const routeObstacles=sceneObstacles\(\);/);
+ assert.doesNotMatch(app,/const routeObstacles=showObstacles\?sceneObstacles\(\):\[\]/);
+ assert.match(app,/zMin:obstacle\.zMin,zMax:obstacle\.zMax,zUncertainty:obstacle\.zUncertainty\?\?0/);
 });
