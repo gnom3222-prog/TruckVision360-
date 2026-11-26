@@ -129,7 +129,7 @@ main{max-width:1400px;padding:10px 10px calc(100px + env(safe-area-inset-bottom)
 .map-preview .maneuver-view{height:calc(100% - 28px);padding:3px;border:0;border-radius:0;box-shadow:none;background:#061321}#view{height:100%;max-height:230px;object-fit:contain;border:0;border-radius:7px;background:#081b2a}
 .cockpit-readouts .readout{padding:8px 7px;margin-bottom:7px;border-radius:9px;background:#10283a;border:1px solid #1d4055}.readout span{display:block;color:#8ca8bc;font-size:8px;margin-bottom:4px}.readout strong{display:block;color:#48e477;font-size:15px;font-variant-numeric:tabular-nums}
 .sensor-state{font-size:8px;color:#8ea7ba;line-height:1.5;margin-top:10px}.status-dot.muted{background:#e9a94e;box-shadow:0 0 8px #e9a94e}
-.cockpit-actions{display:grid;grid-template-columns:1.35fr 1fr 1fr 1fr;gap:6px;margin-top:9px}.cockpit-actions button{font-size:10px;padding:10px 4px;min-height:40px;border-radius:9px}.cockpit-actions .primary{background:#087eaa;border-color:#29c6e8}.cockpit-actions .drive-action{background:#116a3a;border-color:#39d66d}.cockpit-actions .stop{background:#842e37;border-color:#d95761}
+.cockpit-actions{display:grid;grid-template-columns:1.35fr 1fr 1fr 1fr;gap:6px;margin-top:9px}.cockpit-actions button{font-size:10px;padding:10px 4px;min-height:40px;border-radius:9px}.cockpit-actions #routeConfirmGear:not([hidden]){grid-column:1/-1;font-size:12px;min-height:44px}.cockpit-actions .primary{background:#087eaa;border-color:#29c6e8}.cockpit-actions .drive-action{background:#116a3a;border-color:#39d66d}.cockpit-actions .stop{background:#842e37;border-color:#d95761}
 .cockpit-disclaimer{font-size:8px;color:#8098aa;line-height:1.4;padding:8px 3px 1px}.maneuver-topline{margin:12px 2px 8px}.maneuver-topline h2{font-size:15px}.maneuver-subtitle{font-size:10px}.maneuver-status{font-size:9px}
 .maneuver-controls{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.maneuver-controls button{font-size:11px;min-height:38px}.obstacle-legend,.small{font-size:10px}.metric{background:#0b1c2a;border-color:#1e4055}.metric strong{font-size:15px}
 .assistant-box,.maneuver-hint{background:#0b2233;border-color:#22536b}#environmentSection,#measurementSection,#settingsSection{padding:10px;background:#0a1b29;border:1px solid #1e3e53;border-radius:15px}
@@ -249,7 +249,7 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 </div>
 <p class="small">Автопроезд управляет только виртуальной моделью на экране. Это демонстрация алгоритма, не подключение к настоящему грузовику.</p>
 <p class="small">Планировщик ищет траекторию сочленённого автопоезда вперёд и назад, проверяя контуры тягача, кабины и полуприцепа. Для завершения задайте курс тягача у цели и допуски конечного курса и угла сочленения. Положительный курс отсчитывается против часовой стрелки от оси +X. Расчёт выполняется в фоновом потоке и требует проверки на площадке.</p>
-<p id="routeAdvice">Задайте конечную точку и нажмите «Построить путь».</p>
+<p id="routeAdvice" role="status" aria-live="polite">Задайте конечную точку и нажмите «Построить путь».</p>
 <p id="difficultyAdvice" style="margin-top:8px;color:#ffd18b">Сложность: пока не рассчитана.</p>
 <div class="recommendation-card" id="recommendationCard" aria-live="polite">
  <div class="recommendation-title">🧭 Рекомендация по манёвру <span id="recommendationStatus">Ожидает расчёта</span></div>
