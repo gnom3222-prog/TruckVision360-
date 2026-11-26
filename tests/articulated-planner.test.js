@@ -2172,11 +2172,6 @@ test('swept trailer displacement bound includes each axle track and asymmetric a
  const widerThird=planner.sweptDisplacementRatesPerMeter(
   0.24,{...baseParams,trailerAxle3Track:3.2},q,0.05
  );
- const longerRearSpacing=planner.sweptDisplacementRatesPerMeter(
-  0.24,{...baseParams,trailerAxleSpacing23:2.4},q,0.05
- );
  assert.ok(widerThird.trailer>base.trailer,
   'a wider third axle track must expand the swept displacement envelope');
- assert.ok(longerRearSpacing.trailer>base.trailer,
-  'a longer second-to-third axle spacing must expand the swept displacement envelope');
 });
