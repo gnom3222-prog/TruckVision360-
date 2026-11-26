@@ -794,3 +794,21 @@ test('trailer axle-specific tire group widths are range-checked against single t
  const valid=physics.validateVehicleParams({...base,trailerTireGroupWidth:0.7,trailerAxle1TireGroupWidth:0.74});
  assert.deepEqual(valid,[]);
 });
+ 
+test('tire group uncertainty lower bounds stay above the maximum single tire width',()=>{
+ const base={
+  tireWidth:0.44,tireWidthUncertainty:0.05,
+  tractorRearTireGroupWidth:0.72,tractorRearTireGroupWidthUncertainty:0.2,
+  trailerTireGroupWidth:0.70,trailerTireGroupWidthUncertainty:0.2,
+  trailerAxle1TireGroupWidth:0.72,trailerAxle1TireGroupWidthUncertainty:0.2
+ };
+ assert.deepEqual(physics.validateTireGroupWidthUncertainty(base),[]);
+ const tooNarrow=physics.validateTireGroupWidthUncertainty({
+  ...base,trailerAxle2TireGroupWidth:0.60,trailerAxle2TireGroupWidthUncertainty:0.15
+ });
+ assert.ok(tooNarrow.some(message=>message.includes('trailerAxle2TireGroupWidthUncertainty')));
+ const missingNominal=physics.validateTireGroupWidthUncertainty({
+  ...base,trailerAxle3TireGroupWidth:0,trailerAxle3TireGroupWidthUncertainty:0.1
+ });
+ assert.ok(missingNominal.some(message=>message.includes('trailerAxle3TireGroupWidthUncertainty')));
+});
