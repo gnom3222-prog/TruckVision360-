@@ -268,6 +268,12 @@ function readSettings(){
    endpointErrors.forEach(message=>errors.push(uncertaintyKey+': крайнее значение '+parameterKey+'='+endpoint.toFixed(3)+' м: '+message));
   }
  }
+ if(candidate.tractorRearTireGroupWidth===0&&candidate.tractorRearTireGroupWidthUncertainty>0){
+  errors.push('tractorRearTireGroupWidthUncertainty: сначала задайте измеренную номинальную ширину группы задних шин тягача.');
+ }
+ if(candidate.trailerTireGroupWidth===0&&candidate.trailerTireGroupWidthUncertainty>0){
+  errors.push('trailerTireGroupWidthUncertainty: сначала задайте измеренную номинальную ширину группы шин полуприцепа.');
+ }
  if(errors.length)return {ok:false,changed:false,errors};
  const changed=Object.keys(cfg).some(key=>!Object.is(cfg[key],candidate[key]));
  Object.assign(cfg,candidate);
