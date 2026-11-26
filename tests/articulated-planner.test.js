@@ -1983,7 +1983,9 @@ test('per-wheel clearance reconstructs both directions of an in-route gear chang
   assert.equal(segment.gearChangedAtSegmentStart,true);
   assert.deepEqual(segment.gearTransition,{
    kind:'gear-change',from:fromGear,to:toGear,at:'segment-start',
-   dwellTimeModelled:false,spatialSegmentUsesGear:toGear
+   dwellTimeModelled:false,durationSeconds:null,durationKnown:false,timeStatus:'unknown',
+   requiresStopBeforeChange:true,requiresOperatorConfirmation:true,
+   confirmationMode:'explicit-playback-confirmation',spatialSegmentUsesGear:toGear
   });
   assert.equal(segment.motionModel,'constant-control-spatial-segment; gear-change dwell not modelled');
   assert.ok(segment.endpointResidual.position<=1e-8);
