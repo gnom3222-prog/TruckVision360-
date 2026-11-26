@@ -824,18 +824,23 @@
       throw new Error('Control-start wheel geometry count does not match the route footprint set.');
      }
      for(const wheel of controlStartFootprints){
-      let polygonDistance=Infinity,polygonObstacle=null,polygonVerticalStatus=null;
+      const wheelVerticalRange=adjustVerticalRangeToRoadSurface(wheel.verticalRange,wheel.polygon,p);
+      let polygonDistance=Infinity,polygonObstacle=null,polygonVerticalStatus=null,polygonVerticalGap=null,polygonRoadSurfaceStatus=null;
       for(const obstacle of prepared){
-       const measure=distanceWithVertical(wheel.polygon,obstacle,wheel.verticalRange);
-       if(obstacle.verticalRange){if(wheel.verticalRange)verticalEvaluatedChecks++;else verticalUnverifiedChecks++;}
-       if(measure.distance<polygonDistance){polygonDistance=measure.distance;polygonObstacle=obstacle.name;polygonVerticalStatus=measure.verticalStatus;}
+       const measure=distanceWithVertical(wheel.polygon,obstacle,wheelVerticalRange);
+       if(obstacle.verticalRange){if(wheelVerticalRange)verticalEvaluatedChecks++;else verticalUnverifiedChecks++;}
+       if(measure.distance<polygonDistance){
+        polygonDistance=measure.distance;polygonObstacle=obstacle.name;
+        polygonVerticalStatus=measure.verticalStatus;polygonVerticalGap=measure.verticalGap;
+        polygonRoadSurfaceStatus=measure.roadSurfaceStatus;
+       }
       }
       const record=records.get(wheel.name);
       if(!record)throw new Error('Wheel identity changed during control-start pose checking.');
       if(polygonDistance<record.minimumIntermediatePolygonClearance){
        record.minimumIntermediatePolygonClearance=polygonDistance;
        record.minimumIntermediatePolygonDetail=Number.isFinite(polygonDistance)?{
-        obstacle:polygonObstacle,verticalStatus:polygonVerticalStatus,
+        obstacle:polygonObstacle,verticalStatus:polygonVerticalStatus,verticalGap:polygonVerticalGap,roadSurfaceStatus:polygonRoadSurfaceStatus,
         state:snapshot({...previousState,gear:segmentGear,steer:segmentSteer,gearKnown:true,steerKnown:true}),
         distanceAlongRoute:segmentStartDistance,sampleFraction:0,controlStartPose:true
        }:null;
