@@ -2479,6 +2479,13 @@ function applyCameraGateRegistration(registration){
  cfg.gateLintelEnabled=lintelEnabled;
  cfg.gateLintelClearHeight=clearHeight;
  cfg.gateLintelCameraHeightUncertainty=heightUncertaintyBound;
+ if(lintelEnabled){
+  cfg.gateLintelFloorUncertainty=lintel.floorDatumUncertainty;
+  cfg.gateLintelThickness=lintel.thickness;
+  cfg.gateLintelThicknessUncertainty=lintel.thicknessUncertainty;
+  cfg.gateLintelDepth=lintel.depth;
+  cfg.gateLintelDepthUncertainty=lintel.depthUncertainty;
+ }
  $('gateWidth').value=clearWidth.toFixed(2);
  $('gateWidthUncertainty').value=widthUncertaintyBound.toFixed(3);
  $('gateCenterX').value=centerX.toFixed(2);
