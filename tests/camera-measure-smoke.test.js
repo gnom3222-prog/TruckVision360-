@@ -367,3 +367,42 @@ test('backgrounding while camera permission is pending stops a late stream and r
  assert.match(camera.elements.cameraStatus.textContent,/Камера включена/);
  camera.fire('cameraStop','click');
 });
+
+test('rapid repeated camera-start taps while permission is pending issue only one request',async()=>{
+ let resolvePermission;
+ const camera=bootCamera({getUserMedia:({createStream})=>new Promise(resolve=>{resolvePermission=()=>resolve(createStream());})});
+ const firstStart=camera.fire('cameraStart','click');
+ await Promise.resolve();
+ await camera.fire('cameraStart','click');
+ assert.equal(camera.permissionRequests,1,'startPending must prevent duplicate permission prompts');
+ resolvePermission();
+ await firstStart;
+ assert.match(camera.elements.cameraStatus.textContent,/Камера включена/);
+ camera.fire('cameraStop','click');
+ assert.equal(camera.trackStops,1);
+});
+
+
+test('manual stop invalidates a pending request without allowing it to replace a newer stream',async()=>{
+ let resolveFirstPermission;
+ let requestCount=0;
+ const camera=bootCamera({getUserMedia:({createStream})=>{
+  requestCount++;
+  if(requestCount===1)return new Promise(resolve=>{resolveFirstPermission=()=>resolve(createStream());});
+  return Promise.resolve(createStream());
+ }});
+ const firstStart=camera.fire('cameraStart','click');
+ await Promise.resolve();
+ assert.equal(camera.permissionRequests,1);
+ camera.fire('cameraStop','click');
+ await camera.fire('cameraStart','click');
+ assert.equal(camera.permissionRequests,2);
+ const currentStream=camera.elements.measureVideo.srcObject;
+ assert.ok(currentStream,'the newer explicit request should own the video element');
+ resolveFirstPermission();
+ await firstStart;
+ assert.equal(camera.elements.measureVideo.srcObject,currentStream,'the stale late stream must not replace the newer stream');
+ assert.equal(camera.trackStops,1,'the stale stream must be stopped');
+ camera.fire('cameraStop','click');
+ assert.equal(camera.trackStops,2,'the current stream must also be released on stop');
+});
