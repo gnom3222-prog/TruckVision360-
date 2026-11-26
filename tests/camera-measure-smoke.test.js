@@ -7,7 +7,7 @@ const vm=require('node:vm');
 const geometry=require('../camera-geometry.js');
 
 function bootCamera(options={}){
- const elements={},windowListeners={};
+ const elements={},windowListeners={},documentListeners={};
  const context={clearRect(){},beginPath(){},moveTo(){},lineTo(){},closePath(){},stroke(){},arc(){},fill(){},fillText(){}};
  const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateWidthUncertainty','gateCenterX','gateCenterY','gateHeadingDeg','gateResult','cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg'];
  for(const id of ids){
@@ -40,7 +40,7 @@ function bootCamera(options={}){
  };
  const sandbox={
   window:win,
-  document:{getElementById:id=>elements[id]},
+  document:{visibilityState:'visible',getElementById:id=>elements[id],addEventListener(type,fn){(documentListeners[type]??=[]).push(fn);}},
   navigator:{mediaDevices:{getUserMedia:async()=>{
    permissionRequests++;
    if(options.permissionError){const error=new Error('camera permission error');error.name=options.permissionError;throw error;}
@@ -64,6 +64,7 @@ function bootCamera(options={}){
  };
  return {
   elements,windowListeners,fire,tap,appliedRegistrations,obstacleRegistrations,
+  setVisibility(state){document.visibilityState=state;for(const fn of documentListeners.visibilitychange||[])fn();},
   endTrack(index=mediaTracks.length-1){mediaTracks[index]?.emit('ended');},
   get clearCalls(){return clearCalls;},
   get permissionRequests(){return permissionRequests;},
@@ -315,4 +316,25 @@ test('pagehide stops the active camera stream and invalidates the frozen calibra
  assert.match(camera.elements.cameraStatus.textContent,/Камера выключена/);
  camera.fire('cameraMeasureGate','click');
  assert.match(camera.elements.cameraStatus.textContent,/Сначала включите камеру/);
+});
+
+
+test('backgrounding the page stops camera, clears calibration and requires an explicit restart',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
+ assert.match(camera.elements.cameraStatus.textContent,/Плоскость откалибрована/);
+ camera.setVisibility('hidden');
+ assert.equal(camera.trackStops,1,'hidden page must release the active media track');
+ assert.equal(camera.elements.measureVideo.srcObject??null,null);
+ assert.match(camera.elements.cameraStatus.textContent,/Страница перешла в фон/);
+ camera.setVisibility('visible');
+ assert.equal(camera.permissionRequests,1,'returning to the foreground must not restart camera automatically');
+ camera.fire('cameraMeasureGate','click');
+ assert.match(camera.elements.cameraStatus.textContent,/Сначала включите камеру/);
+ await camera.fire('cameraStart','click');
+ assert.equal(camera.permissionRequests,2,'a fresh explicit tap must acquire a new stream');
+ assert.match(camera.elements.cameraStatus.textContent,/Камера включена/);
+ camera.fire('cameraStop','click');
 });
