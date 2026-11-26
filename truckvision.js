@@ -1027,6 +1027,16 @@ function wheelClearanceSummaryText(metrics){
  const incomplete=wheelClearance?.segmentsWithoutIntermediateKinematicSamples>0?
   ' Промежуточная проверка не завершена на '+wheelClearance.segmentsWithoutIntermediateKinematicSamples+
   ' сегментах; виртуальный автопроезд заблокирован.':'';
+ const controlTransitions=wheelClearance?[
+  wheelClearance.segmentsWithInitialGearSelection>0?
+   ' Исходная передача не измерялась; первое направление рассматривается как выбранное действие планировщика.':'',
+  wheelClearance.segmentsWithGearChangeAtStart>0?
+   ' Переключений передачи на границах пространственных сегментов: '+wheelClearance.segmentsWithGearChangeAtStart+
+   '; новая передача применяется от общей начальной позы, время остановки и переключения не моделируется.':'',
+  wheelClearance.controlStartPosesAnalyzed>0?
+   ' Проверено статических положений при выборе рулевого воздействия: '+wheelClearance.controlStartPosesAnalyzed+
+   ' (проверок колёс: '+wheelClearance.controlStartWheelChecks+').':''
+ ].join(''):'';
  const wheelItems=Array.isArray(wheelClearance?.wheels)?wheelClearance.wheels:[];
  const perWheel=wheelItems.length===10?
   ' Нижние оценки по каждому из 10 колёс: '+wheelItems.map(item=>
@@ -1036,7 +1046,7 @@ function wheelClearanceSummaryText(metrics){
   ).join('; ')+'.':'';
  const wheel=metrics?.limitingWheelClearance;
  if(!wheel||!Number.isFinite(wheel.minimumClearanceLowerBound)){
-  return 'Индивидуальный зазор колёс не определён.'+perWheel+adaptive+cap+incomplete;
+  return 'Индивидуальный зазор колёс не определён.'+perWheel+adaptive+cap+incomplete+controlTransitions;
  }
  const detail=wheel.limitingDetail||{};
  const obstacle=detail.obstacleAtReference||detail.obstacle||'не выделено';
@@ -1047,7 +1057,7 @@ function wheelClearanceSummaryText(metrics){
    ' в позе около '+Number(detail.distanceAlongRoute).toFixed(1)+' м пути':'';
  return 'Ограничивающее колесо: '+wheel.name+'; нижняя оценка по описанной оболочке '+
   wheel.minimumClearanceLowerBound.toFixed(2)+' м; препятствие «'+obstacle+'»'+location+
-  ' (консервативная геометрическая оценка).'+perWheel+adaptive+cap+incomplete;
+  ' (консервативная геометрическая оценка).'+perWheel+adaptive+cap+incomplete+controlTransitions;
 }
 
 function wheelTrackSummaryText(metrics){
