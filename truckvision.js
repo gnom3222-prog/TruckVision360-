@@ -148,7 +148,7 @@ function gateGeometryForPlanner(){
   positionUncertainty:cfg.gatePositionUncertainty,
   headingUncertaintyDeg:cfg.gateHeadingUncertaintyDeg
  };
- if(cfg.gateLintelEnabled){
+ if(cfg.gateLintelEnabled&&$('gateLintelEnabled')&&$('gateLintelEnabled').checked){
   geometry.lintel={
    clearHeight:cfg.gateLintelClearHeight,
    clearHeightUncertainty:cfg.gateLintelCameraHeightUncertainty,
