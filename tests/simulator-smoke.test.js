@@ -750,3 +750,16 @@ test('route metrics still counts a measured in-route forward-to-reverse gear cha
  assert.match(advice,/переключений передачи: 1/);
  assert.equal(/первое рулевое действие при начале маршрута/.test(advice),false);
 });
+
+test('virtual playback brakes to near-zero model speed before changing gear and discloses unmodelled shift delay',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'..','truckvision.js'),'utf8');
+ const start=source.indexOf('if(routePlayback.currentGear!==gear)');
+ const end=source.indexOf('let nearest=Infinity',start);
+ assert.ok(start>=0&&end>start);
+ const block=source.slice(start,end);
+ const stopCheck=block.indexOf('if(Math.abs(speed)>0.02)');
+ const gearUpdate=block.indexOf('routePlayback.currentGear=gear');
+ assert.ok(stopCheck>=0&&gearUpdate>stopCheck);
+ assert.match(block,/drive=0;braking=true/);
+ assert.match(block,/задержка КПП и сцепления не моделируется/);
+});
