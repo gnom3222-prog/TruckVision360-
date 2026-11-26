@@ -143,6 +143,80 @@
      headingUncertaintyDeg<0||headingUncertaintyDeg>45){
    throw new Error('Ворота и их границы неопределённости должны быть конечными и находиться в допустимых диапазонах.');
   }
+  const lintel=gate.lintel===undefined||gate.lintel===null?null:gate.lintel;
+  let lintelObstacle=null;
+  if(lintel!==null){
+   if(!lintel||typeof lintel!=='object'||Array.isArray(lintel)){
+    throw new Error('Параметры верхней перемычки должны быть отдельным измеренным объектом.');
+   }
+   const {
+    clearHeight,clearHeightUncertainty,floorDatumUncertainty,
+    thickness,thicknessUncertainty,depth:lintelDepth,depthUncertainty
+   }=lintel;
+   if(![
+    clearHeight,clearHeightUncertainty,floorDatumUncertainty,
+    thickness,thicknessUncertainty,lintelDepth,depthUncertainty
+   ].every(Number.isFinite)||
+      clearHeight<=0.5||clearHeight>15||
+      clearHeightUncertainty<=0||clearHeightUncertainty>2||
+      floorDatumUncertainty<0||floorDatumUncertainty>1||
+      thickness<=0.02||thickness>2||
+      thicknessUncertainty<0||thicknessUncertainty>1||
+      lintelDepth<=0.05||lintelDepth>10||
+      depthUncertainty<0||depthUncertainty>2){
+    throw new Error('Для верхней перемычки нужны измеренные высота проёма, толщина, глубина и конечные неотрицательные допуски.');
+   }
+   const verticalUncertainty=clearHeightUncertainty+floorDatumUncertainty+thicknessUncertainty;
+   const beamBottom=clearHeight;
+   const beamTop=clearHeight+thickness;
+   const beamDepth=lintelDepth+2*depthUncertainty;
+   if(verticalUncertainty>2||beamBottom-verticalUncertainty<=0.05||
+      beamTop+verticalUncertainty>30||beamDepth>10){
+    throw new Error('Интервальная оболочка верхней перемычки выходит за допустимые вертикальные или горизонтальные границы.');
+   }
+   const ux=Math.cos(heading),uy=Math.sin(heading);
+   const nx=-uy,ny=ux;
+   const beamWidth=clearWidth+2*postWidth+widthUncertainty;
+   const point=(along,across)=>({
+    x:centerX+along*ux+across*nx,
+    y:centerY+along*uy+across*ny
+   });
+   const nominalPolygon=[
+    point(-beamWidth/2,-beamDepth/2),
+    point(beamWidth/2,-beamDepth/2),
+    point(beamWidth/2,beamDepth/2),
+    point(-beamWidth/2,beamDepth/2)
+   ];
+   const radius=Math.max(...nominalPolygon.map(point=>Math.hypot(point.x-centerX,point.y-centerY)));
+   const headingInflation=2*radius*Math.sin(headingUncertaintyDeg*Math.PI/360);
+   const positionInflation=Math.SQRT2*positionUncertainty;
+   const totalInflation=positionInflation+headingInflation;
+   const polygon=inflateConvexPolygon(nominalPolygon,totalInflation);
+   lintelObstacle={
+    name:'Верхняя перемычка ворот',
+    kind:'gate-lintel',
+    polygon,
+    nominalPolygon,
+    zMin:beamBottom,
+    zMax:beamTop,
+    zUncertainty:verticalUncertainty,
+    gateUncertainty:{
+     clearHeight,
+     clearHeightUncertainty,
+     floorDatumUncertainty,
+     thickness,
+     thicknessUncertainty,
+     depth:lintelDepth,
+     depthUncertainty,
+     widthUncertainty,
+     positionUncertainty,
+     headingUncertaintyDeg,
+     positionInflation,
+     headingInflation,
+     totalInflation
+    }
+   };
+  }
   // widthUncertainty is an absolute bound on the full clear width. Moving
   // both jambs inward by half this amount models the narrowest opening.
   const conservativeClearWidth=clearWidth-widthUncertainty;
@@ -184,10 +258,12 @@
     }
    };
   };
-  return [
+  const obstacles=[
    makePost(-1,'Левый косяк ворот'),
    makePost(1,'Правый косяк ворот')
   ];
+  if(lintelObstacle)obstacles.push(lintelObstacle);
+  return obstacles;
  }
  function intersects(a,b){
   for(const poly of [a,b])for(let i=0;i<poly.length;i++){
