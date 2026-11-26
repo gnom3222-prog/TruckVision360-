@@ -130,3 +130,16 @@ test('measured auxiliary height remains a separate component even inside the bod
  assert.equal(result.distance,0);
  assert.equal(result.verticalStatus,'vertical-overlap');
 });
+
+test('unknown internal wheel height cannot be hidden by a measured body height profile',()=>{
+ const p={...params,vehicleVerticalProfiles:{
+  'tractor-body':{zMin:0.5,zMax:3.0},
+  'tractor-cab':{zMin:0.5,zMax:3.5}
+ }};
+ const wheel=physics.wheelFootprints(pose,p,0)[0];
+ const obstacle={name:'Низкая балка у колеса без профиля',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:0.1,zMax:0.2};
+ const result=planner.clearance(pose,[obstacle],p);
+ assert.equal(result.distance,0);
+ assert.equal(result.verticalStatus,'vehicle-height-unverified');
+ assert.ok(result.verticalUnverifiedCount>0);
+});
