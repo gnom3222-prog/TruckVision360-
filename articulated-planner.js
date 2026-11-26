@@ -215,6 +215,15 @@
   }
   return range;
  }
+ function roadSurfaceGradientBound(params){
+  const surface=params&&params.roadSurface;
+  if(!surface)return 0;
+  return Math.hypot(surface.gradeX,surface.gradeY)+
+   Math.hypot(surface.gradeXUncertainty,surface.gradeYUncertainty);
+ }
+ function roadSurfaceSpatialRateScale(params){
+  return Math.hypot(1,roadSurfaceGradientBound(params));
+ }
  function distanceWithVertical(poly,obstacle,vehicleRange){
   const horizontalDistance=polyDist(poly,obstacle.poly);
   const roadSurfaceStatus=obstacle.roadSurfaceStatus||
@@ -492,10 +501,14 @@
     trailerPointRate=Math.max(trailerPointRate,Math.sqrt(Math.max(0,largestEigenvalue)));
    }
   }
+  const roadSurfaceGradient=roadSurfaceGradientBound(p);
+  const roadSurfaceRateScale=Math.hypot(1,roadSurfaceGradient);
   return {
-   tractor:1+tractorRadius*tractorYawPerMeter,
-   cab:1+cabRadiusFromRearAxle*tractorYawPerMeter,
-   trailer:trailerPointRate
+   tractor:(1+tractorRadius*tractorYawPerMeter)*roadSurfaceRateScale,
+   cab:(1+cabRadiusFromRearAxle*tractorYawPerMeter)*roadSurfaceRateScale,
+   trailer:trailerPointRate*roadSurfaceRateScale,
+   roadSurfaceGradientBound:roadSurfaceGradient,
+   roadSurfaceRateScale
   };
  }
  function sweptDisplacementPerMeter(steer,p,q=null,maxDistance=0.05){
@@ -798,7 +811,7 @@
       const previous=previousByName.get(current.wheel.name);
       if(!previous)throw new Error('Wheel identity changed between adjacent route states.');
       if(!Number.isFinite(previous.envelopeDistance))continue;
-      const rate=wheelCenterDisplacementRatePerMeter(current.wheel,p,previousState,state);
+      const rate=wheelCenterDisplacementRatePerMeter(current.wheel,p,previousState,state)*roadSurfaceSpatialRateScale(p);
       const lowerBound=previous.envelopeDistance-rate*stepDistance;
       const record=records.get(current.wheel.name);
       if(lowerBound<record.minimumClearanceLowerBound){
