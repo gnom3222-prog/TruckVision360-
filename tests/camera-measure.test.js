@@ -10,7 +10,7 @@ function makeHarness(options={}){
   const el={id,value:'',textContent:'',style:{},listeners:{},addEventListener(type,fn){this.listeners[type]=fn;},fire(type,event={}){return this.listeners[type]?.(event);}};
   elements[id]=el;return el;
  };
- const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','cameraCalibrate','cameraMeasureGate','cameraReset','gateCenterX','gateCenterY','gateHeadingDeg','gateResult'];
+ const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','cameraCalibrate','cameraMeasureGate','cameraMeasureObstacle','cameraReset','cameraObstacleName','cameraObstacleHeading','cameraObstacleX','cameraObstacleY','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg','gateCenterX','gateCenterY','gateHeadingDeg','gateResult'];
  ids.forEach(makeElement);
  const video=elements.measureVideo;
  Object.assign(video,{videoWidth:640,videoHeight:480,clientWidth:640,clientHeight:480,offsetLeft:0,offsetTop:0,readyState:4,paused:true,srcObject:null,playCalls:0,pauseCalls:0,play(){this.playCalls++;this.paused=false;return Promise.resolve();},pause(){this.pauseCalls++;this.paused=true;}});
@@ -24,7 +24,7 @@ function makeHarness(options={}){
  Object.assign(elements.gateCenterX,{value:'12'});
  Object.assign(elements.gateCenterY,{value:'0'});
  Object.assign(elements.gateHeadingDeg,{value:'90'});
- let permissionCalls=0,registrationCalls=0,trackStops=0;
+ let permissionCalls=0,registrationCalls=0,obstacleCalls=0,trackStops=0;
  const tracks=[];
  function createStream(){
   const listeners={};
@@ -48,10 +48,10 @@ function makeHarness(options={}){
  const geometry={
   validQuad(){return true;},
   homography(){return [1,0,0,0,1,0,0,0];},
-  estimateUncertainty({measuredPoints}){return {width:4,height:2,points:measuredPoints.map(p=>({...p})),sigmaWidth:0.01,sigmaHeight:0.02,conditioningWarning:false,shapeWarning:false,shapeDiagnostics:{widthSpreadRatio:0,heightSpreadRatio:0,maxOrthogonalityErrorDeg:0,diagonalSpreadRatio:0}};},
+  estimateUncertainty({measuredPoints}){return {width:4,height:2,points:measuredPoints.map(p=>({...p})),sigmaWidth:0.01,sigmaHeight:0.02,conditioningWarning:false,shapeWarning:false,nonlinearSensitivityAvailable:options.nonlinearSensitivityAvailable??true,nonlinearWarning:options.nonlinearWarning??false,nonlinearMismatchWidth:0.01,maxAxisAsymmetryRatio:0.02,shapeDiagnostics:{widthSpreadRatio:0,heightSpreadRatio:0,maxOrthogonalityErrorDeg:0,diagonalSpreadRatio:0}};},
   registerGateOnMap(){return {centerX:12,centerY:0,headingDeg:90,clearWidth:4,widthUncertaintyBound:0.02,openingStart:{x:12,y:-2},openingEnd:{x:12,y:2}};}
  };
- const window={TruckVisionCameraGeometry:geometry,TruckVisionApplyGateRegistration(){registrationCalls++;return true;},addEventListener(){}};
+ const window={TruckVisionCameraGeometry:geometry,TruckVisionApplyGateRegistration(){registrationCalls++;return true;},TruckVisionAddCameraObstacle(){obstacleCalls++;return true;},addEventListener(){}};
  const document={getElementById(id){return elements[id]||null;}};
  const navigator={mediaDevices:{async getUserMedia(){
   permissionCalls++;
@@ -63,7 +63,7 @@ function makeHarness(options={}){
  const tapQuad=()=>{
   for(const [clientX,clientY] of [[10,10],[630,10],[630,470],[10,470]])canvas.fire('pointerdown',{clientX,clientY});
  };
- return {elements,video,tapQuad,tracks,get permissionCalls(){return permissionCalls;},get registrationCalls(){return registrationCalls;},get trackStops(){return trackStops;}};
+ return {elements,video,tapQuad,tracks,get permissionCalls(){return permissionCalls;},get registrationCalls(){return registrationCalls;},get obstacleCalls(){return obstacleCalls;},get trackStops(){return trackStops;}};
 }
 
 test('camera permission is requested only after an explicit user action',async()=>{
@@ -124,4 +124,28 @@ test('an unexpectedly ended camera track clears stale state and allows a fresh p
  await app.elements.cameraStart.fire('click');
  assert.equal(app.permissionCalls,2);
  assert.match(app.elements.cameraStatus.textContent,/Камера включена/);
+});
+
+
+test('gate measurement is not transferred to the map when nonlinear uncertainty validation warns',async()=>{
+ const app=makeHarness({nonlinearWarning:true});
+ await app.elements.cameraStart.fire('click');
+ app.elements.cameraCalibrate.fire('click');
+ app.tapQuad();
+ app.elements.cameraMeasureGate.fire('click');
+ app.tapQuad();
+ assert.equal(app.registrationCalls,0);
+ assert.match(app.elements.gateResult.textContent,/Нелинейная проверка неопределённости не прошла/);
+ assert.match(app.elements.cameraStatus.textContent,/Ширина ворот не обновлена/);
+});
+
+test('camera obstacle is not added when nonlinear uncertainty validation is unavailable',async()=>{
+ const app=makeHarness({nonlinearSensitivityAvailable:false});
+ await app.elements.cameraStart.fire('click');
+ app.elements.cameraCalibrate.fire('click');
+ app.tapQuad();
+ app.elements.cameraMeasureObstacle.fire('click');
+ app.tapQuad();
+ assert.equal(app.obstacleCalls,0);
+ assert.match(app.elements.cameraStatus.textContent,/Нелинейная проверка неопределённости не пройдена/);
 });
