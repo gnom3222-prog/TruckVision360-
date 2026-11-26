@@ -407,22 +407,6 @@
      !Number.isFinite(measurement.width)||measurement.width<=0||measurement.width>50){
    throw new Error('Измерение ворот должно содержать четыре угла и положительную конечную ширину.');
   }
-  if(measurement.nonlinearSensitivityAvailable!==true||measurement.nonlinearWarning===true){
-   throw new Error('Нелинейная проверка неопределённости не пройдена. Повторите калибровку с более крупным эталоном и устойчивым ракурсом; измерение нельзя переносить на карту.');
-  }
-  const sigmaWidth=measurement.sigmaWidth;
-  if(!Number.isFinite(sigmaWidth)||sigmaWidth<0||sigmaWidth>25){
-   throw new Error('Оценка 1σ ширины должна быть конечной и неотрицательной.');
-  }
-  // Convert the camera's local 1σ sensitivity into a clearly-labelled 2σ
-  // screening envelope. This is not a deterministic bound or a safety claim.
-  const widthUncertaintyBound=2*sigmaWidth;
-  if(widthUncertaintyBound>2){
-   throw new Error('Оболочка неопределённости ширины превышает поддерживаемый предел 2 м. Измерение нельзя переносить на карту.');
-  }
-  if(widthUncertaintyBound>=measurement.width-0.05){
-   throw new Error('Неопределённость ширины сопоставима с самим проёмом. Измерение нельзя переносить на карту.');
-  }
   if(!anchor||!Number.isFinite(anchor.x)||!Number.isFinite(anchor.y)||
      Math.abs(anchor.x)>10000||Math.abs(anchor.y)>10000||!Number.isFinite(headingRadians)){
    throw new Error('Для привязки ворот задайте конечные координаты центра и направление линии ворот.');
@@ -438,6 +422,22 @@
   }
   if(Math.abs(measurement.width-derivedWidth)>Math.max(0.01,derivedWidth*0.01)){
    throw new Error('Ширина измерения не совпадает с шириной, рассчитанной по четырём углам. Повторите измерение.');
+  }
+  if(measurement.nonlinearSensitivityAvailable!==true||measurement.nonlinearWarning===true){
+   throw new Error('Нелинейная проверка неопределённости не пройдена. Повторите калибровку с более крупным эталоном и устойчивым ракурсом; измерение нельзя переносить на карту.');
+  }
+  const sigmaWidth=measurement.sigmaWidth;
+  if(!Number.isFinite(sigmaWidth)||sigmaWidth<0||sigmaWidth>25){
+   throw new Error('Оценка 1σ ширины должна быть конечной и неотрицательной.');
+  }
+  // Convert the camera's local 1σ sensitivity into a clearly-labelled 2σ
+  // screening envelope. This is not a deterministic bound or a safety claim.
+  const widthUncertaintyBound=2*sigmaWidth;
+  if(widthUncertaintyBound>2){
+   throw new Error('Оболочка неопределённости ширины превышает поддерживаемый предел 2 м. Измерение нельзя переносить на карту.');
+  }
+  if(widthUncertaintyBound>=measurement.width-0.05){
+   throw new Error('Неопределённость ширины сопоставима с самим проёмом. Измерение нельзя переносить на карту.');
   }
   const leftMid={
    x:(points[0].x+points[3].x)/2,
