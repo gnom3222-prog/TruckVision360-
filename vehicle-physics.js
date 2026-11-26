@@ -514,7 +514,7 @@
  }
 
 
- // Returns sampled center tracks for all six trailer tires and all three axle centers.
+ // Returns sampled center tracks for six trailer axle-side tire groups and all three axle centers.
  // Left/right inner-side classification is relative to the direction of travel:
  // reverse gear swaps the vehicle-side label. Distances are chords between route samples.
  function trailerWheelTrajectoryDiagnostics(path,params){
@@ -540,7 +540,7 @@
   const offsets=trailerAxleOffsets(params);
   const makeTrack=side=>({
    side,
-   name:side==='center'?'центр оси':(side==='left'?'левое колесо':'правое колесо'),
+   name:side==='center'?'центр оси':(side==='left'?'левая группа шин':'правая группа шин'),
    points:[],
    sampledTravel:0,
    integratedTravelAccumulator:0,
