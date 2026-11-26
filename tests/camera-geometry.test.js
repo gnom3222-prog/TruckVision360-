@@ -135,7 +135,9 @@ test('camera uncertainty estimation also fails closed for a projective-horizon c
    referenceWidth:0.297,
    referenceHeight:0.210,
    measuredPoints:horizonCrossingOpening,
-   sigmaPixels:2
+   sigmaPixels:2,
+   sigmaReferenceWidth:0.001,
+   sigmaReferenceHeight:0.001
   }),
   /пересекает линию вырождения/
  );
