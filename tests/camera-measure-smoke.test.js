@@ -346,7 +346,11 @@ test('backgrounding the page stops camera, clears calibration and requires an ex
 
 test('backgrounding while camera permission is pending stops a late stream and requires a fresh tap',async()=>{
  let resolvePermission;
- const camera=bootCamera({getUserMedia:({createStream})=>new Promise(resolve=>{resolvePermission=()=>resolve(createStream());})});
+ let deferFirstRequest=true;
+ const camera=bootCamera({getUserMedia:({createStream})=>{
+  if(deferFirstRequest){deferFirstRequest=false;return new Promise(resolve=>{resolvePermission=()=>resolve(createStream());});}
+  return Promise.resolve(createStream());
+ }});
  const pendingStart=camera.fire('cameraStart','click');
  await Promise.resolve();
  assert.equal(camera.permissionRequests,1);
