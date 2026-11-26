@@ -31,6 +31,17 @@
     if(!pose||![pose.x,pose.y,pose.heading].every(finite))errors.push(p+'.pose должен содержать конечные x, y и heading (радианы).');
     else if(Math.hypot(pose.x,pose.y)>MAX_RANGE_M)errors.push(p+' находится дальше 60 м от тягача.');
     if(!dim||![dim.length,dim.width].every(finite)||dim.length<0.05||dim.width<0.05||dim.length>30||dim.width>15)errors.push(p+'.dimensions содержит недопустимые length/width.');
+    if(o.verticalRange!==undefined){
+     const range=o.verticalRange;
+     if(!range||typeof range!=='object'||Array.isArray(range)||
+        !finite(range.zMin)||!finite(range.zMax)||range.zMin< -2||range.zMax>30||range.zMax<=range.zMin){
+      errors.push(p+'.verticalRange должен содержать измеренные zMin/zMax в диапазоне −2…30 м.');
+     }
+     const uncertainty=range&&range.uncertainty!==undefined?range.uncertainty:0;
+     if(!finite(uncertainty)||uncertainty<0||uncertainty>2){
+      errors.push(p+'.verticalRange.uncertainty должен находиться в диапазоне 0–2 м.');
+     }
+    }
     if(!finite(o.confidence)||o.confidence<0||o.confidence>1)errors.push(p+'.confidence должен быть в диапазоне 0–1.');
     if(!['lidar','camera','fused'].includes(o.source))errors.push(p+'.source должен быть lidar, camera или fused.');
    });
@@ -55,8 +66,10 @@
     {x:x+hl*ux+hw*nx,y:y+hl*uy+hw*ny},
     {x:x-hl*ux+hw*nx,y:y-hl*uy+hw*ny}
    ];
+   const vertical=o.verticalRange;
    return {kind:'perception-obstacle',id:o.id,name:o.type+' · '+o.id,source:o.source,confidence:o.confidence,
-    detectedAt:frame.timestamp,polygon};
+    detectedAt:frame.timestamp,polygon,
+    ...(vertical?{zMin:vertical.zMin,zMax:vertical.zMax,zUncertainty:vertical.uncertainty??0}: {})};
   });
  }
  return Object.freeze({validateFrame,toObstacles,MAX_AGE_MS,MAX_OBJECTS});
