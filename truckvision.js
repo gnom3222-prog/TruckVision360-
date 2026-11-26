@@ -1002,6 +1002,14 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
  maxBeta=articulationPeak.maxAngleDegrees;
  const scrubExposure=physics.trailerAxleScrubExposure(path,cfg,0.7);
  const wheelTrajectory=physics.trailerWheelTrajectoryDiagnostics(path,cfg);
+ let tireTrajectory=null,tireTrajectoryError=null;
+ try{
+  if(typeof physics.wheelTireTrajectoryDiagnostics==='function'){
+   tireTrajectory=physics.wheelTireTrajectoryDiagnostics(path,cfg);
+  }else tireTrajectoryError='Индивидуальная диагностика траекторий покрышек недоступна.';
+ }catch(error){
+  tireTrajectoryError=error&&error.message?error.message:String(error);
+ }
  const wheelTrackSummary=wheelTrajectory.axles.map((axle,index)=>{
   const segmentAxles=wheelTrajectory.segments.map(segment=>segment.axles[index]);
   const differences=segmentAxles.map(segment=>segment?.outerMinusInner).filter(Number.isFinite);
@@ -1106,7 +1114,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   wheelTrackTravelMethod:wheelTrajectory.wheelTravelMethod,
   wheelTrackSegmentsWithKinematicEstimate:wheelTrajectory.segmentsWithKinematicEstimate,
   wheelTrackSegmentsWithoutKinematicEstimate:wheelTrajectory.segmentsWithoutKinematicEstimate,
-  wheelTrackSummary,
+  wheelTrackSummary,tireTrajectory,tireTrajectoryError,
   level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',
   maxBeta,articulationPeak,articulationWarning,clearance:minClearance,clearanceDetail:minClearanceDetail,
   clearanceLowerBound:clearanceForAssessment,effectiveClearance,
@@ -1145,8 +1153,11 @@ function wheelClearanceSummaryText(metrics){
    ' (проверок колёс: '+wheelClearance.controlStartWheelChecks+').':''
  ].join(''):'';
  const wheelItems=Array.isArray(wheelClearance?.wheels)?wheelClearance.wheels:[];
- const perWheel=wheelItems.length===10?
-  ' Нижние оценки по каждому из 10 колёс: '+wheelItems.map(item=>
+ const perWheelLabel=wheelItems.length===10?
+  ' Нижние оценки по каждому из 10 колёс: ':
+  ' Нижние оценки по каждой из '+wheelItems.length+' расчётных шинных оболочек: ';
+ const perWheel=wheelItems.length>=10?
+  perWheelLabel+wheelItems.map(item=>
    item.name+' — '+(Number.isFinite(item.minimumClearanceLowerBound)?item.minimumClearanceLowerBound.toFixed(2)+' м':'не ограничен')+
    (Number.isFinite(item.minimumIntermediatePolygonClearance)?
     '; промежуточная выборка '+item.minimumIntermediatePolygonClearance.toFixed(2)+' м':'')
@@ -1189,6 +1200,24 @@ function wheelTrackSummaryText(metrics){
   items.map(item=>'ось '+item.axleIndex+' '+
    item.integratedCenterDistance.toFixed(2)+'/'+item.integratedLeftWheelDistance.toFixed(2)+'/'+item.integratedRightWheelDistance.toFixed(2)).join('; ');
  return sampled+'; '+integrated+'; численная оценка внутри кинематической модели, не измерение шин.';
+}
+
+function tireTrajectorySummaryText(metrics){
+ const result=metrics?.tireTrajectory;
+ if(metrics?.tireTrajectoryError)return 'не рассчитаны: '+metrics.tireTrajectoryError;
+ if(!result||!Array.isArray(result.tires)||result.tires.length===0)return 'не определены';
+ const tires=result.tires.map(tire=>{
+  const sampled=Number.isFinite(tire.sampledTravel)?tire.sampledTravel.toFixed(2):'не определена';
+  const integrated=Number.isFinite(tire.integratedTravelEstimate)?
+   tire.integratedTravelEstimate.toFixed(2):'не выдана';
+  return tire.name+' '+sampled+'/'+integrated;
+ });
+ const integration=result.integratedTravelComplete?
+  'RK4 + составной Симпсон, все сегменты реконструированы':
+  'интегральная оценка не выдана: не все сегменты прошли проверку RK4 или не имеют stepDistance';
+ return result.tires.length+' оболочек (выборочная хорда / интегральная оценка, м): '+tires.join('; ')+
+  '; '+integration+'; максимальный индикатор уточнения Симпсона '+
+  Number(result.maxSegmentRefinementDelta||0).toFixed(6)+' м (не граница ошибки).';
 }
 
 function updateRecommendationCard(data={}){
@@ -1711,7 +1740,7 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
   $('difficultyAdvice').textContent=
    'Сложность: '+m.level+'. Причины: '+m.reasons.join('; ')+
    '. Максимальный угол сочленения '+m.maxBeta.toFixed(1)+'°; '+articulationPeakText+'; конечная ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+
-   '°; конечный угол тягач–полуприцеп '+m.finalArticulationDeg.toFixed(1)+'°; геометрический индикатор боковой скорости крайних осей при расчётной скорости 0,7 м/с '+m.maxAxleScrubSpeed.toFixed(3)+' м/с; по осям (передняя/средняя/задняя): '+m.axleScrubSpeedByAxle.map(value=>value.toFixed(3)).join('/')+' м/с; накопленный proxy по осям: '+m.axleScrubTravelByAxle.map(value=>value.toFixed(2)).join('/')+' м; суммарный proxy '+m.axleScrubTravelProxy.toFixed(2)+' м (не модель шин; база длины сегмента: '+(m.axleScrubDistanceMethod==='planner-step-distance'?'stepDistance планировщика':m.axleScrubDistanceMethod==='chord-fallback'?'резервная хорда между узлами':'stepDistance при наличии, иначе хорда')+'); выборочные траектории колёс трёх осей (центр/левое/правое, м): '+m.wheelTrackSummary.map(item=>'ось '+item.axleIndex+' '+item.centerDistance.toFixed(2)+'/'+item.leftWheelDistance.toFixed(2)+'/'+item.rightWheelDistance.toFixed(2)+'; внутренняя сторона '+item.innerSideSummary+'; max разница внешнего и внутреннего колеса на сегменте '+item.maxOuterMinusInnerPerSample.toFixed(3)).join('; ')+'; длины — хорды между узлами маршрута, не непрерывная оценка; минимальный зазор до тестовых препятствий '+
+   '°; конечный угол тягач–полуприцеп '+m.finalArticulationDeg.toFixed(1)+'°; геометрический индикатор боковой скорости крайних осей при расчётной скорости 0,7 м/с '+m.maxAxleScrubSpeed.toFixed(3)+' м/с; по осям (передняя/средняя/задняя): '+m.axleScrubSpeedByAxle.map(value=>value.toFixed(3)).join('/')+' м/с; накопленный proxy по осям: '+m.axleScrubTravelByAxle.map(value=>value.toFixed(2)).join('/')+' м; суммарный proxy '+m.axleScrubTravelProxy.toFixed(2)+' м (не модель шин; база длины сегмента: '+(m.axleScrubDistanceMethod==='planner-step-distance'?'stepDistance планировщика':m.axleScrubDistanceMethod==='chord-fallback'?'резервная хорда между узлами':'stepDistance при наличии, иначе хорда')+'); выборочные траектории колёс трёх осей (центр/левое/правое, м): '+m.wheelTrackSummary.map(item=>'ось '+item.axleIndex+' '+item.centerDistance.toFixed(2)+'/'+item.leftWheelDistance.toFixed(2)+'/'+item.rightWheelDistance.toFixed(2)+'; внутренняя сторона '+item.innerSideSummary+'; max разница внешнего и внутреннего колеса на сегменте '+item.maxOuterMinusInnerPerSample.toFixed(3)).join('; ')+'; отдельные траектории покрышек: '+tireTrajectorySummaryText(m)+'; длины групп — хорды между узлами маршрута, не непрерывная оценка; минимальный зазор до тестовых препятствий '+
    (Number.isFinite(m.clearance)?m.clearance.toFixed(2)+' м':'не определён')+
    '; ближайшая проверенная часть автопоезда: '+closestLocationText+
    '; нижняя оценка между узлами '+(Number.isFinite(m.clearanceLowerBound)?m.clearanceLowerBound.toFixed(2)+' м':'не ограничена')+
@@ -1749,6 +1778,26 @@ function drawRoute(){
  if(plannedRoute.length<2)return;
 
  drawLine(plannedRoute,'#ffe082',4,[9,6]);
+
+ // Overlay the sampled center paths of individual tire footprints.
+ const tireTracks=routeAssessment?.tireTrajectory?.tires||[];
+ tireTracks.forEach(track=>{
+  if(!Array.isArray(track.points)||track.points.length<2)return;
+  ctx.beginPath();
+  track.points.forEach((point,index)=>{
+   const screen=toScreen(point);
+   if(index===0)ctx.moveTo(screen.x,screen.y);
+   else ctx.lineTo(screen.x,screen.y);
+  });
+  const axleColors=['#81c784','#ffb74d','#ce93d8'];
+  ctx.strokeStyle=track.vehiclePart==='тягач'?'#4fc3f7':axleColors[(track.axleIndex-1)%axleColors.length];
+  ctx.lineWidth=1.35;
+  ctx.globalAlpha=0.72;
+  ctx.setLineDash(track.pairPosition==='inner'?[3,3]:[]);
+  ctx.stroke();
+ });
+ ctx.setLineDash([]);
+ ctx.globalAlpha=1;
 
  const swept=routeAssessment&&routeAssessment.sweptClearanceDetail;
  if(swept&&swept.kind==='segment-lower-bound'&&swept.from&&swept.to){
@@ -1848,6 +1897,8 @@ function fitSceneCamera(){
  add(vehicleCollisionParts(state).flatMap(group=>group.components.map(component=>component.polygon)));
  if(showObstacles)sceneObstacles().forEach(o=>add(obstaclePolygon(o)));
  if(plannedRoute.length>1)plannedRoute.forEach(p=>points.push({x:p.x,y:p.y}));
+ const tireTracks=routeAssessment?.tireTrajectory?.tires||[];
+ tireTracks.forEach(track=>track.points?.forEach(point=>points.push({x:point.x,y:point.y})));
  if(!points.length)return;
  const xs=points.map(p=>p.x),ys=points.map(p=>p.y);
  const minX=Math.min(...xs)-2.5,maxX=Math.max(...xs)+2.5;

@@ -910,3 +910,108 @@ test('asymmetric axle spacings produce asymmetric rigid-group scrub diagnostics'
   1.6/1.1,1e-9
  );
 });
+
+
+const tirePathParams={
+ wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+ trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+ tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.11,
+ tireLength:0.72,tireWidth:0.32,
+ tractorRearTireCenterSpacing:0.36,
+ trailerAxle1TireCenterSpacing:0.36,
+ trailerAxle2TireCenterSpacing:0.36,
+ trailerAxle3TireCenterSpacing:0.36
+};
+const makeTirePath=(gear,steer,steps=4,stepDistance=0.25)=>{
+ let q={x:0,y:0,psi:0,psiT:0};
+ const path=[{...q,gear,steer,stepDistance:0}];
+ for(let i=0;i<steps;i++){
+  q=physics.rk4(q,gear*0.7,steer,stepDistance/0.7,tirePathParams);
+  path.push({...q,gear,steer,stepDistance});
+ }
+ return path;
+};
+
+test('per-tire trajectory diagnostics integrate all 18 calibrated tire centers on a straight route',()=>{
+ const result=physics.wheelTireTrajectoryDiagnostics(makeTirePath(1,0),tirePathParams);
+ assert.equal(result.tires.length,18);
+ assert.equal(result.integratedTravelComplete,true);
+ assert.equal(result.segmentsWithKinematicEstimate,4);
+ assert.equal(result.segmentsWithoutKinematicEstimate,0);
+ for(const tire of result.tires){
+  near(tire.sampledTravel,1,1e-8);
+  near(tire.integratedTravelEstimate,1,1e-8);
+  assert.equal(tire.points.length,5);
+ }
+ near(result.totalIntegratedTireTravel,18,1e-8);
+ assert.equal(result.tires.filter(tire=>tire.pairPosition==='outer').length,8);
+ assert.equal(result.tires.filter(tire=>tire.pairPosition==='inner').length,8);
+ assert.ok(result.longestIntegratedTire);
+ assert.equal(result.integration,'rk4-reconstructed-composite-simpson-4-subintervals');
+});
+
+test('per-tire path estimates distinguish inner and outer tires during a forward turn',()=>{
+ const result=physics.wheelTireTrajectoryDiagnostics(makeTirePath(1,0.28,30,0.1),tirePathParams);
+ assert.equal(result.integratedTravelComplete,true);
+ const outer=result.tires.find(tire=>
+  tire.vehiclePart==='полуприцеп'&&tire.axleIndex===2&&tire.side==='right'&&tire.pairPosition==='outer'
+ );
+ const inner=result.tires.find(tire=>
+  tire.vehiclePart==='полуприцеп'&&tire.axleIndex===2&&tire.side==='right'&&tire.pairPosition==='inner'
+ );
+ assert.ok(outer&&inner);
+ assert.ok(Math.abs(outer.integratedTravelEstimate-inner.integratedTravelEstimate)>1e-5);
+ assert.ok(result.maxSegmentRefinementDelta>=0);
+ assert.ok(Number.isFinite(outer.refinementIndicatorTotal));
+});
+
+test('per-tire trajectory diagnostics support reverse motion and retain positive traveled lengths',()=>{
+ const result=physics.wheelTireTrajectoryDiagnostics(makeTirePath(-1,-0.22,12,0.1),tirePathParams);
+ assert.equal(result.integratedTravelComplete,true);
+ assert.equal(result.segmentsWithKinematicEstimate,12);
+ assert.ok(result.tires.every(tire=>tire.integratedTravelEstimate>0));
+ assert.ok(result.tires.every(tire=>tire.points.every(point=>point.gear===-1)));
+});
+
+test('per-tire sampled chords remain available but integrated estimates are withheld without stepDistance',()=>{
+ const q0={x:0,y:0,psi:0,psiT:0};
+ const q1=physics.rk4(q0,0.7,0.18,1/0.7,tirePathParams);
+ const result=physics.wheelTireTrajectoryDiagnostics([
+  {...q0,gear:1,steer:0.18},
+  {...q1,gear:1,steer:0.18}
+ ],tirePathParams);
+ assert.equal(result.distanceMethod,'chord-fallback');
+ assert.equal(result.segmentsWithoutKinematicEstimate,1);
+ assert.equal(result.integratedTravelComplete,false);
+ assert.ok(result.tires.every(tire=>tire.sampledTravel>0));
+ assert.ok(result.tires.every(tire=>tire.integratedTravelEstimate===null));
+});
+
+test('per-tire integrated estimates are withheld when RK4 endpoint reconstruction mismatches',()=>{
+ const q0={x:0,y:0,psi:0,psiT:0};
+ const q1=physics.rk4(q0,0.7,0.12,0.1/0.7,tirePathParams);
+ q1.psiT+=0.02;
+ const result=physics.wheelTireTrajectoryDiagnostics([
+  {...q0,gear:1,steer:0.12,stepDistance:0},
+  {...q1,gear:1,steer:0.12,stepDistance:0.1}
+ ],tirePathParams);
+ assert.equal(result.segmentsWithoutKinematicEstimate,1);
+ assert.equal(result.integratedTravelComplete,false);
+ assert.ok(result.tires.every(tire=>tire.integratedTravelEstimate===null));
+ assert.equal(result.segmentDiagnostics.length,1);
+ assert.ok(result.segmentDiagnostics[0].endpointResidual.trailerHeading>1e-6);
+});
+
+
+test('coarse per-tire Simpson path estimates converge toward a dense RK4 reference',()=>{
+ const coarse=physics.wheelTireTrajectoryDiagnostics(makeTirePath(1,0.28,30,0.1),tirePathParams);
+ const fine=physics.wheelTireTrajectoryDiagnostics(makeTirePath(1,0.28,300,0.01),tirePathParams);
+ assert.equal(coarse.integratedTravelComplete,true);
+ assert.equal(fine.integratedTravelComplete,true);
+ const fineByName=new Map(fine.tires.map(tire=>[tire.name,tire.integratedTravelEstimate]));
+ const errors=coarse.tires.map(tire=>Math.abs(
+  tire.integratedTravelEstimate-fineByName.get(tire.name)
+ ));
+ assert.ok(errors.every(Number.isFinite));
+ assert.ok(Math.max(...errors)<1e-6,'refined route sampling should closely match each tire-center path integral');
+});
