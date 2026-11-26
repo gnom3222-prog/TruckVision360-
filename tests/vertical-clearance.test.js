@@ -166,7 +166,8 @@ test('measured mirror height is propagated as its own cab collision component',(
  const cab=parts.find(part=>part.vehiclePart==='кабина');
  const mirror=cab.components.find(component=>component.name==='левое зеркало');
  assert.ok(mirror);
- assert.deepEqual(mirror.verticalRange,{min:1.8,max:3.9});
+ assert.ok(Math.abs(mirror.verticalRange.min-1.8)<1e-12);
+ assert.ok(Math.abs(mirror.verticalRange.max-3.9)<1e-12);
 });
 
 test('unknown mirror height is not inferred from the cab height profile',()=>{
