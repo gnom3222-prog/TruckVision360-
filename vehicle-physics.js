@@ -573,7 +573,7 @@
 
  // Collision components are grouped into the same three driver-facing parts.
  // Mirrors are separate cab components, so their nearest obstacle can be named.
- function vehicleCollisionParts(q,params,steer=Number.isFinite(q&&q.steer)?q.steer:0){
+ function vehicleCollisionParts(q,params,steer=Number.isFinite(q&&q.steer)?q.steer:0,includeInternalComponentsForVertical=false){
   if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2){
    throw new Error('Угол поворота колёс для проверки столкновений некорректен.');
   }
@@ -583,24 +583,24 @@
   const auxiliary=auxiliaryEnvelopePolygons(q,params);
   const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
   const tractorWheelComponents=wheels.filter(wheel=>
-   wheel.vehiclePart==='тягач'&&(!!wheel.verticalRange||polygonOutsideEnvelope(
+   wheel.vehiclePart==='тягач'&&(includeInternalComponentsForVertical||!!wheel.verticalRange||polygonOutsideEnvelope(
     wheel.polygon,q,q.psi,5+uncertainty,-1.2-uncertainty,2.55+2*uncertainty
    ))
   );
   const tractorAuxiliaryComponents=auxiliary.filter(component=>
-   component.vehiclePart==='тягач'&&(!!component.verticalRange||polygonOutsideEnvelope(
+   component.vehiclePart==='тягач'&&(includeInternalComponentsForVertical||!!component.verticalRange||polygonOutsideEnvelope(
     component.polygon,q,q.psi,5+uncertainty,-1.2-uncertainty,2.55+2*uncertainty
    ))
   );
   const hitch=hitchPoint(q,params);
   const trailerWheelComponents=wheels.filter(wheel=>
-   wheel.vehiclePart==='полуприцеп'&&(!!wheel.verticalRange||polygonOutsideEnvelope(
+   wheel.vehiclePart==='полуприцеп'&&(includeInternalComponentsForVertical||!!wheel.verticalRange||polygonOutsideEnvelope(
     wheel.polygon,hitch,q.psiT,1.5+uncertainty,
     -(params.trailerLength-1.5+uncertainty),params.trailerWidth+2*uncertainty
    ))
   );
   const trailerAuxiliaryComponents=auxiliary.filter(component=>
-   component.vehiclePart==='полуприцеп'&&(!!component.verticalRange||polygonOutsideEnvelope(
+   component.vehiclePart==='полуприцеп'&&(includeInternalComponentsForVertical||!!component.verticalRange||polygonOutsideEnvelope(
     component.polygon,hitch,q.psiT,1.5+uncertainty,
     -(params.trailerLength-1.5+uncertainty),params.trailerWidth+2*uncertainty
    ))
