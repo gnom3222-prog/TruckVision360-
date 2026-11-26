@@ -2606,9 +2606,20 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,
   poseEnvelope=planner.inflateObstaclePoseUncertainty(nominalPolygon,anchor,mapPoseUncertainty);
   conservativePolygon=planner.inflateConvexPolygon(poseEnvelope.polygon,measurementInflation);
  }catch(_){return false;}
+ const roadSurfaceText=$('roadSurface')?.value.trim()||'';
+ let enteredRoadSurface=null;
+ try{enteredRoadSurface=JSON.parse(roadSurfaceText||'null');}catch(_){}
+ const roadSurfaceKeys=[
+  'originX','originY','originZ','gradeX','gradeY',
+  'originZUncertainty','gradeXUncertainty','gradeYUncertainty','surfaceResidualUncertainty'
+ ];
+ const roadSurfaceMatchesApplied=!!cfg.roadSurface&&!!enteredRoadSurface&&
+  roadSurfaceKeys.every(key=>Number.isFinite(enteredRoadSurface[key])&&
+   Math.abs(enteredRoadSurface[key]-cfg.roadSurface[key])<=1e-12);
  const roadSurfaceErrors=cfg.roadSurface&&typeof physics.validateRoadSurface==='function'?
   physics.validateRoadSurface(cfg.roadSurface):['Калибровка поверхности дороги отсутствует.'];
- const verticalDatumCalibrated=!!cfg.roadSurface&&Array.isArray(roadSurfaceErrors)&&roadSurfaceErrors.length===0;
+ const verticalDatumCalibrated=roadSurfaceMatchesApplied&&
+  Array.isArray(roadSurfaceErrors)&&roadSurfaceErrors.length===0;
  const obstacle={
   kind:'camera-obstacle',
   name:String(name||'Препятствие камеры').trim().slice(0,48)||'Препятствие камеры',
