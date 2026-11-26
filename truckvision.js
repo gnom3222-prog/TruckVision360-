@@ -862,28 +862,37 @@ function planAStar(start,goal){
 }
 
 function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDetail=null,trajectoryClearance=null){
- let length=0,gearChanges=0,steeringChanges=0,reverseDistance=0,reverseSegments=0;
+ let length=0,gearChanges=0,steeringChanges=0,initialSteeringActions=0,reverseDistance=0,reverseSegments=0;
  let minClearance=Infinity,minClearanceDetail=null,maxBeta=0,collision=false;
  const routeObstacles=showObstacles?sceneObstacles():[];
  const checkClearance=showObstacles?planner.createClearanceChecker(routeObstacles,cfg):null;
- let previousGear=path[0]?.gear||1,previousSteer=path[0]?.steer||0,wasReverse=false;
+ let previousGear=path[0]?.gear||1,previousSteer=path[0]?.steer||0;
+ let previousGearKnown=path[0]?.gearKnown!==false;
+ let previousSteerKnown=path[0]?.steerKnown!==false,wasReverse=false;
  for(let i=0;i<path.length;i++){
   const q=path[i];
+  const currentGear=q.gear===-1?-1:1;
+  const currentSteer=Number.isFinite(q.steer)?q.steer:0;
   if(i>0){
    const prev=path[i-1];
    const segmentLength=Math.hypot(q.x-prev.x,q.y-prev.y);
    length+=segmentLength;
-   const reversing=q.gear<0;
+   const reversing=currentGear<0;
    if(reversing){
     reverseDistance+=segmentLength;
     if(!wasReverse)reverseSegments++;
    }
-   if(q.gear!==previousGear)gearChanges++;
-   if(Math.abs(q.steer-previousSteer)>0.12)steeringChanges++;
+   if(previousGearKnown&&currentGear!==previousGear)gearChanges++;
+   if(Math.abs(currentSteer-previousSteer)>0.12){
+    if(previousSteerKnown)steeringChanges++;
+    else initialSteeringActions++;
+   }
    wasReverse=reversing;
-  }else wasReverse=q.gear<0;
-  previousGear=q.gear||previousGear;
-  previousSteer=q.steer||0;
+  }else wasReverse=currentGear<0;
+  previousGear=currentGear;
+  previousSteer=currentSteer;
+  previousGearKnown=true;
+  previousSteerKnown=true;
   if(showObstacles){
    const c=checkClearance(q);
    if(c.distance<minClearance){
@@ -939,7 +948,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
  if(intermediateWheelContact)collision=true;
  const wheelLowerBounds=Array.isArray(wheelClearance?.wheels)?
   wheelClearance.wheels.map(wheel=>wheel.minimumClearanceLowerBound).filter(Number.isFinite):[];
- const turns=gearChanges+steeringChanges;
+ const turns=gearChanges+steeringChanges+initialSteeringActions;
  const clearanceByPart=Array.isArray(trajectoryClearance?.parts)?trajectoryClearance.parts:[];
  const partLowerBounds=clearanceByPart.map(part=>part.minimumClearanceLowerBound).filter(Number.isFinite);
  const clearanceForAssessment=Math.min(minClearance,minimumClearanceLowerBound,...partLowerBounds,...wheelLowerBounds);
@@ -958,12 +967,13 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   (Number.isFinite(effectiveClearance)&&effectiveClearance<0.35);
  const articulationWarning=maxBeta>=ARTICULATION_WARNING_DEG;
  const articulationBlocked=maxBeta>=ARTICULATION_STOP_DEMO_DEG;
- const score=gearChanges*1.2+steeringChanges*0.4+(reverseDistance>0?1.5:0)+(articulationWarning?3:maxBeta>30?1.5:0)+
+ const score=gearChanges*1.2+(steeringChanges+initialSteeringActions)*0.4+(reverseDistance>0?1.5:0)+(articulationWarning?3:maxBeta>30?1.5:0)+
   (effectiveClearance<0.35?4:effectiveClearance<0.75?2:effectiveClearance<1.5?1:0)+(!reached?3:0)+(collision?8:0);
  const reasons=[];
  if(reverseDistance>0)reasons.push('задний ход: '+reverseSegments+' участков, '+reverseDistance.toFixed(1)+' м');
  if(gearChanges)reasons.push('переключений передачи: '+gearChanges);
  if(steeringChanges)reasons.push('изменений рулевого режима: '+steeringChanges);
+ if(initialSteeringActions)reasons.push('первое рулевое действие при начале маршрута');
  if(collision)reasons.push('пересечение с препятствием');
  if(intermediateWheelContact)reasons.push('промежуточная RK4-выборка контура шины пересекает препятствие; виртуальный автопроезд заблокирован');
  if(!reached)reasons.push('конечное положение не достигнуто в заданных допусках');
@@ -990,7 +1000,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
  }
  if(cfg.mirrorOutboard<=0)reasons.push('геометрия зеркал не задана; зеркала не входят в проверку зазоров');
  if(!reasons.length)reasons.push('в проверенной модели препятствия не пересечены');
- return {length,turns,gearChanges,steeringChanges,reverseDistance,reverseSegments,
+ return {length,turns,gearChanges,steeringChanges,initialSteeringActions,reverseDistance,reverseSegments,
   maxAxleScrubSpeed:scrubExposure.maxAbsLateralVelocity,
   axleScrubTravelProxy:scrubExposure.totalAbsoluteLateralTravel,
   axleScrubTravelByAxle:scrubExposure.cumulativeAbsoluteLateralTravelByAxle,
