@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 
-function makeHarness(){
+function makeHarness(options={}){
  const elements={};
  const makeElement=id=>{
   const el={id,value:'',textContent:'',style:{},listeners:{},addEventListener(type,fn){this.listeners[type]=fn;},fire(type,event={}){return this.listeners[type]?.(event);}};
@@ -25,7 +25,26 @@ function makeHarness(){
  Object.assign(elements.gateCenterY,{value:'0'});
  Object.assign(elements.gateHeadingDeg,{value:'90'});
  let permissionCalls=0,registrationCalls=0,trackStops=0;
- const mediaStream={getTracks(){return [{stop(){trackStops++;}}];}};
+ const tracks=[];
+ function createStream(){
+  const listeners={};
+  const track={
+   readyState:'live',
+   addEventListener(type,handler){(listeners[type]||(listeners[type]=[])).push(handler);},
+   fire(type){
+    if(type==='ended')this.readyState='ended';
+    for(const handler of listeners[type]||[])handler();
+    if(type==='ended')delete listeners.ended;
+   },
+   stop(){
+    if(this.readyState==='ended')return;
+    trackStops++;
+    this.fire('ended');
+   }
+  };
+  tracks.push(track);
+  return {getTracks(){return [track];}};
+ }
  const geometry={
   validQuad(){return true;},
   homography(){return [1,0,0,0,1,0,0,0];},
@@ -34,13 +53,17 @@ function makeHarness(){
  };
  const window={TruckVisionCameraGeometry:geometry,TruckVisionApplyGateRegistration(){registrationCalls++;return true;},addEventListener(){}};
  const document={getElementById(id){return elements[id]||null;}};
- const navigator={mediaDevices:{async getUserMedia(){permissionCalls++;return mediaStream;}}};
+ const navigator={mediaDevices:{async getUserMedia(){
+  permissionCalls++;
+  if(options.getUserMedia)return options.getUserMedia({createStream});
+  return createStream();
+ }}};
  const source=fs.readFileSync(require.resolve('../camera-measure.js'),'utf8');
- vm.runInNewContext(source,{document,window,navigator,isSecureContext:true,console});
+ vm.runInNewContext(source,{document,window,navigator,isSecureContext:options.isSecureContext??true,console});
  const tapQuad=()=>{
   for(const [clientX,clientY] of [[10,10],[630,10],[630,470],[10,470]])canvas.fire('pointerdown',{clientX,clientY});
  };
- return {elements,video,tapQuad,get permissionCalls(){return permissionCalls;},get registrationCalls(){return registrationCalls;},get trackStops(){return trackStops;}};
+ return {elements,video,tapQuad,tracks,get permissionCalls(){return permissionCalls;},get registrationCalls(){return registrationCalls;},get trackStops(){return trackStops;}};
 }
 
 test('camera permission is requested only after an explicit user action',async()=>{
@@ -79,4 +102,26 @@ test('stopping the camera pauses video and releases every media track',async()=>
  assert.equal(app.video.srcObject,null);
  assert.equal(app.trackStops,1);
  assert.match(app.elements.cameraStatus.textContent,/Камера выключена/);
+ assert.doesNotMatch(app.elements.cameraStatus.textContent,/завершился или был прерван/);
+});
+
+test('a denied camera permission leaves no active stream and explains how to retry',async()=>{
+ const denied=Object.assign(new Error('permission denied'),{name:'NotAllowedError'});
+ const app=makeHarness({getUserMedia:async()=>{throw denied;}});
+ await app.elements.cameraStart.fire('click');
+ assert.equal(app.video.srcObject,null);
+ assert.match(app.elements.cameraStatus.textContent,/Доступ к камере запрещён/);
+});
+
+test('an unexpectedly ended camera track clears stale state and allows a fresh permission request',async()=>{
+ const app=makeHarness();
+ await app.elements.cameraStart.fire('click');
+ assert.equal(app.permissionCalls,1);
+ app.tracks[0].fire('ended');
+ assert.equal(app.video.srcObject,null);
+ assert.equal(app.video.paused,true);
+ assert.match(app.elements.cameraStatus.textContent,/Видеопоток камеры завершился или был прерван/);
+ await app.elements.cameraStart.fire('click');
+ assert.equal(app.permissionCalls,2);
+ assert.match(app.elements.cameraStatus.textContent,/Камера включена/);
 });
