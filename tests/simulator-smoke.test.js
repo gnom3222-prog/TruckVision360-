@@ -381,6 +381,25 @@ test('camera obstacle registration rejects a two-frame or unstable repeatability
  assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,unstable),false);
 });
 
+test('camera obstacle registration rejects inconsistent repeatability uncertainty summaries',()=>{
+ const {windowObject}=bootSimulator();
+ const measurement={
+  width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01,
+  conditioningWarning:false,shapeWarning:false,
+  nonlinearSensitivityAvailable:true,nonlinearWarning:false
+ };
+ const anchor={x:3,y:4},heading=Math.PI/2,name='Опорный столб';
+ const poseUncertainty={positionX:0.1,positionY:0.15,headingDeg:2};
+ const valid=cameraGeometry.summarizeRepeatability([
+  {width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01},
+  {width:2.005,height:1.004,sigmaWidth:0.012,sigmaHeight:0.012},
+  {width:1.998,height:0.998,sigmaWidth:0.011,sigmaHeight:0.011}
+ ],{widthTolerance:0.02,heightTolerance:0.02});
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,{...valid,maxSigmaWidth:0.001}),false);
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,{...valid,widthEnvelopeBound:0.001}),false);
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,{...valid,maxDeviationWidth:valid.rangeWidth+0.01}),false);
+});
+ 
 test('camera registration atomically applies measured gate pose and enables jamb obstacles',()=>{
  const {elements,windowObject}=bootSimulator();
  const applied=windowObject.TruckVisionApplyGateRegistration({
