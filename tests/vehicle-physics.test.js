@@ -1087,6 +1087,9 @@ test('suspension travel requires every axle side and explicit compression, rebou
   ...suspensionGeometryParams,suspensionTravel:missingBound
  }).some(error=>error.includes('uncertainty')));
  assert.deepEqual(physics.validateSuspensionTravel(null,suspensionGeometryParams),[]);
+ const zeroGeometry={...suspensionGeometryParams,wheelbaseUncertainty:0};
+ assert.ok(physics.validateSuspensionTravel(makeSuspensionTravelConfig(),zeroGeometry)
+  .some(error=>error.includes('wheelbaseUncertainty')));
 });
 
 test('bounded rigid-plane suspension envelope includes heave pitch and roll over tractor body corners',()=>{
