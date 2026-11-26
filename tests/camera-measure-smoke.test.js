@@ -30,6 +30,16 @@ function bootCamera(options={}){
  }
  let permissionRequests=0,trackStops=0,clearCalls=0;
  const mediaTracks=[];
+ const createStream=()=>{
+  const listeners={};
+  const track={
+   stop(){trackStops++;},
+   addEventListener(type,fn){(listeners[type]??=[]).push(fn);},
+   emit(type){for(const fn of listeners[type]||[])fn();}
+  };
+  mediaTracks.push(track);
+  return{getTracks:()=>[track]};
+ };
  const appliedRegistrations=[],obstacleRegistrations=[];
  const win={
   TruckVisionCameraGeometry:options.geometry||geometry,
@@ -44,14 +54,8 @@ function bootCamera(options={}){
   navigator:{mediaDevices:{getUserMedia:async()=>{
    permissionRequests++;
    if(options.permissionError){const error=new Error('camera permission error');error.name=options.permissionError;throw error;}
-   const listeners={};
-   const track={
-    stop(){trackStops++;},
-    addEventListener(type,fn){(listeners[type]??=[]).push(fn);},
-    emit(type){for(const fn of listeners[type]||[])fn();}
-   };
-   mediaTracks.push(track);
-   return{getTracks:()=>[track]};
+   if(options.getUserMedia)return options.getUserMedia({createStream});
+   return createStream();
   }}},
   isSecureContext:options.secureContext!==false,
   console
@@ -335,6 +339,27 @@ test('backgrounding the page stops camera, clears calibration and requires an ex
  assert.match(camera.elements.cameraStatus.textContent,/Сначала включите камеру/);
  await camera.fire('cameraStart','click');
  assert.equal(camera.permissionRequests,2,'a fresh explicit tap must acquire a new stream');
+ assert.match(camera.elements.cameraStatus.textContent,/Камера включена/);
+ camera.fire('cameraStop','click');
+});
+
+
+test('backgrounding while camera permission is pending stops a late stream and requires a fresh tap',async()=>{
+ let resolvePermission;
+ const camera=bootCamera({getUserMedia:({createStream})=>new Promise(resolve=>{resolvePermission=()=>resolve(createStream());})});
+ const pendingStart=camera.fire('cameraStart','click');
+ await Promise.resolve();
+ assert.equal(camera.permissionRequests,1);
+ camera.setVisibility('hidden');
+ assert.match(camera.elements.cameraStatus.textContent,/Страница перешла в фон/);
+ camera.setVisibility('visible');
+ resolvePermission();
+ await pendingStart;
+ assert.equal(camera.trackStops,1,'a stream granted after backgrounding must be stopped immediately');
+ assert.equal(camera.elements.measureVideo.srcObject??null,null);
+ assert.equal(camera.permissionRequests,1,'background return must not reuse the pending request');
+ await camera.fire('cameraStart','click');
+ assert.equal(camera.permissionRequests,2,'a new explicit tap must start a fresh permission request');
  assert.match(camera.elements.cameraStatus.textContent,/Камера включена/);
  camera.fire('cameraStop','click');
 });
