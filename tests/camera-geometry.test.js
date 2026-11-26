@@ -341,3 +341,68 @@ test('gate map registration refuses measurements without a successful nonlinear 
   /Нелинейная проверка неопределённости/
  );
 });
+
+const repeatableReadings=[
+ {width:4.001,height:2.000,sigmaWidth:0.01,sigmaHeight:0.015},
+ {width:4.004,height:2.003,sigmaWidth:0.012,sigmaHeight:0.014},
+ {width:3.999,height:1.998,sigmaWidth:0.011,sigmaHeight:0.016}
+];
+
+test('repeatability summary reports mean, sample spread and conservative per-frame envelope',()=>{
+ const result=camera.summarizeRepeatability(repeatableReadings,{widthTolerance:0.02,heightTolerance:0.02});
+ assert.equal(result.count,3);
+ assert.equal(result.withinTolerance,true);
+ assert.equal(result.status,'repeatable-within-operator-tolerance');
+ near(result.meanWidth,4.001333333333333);
+ near(result.meanHeight,2.000333333333333);
+ near(result.rangeWidth,0.005);
+ near(result.rangeHeight,0.005);
+ near(result.widthEnvelopeBound,0.029333333333333);
+ near(result.heightEnvelopeBound,0.035666666666667);
+ assert.equal(result.uncertaintyModel,'observed-range-plus-per-frame-2sigma-screening');
+});
+
+test('repeatability summary fails when either observed range exceeds operator tolerance',()=>{
+ const widthFailure=camera.summarizeRepeatability([
+  ...repeatableReadings.slice(0,2),{width:4.08,height:2.001,sigmaWidth:0.01,sigmaHeight:0.01}
+ ],{widthTolerance:0.02,heightTolerance:0.02});
+ assert.equal(widthFailure.withinTolerance,false);
+ assert.equal(widthFailure.status,'repeatability-exceeds-operator-tolerance');
+ const heightFailure=camera.summarizeRepeatability([
+  ...repeatableReadings.slice(0,2),{width:4.002,height:2.08,sigmaWidth:0.01,sigmaHeight:0.01}
+ ],{widthTolerance:0.02,heightTolerance:0.02});
+ assert.equal(heightFailure.withinTolerance,false);
+});
+
+test('repeatability summary rejects too few, too many, invalid readings and missing tolerances',()=>{
+ assert.throws(()=>camera.summarizeRepeatability(repeatableReadings.slice(0,2),{widthTolerance:0.02,heightTolerance:0.02}),/от 3 до 10/);
+ assert.throws(()=>camera.summarizeRepeatability([...repeatableReadings,...Array(8).fill(repeatableReadings[0])],{widthTolerance:0.02,heightTolerance:0.02}),/от 3 до 10/);
+ assert.throws(()=>camera.summarizeRepeatability([...repeatableReadings.slice(0,2),{width:NaN,height:2,sigmaWidth:0.01,sigmaHeight:0.01}],{widthTolerance:0.02,heightTolerance:0.02}),/положительные размеры/);
+ assert.throws(()=>camera.summarizeRepeatability(repeatableReadings,{widthTolerance:0,heightTolerance:0.02}),/положительными значениями/);
+});
+
+test('map registration refuses a repeated series that exceeds the operator tolerance',()=>{
+ const points=[{x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2}];
+ const rejected=camera.summarizeRepeatability([
+  {width:4,height:2,sigmaWidth:0.01,sigmaHeight:0.01},
+  {width:4.01,height:2,sigmaWidth:0.01,sigmaHeight:0.01},
+  {width:4.08,height:2,sigmaWidth:0.01,sigmaHeight:0.01}
+ ],{widthTolerance:0.02,heightTolerance:0.02});
+ assert.throws(()=>camera.registerGateOnMap(
+  {width:4,points,...stableUncertainty},{x:12,y:0},Math.PI/2,rejected
+ ),/Повторяемость ворот не подтверждена/);
+});
+
+test('map registration uses repeat mean and range-plus-per-frame envelope only after accepted series',()=>{
+ const points=[{x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2}];
+ const repeatability=camera.summarizeRepeatability(repeatableReadings,{widthTolerance:0.02,heightTolerance:0.02});
+ const result=camera.registerGateOnMap(
+  {width:4,points,...stableUncertainty},{x:12,y:0},Math.PI/2,repeatability
+ );
+ near(result.clearWidth,repeatability.meanWidth);
+ near(result.widthUncertaintyBound,repeatability.widthEnvelopeBound);
+ near(result.openingStart.y,-repeatability.meanWidth/2);
+ near(result.openingEnd.y,repeatability.meanWidth/2);
+ assert.equal(result.widthUncertaintyModel,'observed-range-plus-per-frame-2sigma-screening');
+ assert.equal(result.repeatability.count,3);
+});
