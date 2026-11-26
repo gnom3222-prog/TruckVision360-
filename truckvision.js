@@ -1993,25 +1993,38 @@ function updateRoutePlayback(){
  if(!routePlayback.active||routePlayback.paused)return;
  if(plannedRoute.length<2){stopRoutePlayback('Нет рассчитанной траектории автопоезда.');return;}
  let index=clamp(routePlayback.index||1,1,plannedRoute.length-1);
- while(index<plannedRoute.length-2&&
+ const nextGearTransition=planner.nextGearTransitionBoundary(
+  plannedRoute,index,routePlayback.currentGear
+ );
+ const shiftBoundaryIndex=nextGearTransition?
+  nextGearTransition.boundaryIndex:plannedRoute.length-1;
+ if(nextGearTransition&&shiftBoundaryIndex<index){
+  stopRoutePlayback('Автопроезд остановлен: граница смены передачи уже оказалась позади текущего индекса траектории.');
+  return;
+ }
+ while(index<plannedRoute.length-2&&index<shiftBoundaryIndex&&
   Math.hypot(plannedRoute[index].x-state.x,plannedRoute[index].y-state.y)<0.22)index++;
  routePlayback.index=index;
- const gear=plannedRoute[Math.min(index+1,plannedRoute.length-1)].gear||1;
- if(routePlayback.currentGear!==gear){
-  if(Math.abs(speed)>0.02){
-   drive=0;braking=true;steer=0;$('steer').value='0';
-   $('routeAdvice').textContent='Переключение передачи: виртуальная модель тормозит до скорости не выше 0,02 м/с. После остановки потребуется отдельное подтверждение; длительность реального переключения неизвестна.';
+ const gear=routePlayback.currentGear;
+ if(nextGearTransition&&index>=shiftBoundaryIndex){
+  const boundary=plannedRoute[shiftBoundaryIndex];
+  const boundaryDistance=Math.hypot(boundary.x-state.x,boundary.y-state.y);
+  if(boundaryDistance<0.025){
+   if(Math.abs(speed)>0.02){
+    drive=0;braking=true;steer=0;$('steer').value='0';
+    $('routeAdvice').textContent='Переключение передачи: виртуальная модель тормозит у границы сегмента до скорости не выше 0,02 м/с. После остановки потребуется отдельное подтверждение; длительность реального переключения неизвестна.';
+    return;
+   }
+   routePlayback.awaitingGearConfirmation=true;
+   routePlayback.pendingGear=nextGearTransition.to;
+   routePlayback.paused=true;
+   drive=0;braking=false;speed=0;steer=0;
+   $('steer').value='0';
+   $('routeConfirmGear').hidden=false;
+   $('routeConfirmGear').disabled=false;
+   $('routeAdvice').textContent='Модельная остановка достигнута на границе смены передачи. Нажмите «Подтвердить виртуальное переключение», чтобы продолжить только симуляцию. Реальная передача, сцепление и длительность переключения не измеряются.';
    return;
   }
-  routePlayback.awaitingGearConfirmation=true;
-  routePlayback.pendingGear=gear;
-  routePlayback.paused=true;
-  drive=0;braking=false;speed=0;steer=0;
-  $('steer').value='0';
-  $('routeConfirmGear').hidden=false;
-  $('routeConfirmGear').disabled=false;
-  $('routeAdvice').textContent='Модельная остановка достигнута перед сменой передачи. Нажмите «Подтвердить виртуальное переключение», чтобы продолжить только симуляцию. Реальная передача, сцепление и длительность переключения не измеряются.';
-  return;
  }
  let nearest=Infinity;
  for(let i=Math.max(1,index-8);i<Math.min(plannedRoute.length,index+18);i++){
@@ -2033,10 +2046,7 @@ function updateRoutePlayback(){
   }
   return;
  }
- let targetIndex=Math.min(plannedRoute.length-1,index+6);
- for(let i=index+1;i<=targetIndex;i++){
-  if((plannedRoute[i].gear||1)!==gear){targetIndex=Math.max(index+1,i-1);break;}
- }
+ let targetIndex=Math.min(plannedRoute.length-1,index+6,shiftBoundaryIndex);
  const target=plannedRoute[targetIndex];
  const dx=target.x-state.x,dy=target.y-state.y;
  const distance=Math.max(0.5,Math.hypot(dx,dy));
