@@ -632,22 +632,24 @@ test('route assessment fails closed when per-wheel swept clearance cannot valida
  assert.match(elements.difficultyAdvice.textContent,/Проверка отдельных колёс не подтверждена/);
  assert.match(elements.difficultyAdvice.textContent,/stepDistance/);
  assert.match(elements.difficultyAdvice.textContent,/Автопроезд остаётся заблокирован/);
+ elements.routeStart.onclick();
+ assert.match(elements.routeAdvice.textContent,/Автопроезд не запущен: проверка отдельных колёс не завершена или не подтверждена/);
 });
 
 
-test('route assessment blocks virtual driving when any wheel-sweep segment cannot be reconstructed',async()=>{
+test('route assessment blocks virtual driving for incomplete wheel sampling even when the route reaches its goal',async()=>{
  const simulator=bootSimulator({workerResult:incompleteWheelSamplingWorkerResult()});
  const {elements}=simulator;
- elements.goalX.value='22';
+ elements.goalX.value='1';
  elements.goalY.value='0';
- elements.goalHeading.value='0';
+ elements.goalHeading.value=String(0.2*180/Math.PI);
  await elements.planRoute.onclick();
  elements.alternativeRouteSelect.value='0';
  elements.alternativeRouteSelect.onchange();
  assert.match(elements.difficultyAdvice.textContent,/Промежуточная проверка не завершена на 2 сегментах/);
  assert.match(elements.difficultyAdvice.textContent,/Автопроезд остаётся заблокирован/);
  elements.routeStart.onclick();
- assert.match(elements.routeAdvice.textContent,/Автопроезд не запущен: предварительная проверка маршрута выявила риск/);
+ assert.match(elements.routeAdvice.textContent,/Автопроезд не запущен: проверка отдельных колёс не завершена или не подтверждена/);
 });
 
 
@@ -786,4 +788,57 @@ test('virtual playback stops at the last waypoint before a gear change and requi
  assert.match(source.slice(pauseStart,pauseEnd),/routePlayback.awaitingGearConfirmation/);
  const startHandler=source.slice(source.indexOf("$('routeStart').onclick"),pauseStart);
  assert.match(startHandler,/routePlayback.awaitingGearConfirmation/);
+});
+
+test('virtual playback holds at the gear boundary until the explicit confirmation button is pressed',async()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  tractorFrontTrack:2.05,tractorSteeringTrack:2.05,tractorRearTrack:2.05,
+  trailerTrack:2.79,tireLength:0.72,tireWidth:0.44
+ };
+ const start={
+  x:0,y:0,psi:0,psiT:0,gear:1,steer:0,
+  gearKnown:true,steerKnown:true,stepDistance:0
+ };
+ const forwardStep=0.5,reverseStep=2.0;
+ const forward=physics.rk4(start,0.7,0,forwardStep/0.7,p);
+ const reverse=physics.rk4(forward,-0.7,0,reverseStep/0.7,p);
+ const states=[
+  start,
+  {...forward,gear:1,steer:0,gearKnown:true,steerKnown:true,stepDistance:forwardStep},
+  {...reverse,gear:-1,steer:0,gearKnown:true,steerKnown:true,stepDistance:reverseStep}
+ ];
+ const simulator=bootSimulator({workerResult:routeControlBoundaryWorkerResult(states)});
+ const {elements,frames}=simulator;
+ elements.goalX.value=String(reverse.x);
+ elements.goalY.value=String(reverse.y);
+ elements.goalHeading.value='0';
+ await elements.planRoute.onclick();
+ elements.alternativeRouteSelect.value='0';
+ elements.alternativeRouteSelect.onchange();
+ assert.equal(elements.routeStart.disabled,undefined);
+ assert.equal(elements.difficultyAdvice.textContent.includes('Автопроезд остаётся заблокирован'),false);
+ elements.routeStart.onclick();
+ assert.match(elements.routeAdvice.textContent,/Виртуальный автопроезд начат/);
+ let timestamp=1000;
+ for(let index=0;index<200&&elements.routeConfirmGear.hidden!==false;index++){
+  const callback=frames.shift();
+  assert.equal(typeof callback,'function');
+  callback(timestamp);
+  timestamp+=40;
+ }
+ assert.equal(elements.routeConfirmGear.hidden,false,'playback must stop at the exact gear boundary');
+ assert.equal(elements.routeConfirmGear.disabled,false);
+ assert.match(elements.routeAdvice.textContent,/Нажмите «Подтвердить виртуальное переключение»/);
+ elements.routeStart.onclick();
+ assert.match(elements.routeAdvice.textContent,/Сначала подтвердите виртуальное переключение/);
+ assert.equal(elements.routeConfirmGear.hidden,false);
+ elements.routePause.onclick();
+ assert.match(elements.routeAdvice.textContent,/ожидает отдельного подтверждения/);
+ assert.equal(elements.routeConfirmGear.hidden,false);
+ elements.routeConfirmGear.onclick();
+ assert.equal(elements.routeConfirmGear.hidden,true);
+ assert.equal(elements.routeConfirmGear.disabled,true);
+ assert.match(elements.routeAdvice.textContent,/Виртуальное переключение подтверждено для симуляции/);
 });
