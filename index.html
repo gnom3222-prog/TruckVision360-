@@ -450,7 +450,7 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
  <div><label for="cameraReferenceWidth">Ширина эталона, м</label><input id="cameraReferenceWidth" type="number" min="0.05" max="20" step="0.001" value="0.297"></div>
  <div><label for="cameraReferenceHeight">Высота эталона, м</label><input id="cameraReferenceHeight" type="number" min="0.05" max="20" step="0.001" value="0.210"></div>
  <div><label for="cameraPointSigma">Неопределённость отметки угла, px (1σ)</label><input id="cameraPointSigma" type="number" min="0.5" max="20" step="0.5" value="2"></div>
- <div><label for="cameraReferenceSigma">Погрешность размера эталона, мм (1σ)</label><input id="cameraReferenceSigma" type="number" min="0" max="50" step="0.5" value="2"></div>
+ <div><label for="cameraReferenceSigma">Погрешность размера эталона, мм (1σ, положительная)</label><input id="cameraReferenceSigma" type="number" min="0.1" max="50" step="0.1" value="2"></div>
 </div>
 <p class="small">Например, лист A4 в альбомной ориентации: 0,297 × 0,210 м. Значения неопределённости — вводимые предположения для оценки чувствительности, а не измеренные характеристики камеры.</p>
 <div class="camera-actions"><button id="cameraCalibrate">1 · Калибровать по 4 углам эталона</button><button id="cameraMeasureGate" class="primary">2 · Измерить 4 угла ворот</button><button id="cameraReset">Сбросить калибровку</button></div>
@@ -497,8 +497,8 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <script src="sensor-perception.js?v=20261126-2"></script>
 <script src="truckvision.js?v=20261126-14"></script>
 <script src="voice.js?v=20261123-4"></script>
-<script src="camera-geometry.js?v=20261126-2"></script>
-<script src="camera-measure.js?v=20261126-3"></script>
+<script src="camera-geometry.js?v=20261126-3"></script>
+<script src="camera-measure.js?v=20261126-4"></script>
 
 <script>
 // App-style section navigation. Existing controls remain in the DOM with their IDs.

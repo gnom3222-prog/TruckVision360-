@@ -96,12 +96,23 @@ test('camera uncertainty scales linearly when all assumed input uncertainties do
 test('camera uncertainty rejects negative or non-finite assumptions',()=>{
  assert.throws(()=>camera.estimateUncertainty({
   referencePoints:perspectiveReference,referenceWidth:0.297,referenceHeight:0.210,
-  measuredPoints:measuredOpening,sigmaPixels:-1
+  measuredPoints:measuredOpening,sigmaPixels:-1,sigmaReferenceWidth:0.001,sigmaReferenceHeight:0.001
  }));
  assert.throws(()=>camera.estimateUncertainty({
   referencePoints:perspectiveReference,referenceWidth:0.297,referenceHeight:0.210,
-  measuredPoints:measuredOpening,sigmaReferenceWidth:NaN
+  measuredPoints:measuredOpening,sigmaPixels:2,sigmaReferenceWidth:NaN,sigmaReferenceHeight:0.001
  }));
+});
+
+test('camera uncertainty refuses zero and implausibly small point/reference assumptions',()=>{
+ const base={
+  referencePoints:perspectiveReference,referenceWidth:0.297,referenceHeight:0.210,
+  measuredPoints:measuredOpening,sigmaPixels:2,sigmaReferenceWidth:0.001,sigmaReferenceHeight:0.001
+ };
+ assert.throws(()=>camera.estimateUncertainty({...base,sigmaPixels:0}),/положительную неопределённость/);
+ assert.throws(()=>camera.estimateUncertainty({...base,sigmaPixels:0.49}),/положительную неопределённость/);
+ assert.throws(()=>camera.estimateUncertainty({...base,sigmaReferenceWidth:0}),/положительную неопределённость/);
+ assert.throws(()=>camera.estimateUncertainty({...base,sigmaReferenceHeight:0.00005}),/положительную неопределённость/);
 });
 
 const horizonCrossingOpening=[
@@ -124,7 +135,9 @@ test('camera uncertainty estimation also fails closed for a projective-horizon c
    referenceWidth:0.297,
    referenceHeight:0.210,
    measuredPoints:horizonCrossingOpening,
-   sigmaPixels:2
+   sigmaPixels:2,
+   sigmaReferenceWidth:0.001,
+   sigmaReferenceHeight:0.001
   }),
   /пересекает линию вырождения/
  );

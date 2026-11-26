@@ -115,6 +115,33 @@ test('camera permission is requested only on tap; measurement reports uncertaint
  assert.equal(camera.trackStops,1,'stopping the camera must stop its media track');
 });
 
+test('camera measurement refuses a blank point-selection uncertainty and preserves the previous gate width',async()=>{
+ const camera=bootCamera();
+ camera.elements.cameraPointSigma.value='';
+ await camera.fire('cameraStart','click');
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
+ assert.equal(camera.elements.gateWidth.value,'3.50');
+ assert.equal(camera.appliedRegistrations.length,0);
+ assert.match(camera.elements.cameraStatus.textContent,/Введите положительную неопределённость/);
+ camera.fire('cameraStop','click');
+});
+
+test('camera obstacle measurement refuses a blank reference-size uncertainty',async()=>{
+ const camera=bootCamera();
+ camera.elements.cameraReferenceSigma.value='';
+ await camera.fire('cameraStart','click');
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
+ await camera.fire('cameraMeasureObstacle','click');
+ await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
+ assert.equal(camera.obstacleRegistrations.length,0);
+ assert.match(camera.elements.cameraStatus.textContent,/Введите положительную неопределённость/);
+ camera.fire('cameraStop','click');
+});
+
 test('camera permission denial is explained and leaves no stream attached',async()=>{
  const camera=bootCamera({permissionError:'NotAllowedError'});
  await camera.fire('cameraStart','click');

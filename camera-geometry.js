@@ -244,10 +244,10 @@
    referencePoints,referenceWidth,referenceHeight,measuredPoints,
    sigmaPixels=2,sigmaReferenceWidth=0,sigmaReferenceHeight=0
   }=options||{};
-  if(!Number.isFinite(sigmaPixels)||sigmaPixels<0||sigmaPixels>20||
-     !Number.isFinite(sigmaReferenceWidth)||sigmaReferenceWidth<0||
-     !Number.isFinite(sigmaReferenceHeight)||sigmaReferenceHeight<0){
-   throw new Error('Параметры оценки неопределённости должны быть неотрицательными числами.');
+  if(!Number.isFinite(sigmaPixels)||sigmaPixels<0.5||sigmaPixels>20||
+     !Number.isFinite(sigmaReferenceWidth)||sigmaReferenceWidth<0.0001||
+     !Number.isFinite(sigmaReferenceHeight)||sigmaReferenceHeight<0.0001){
+   throw new Error('Задайте положительную неопределённость отметки угла (0,5–20 px) и размера эталона (не менее 0,1 мм). Нулевые допуски не принимаются.');
   }
   const base=measureQuad(referencePoints,referenceWidth,referenceHeight,measuredPoints);
   let varianceWidth=0,varianceHeight=0;
