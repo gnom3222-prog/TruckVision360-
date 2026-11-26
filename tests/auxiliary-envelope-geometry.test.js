@@ -106,3 +106,28 @@ test('null auxiliary envelope configuration is rejected instead of treated as an
  const errors=physics.validateAuxiliaryEnvelopes(null);
  assert.ok(errors.some(message=>message.includes('массивом JSON')));
 });
+
+test('planner clearance identifies a protruding measured hub envelope by name',()=>{
+ const p={...params,auxiliaryEnvelopes:[{
+  name:'Наружный корпус ступицы',anchor:'trailer-axle-1',
+  longitudinalOffset:0,lateralOffset:1.0,length:0.9,width:0.5
+ }]};
+ const axle=physics.trailerAxlePoints(pose,p)[0];
+ const obstacle={x:axle.x,y:axle.y+1.0,w:0.08,h:0.08,name:'Контрольный столб'};
+ const result=planner.analyzeTrajectoryClearance([
+  {...pose,gear:1,steer:0}
+ ],[obstacle],p);
+ const trailer=result.parts.find(part=>part.vehiclePart==='полуприцеп');
+ assert.equal(trailer.minimumSampledDetail.component,'Наружный корпус ступицы');
+ assert.equal(trailer.minimumSampledDetail.obstacle,'Контрольный столб');
+});
+
+test('tractor auxiliary envelope corners increase the tractor swept displacement bound',()=>{
+ const baseRates=planner.sweptDisplacementRatesPerMeter(0.24,params);
+ const p={...params,auxiliaryEnvelopes:[{
+  name:'Выносной корпус переднего кулака',anchor:'tractor-front-axle',
+  longitudinalOffset:0.4,lateralOffset:1.8,length:1.1,width:0.7,uncertaintyMargin:0.1
+ }]};
+ const hardwareRates=planner.sweptDisplacementRatesPerMeter(0.24,p);
+ assert.ok(hardwareRates.tractor>baseRates.tractor);
+});
