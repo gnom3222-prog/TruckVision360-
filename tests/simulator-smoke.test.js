@@ -363,7 +363,7 @@ test('camera obstacle registration rejects a two-frame or unstable repeatability
   conditioningWarning:false,shapeWarning:false,
   nonlinearSensitivityAvailable:true,nonlinearWarning:false
  };
- const anchor={x:3,y:4},heading:Math.PI/2,name='Опорный столб';
+ const anchor={x:3,y:4},heading=Math.PI/2,name='Опорный столб';
  const poseUncertainty={positionX:0.1,positionY:0.15,headingDeg:2};
  const validRepeatability=cameraGeometry.summarizeRepeatability([
   {width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01},
