@@ -2481,7 +2481,12 @@ test('ground-supported obstacle height is compared only in a calibrated road dat
  const base={
   ...params,roadSurface,
   vehicleVerticalProfiles:{
-   'tractor-cab':{zMin:2.0,zMax:3.2,uncertaintyMargin:0.02}
+   'tractor-body':{zMin:0.4,zMax:1.5,uncertaintyMargin:0.02},
+   'tractor-cab':{zMin:2.0,zMax:3.2,uncertaintyMargin:0.02},
+   'trailer-body':{zMin:0.5,zMax:3.5,uncertaintyMargin:0.02},
+   'mirror':{zMin:2.0,zMax:3.5,uncertaintyMargin:0.02},
+   'tractor-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+   'trailer-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02}
   }
  };
  const obstacle=(height)=>[{
