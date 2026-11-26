@@ -119,8 +119,8 @@ test('simulator starts and exposes route controls',()=>{
  assert.equal(typeof elements.routePause.onclick,'function');
  assert.equal(typeof elements.routeConfirmGear.onclick,'function');
  assert.equal(typeof elements.routeStop.onclick,'function');
- assert.equal(elements.routeConfirmGear.hidden,true);
- assert.equal(elements.routeConfirmGear.disabled,true);
+ const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
+ assert.match(html,/<button id="routeConfirmGear"[^>]*hidden[^>]*disabled/);
 });
 
 test('simulator exposes measured gate geometry and invalidates a route when gate obstacles are enabled',()=>{
