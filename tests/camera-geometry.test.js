@@ -204,7 +204,7 @@ test('camera registration carries a two-sigma width envelope into gate geometry'
   {x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2}
  ];
  const registration=camera.registerGateOnMap(
-  {width:4,sigmaWidth:0.03,points,...stableUncertainty},
+  {width:4,points,...stableUncertainty,sigmaWidth:0.03},
   {x:12,y:0},
   Math.PI/2
  );
