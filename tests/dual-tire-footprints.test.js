@@ -132,3 +132,21 @@ test('geometry uncertainty planner accepts individual dual-tire center-spacing b
  });
  assert.notEqual(result.reason,'invalid-input',JSON.stringify(result));
 });
+
+
+test('collision components retain each exposed tire rectangle separately',()=>{
+ const parts=physics.vehicleCollisionParts(pose,pairParams);
+ const trailer=parts.find(part=>part.vehiclePart==='полуприцеп');
+ assert.ok(trailer);
+ const tireComponents=trailer.components.filter(component=>component.name.includes('покрышка'));
+ assert.equal(tireComponents.length,12);
+ assert.equal(new Set(tireComponents.map(component=>component.name)).size,12);
+});
+
+test('swept displacement bounds use the derived outer width of explicit tire pairs',()=>{
+ const single=planner.sweptDisplacementRatesPerMeter(0.24,base);
+ const paired=planner.sweptDisplacementRatesPerMeter(0.24,pairParams);
+ assert.ok(paired.tractor>single.tractor);
+ assert.ok(paired.trailer>single.trailer);
+ assert.deepEqual(physics.trailerAxleTireGroupWidths(pairParams),[0.68,0.68,0.68]);
+});
