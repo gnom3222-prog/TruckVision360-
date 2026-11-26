@@ -350,6 +350,7 @@ test('camera obstacle registration requires three repeatable measurements and ap
  ];
  const repeatability=cameraGeometry.summarizeRepeatability(readings,{widthTolerance:0.02,heightTolerance:0.02});
  assert.equal(repeatability.withinTolerance,true);
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,'',poseUncertainty,repeatability),false);
  assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,repeatability),true);
  assert.match(elements.routeAdvice.textContent,/Параметры модели изменены/);
  assert.equal(windowObject.TruckVisionClearCameraObstacles(),true);
