@@ -759,6 +759,11 @@ window.TruckVisionGetClearanceDiagnostics=()=>({
  obstacleChecksEnabled:showObstacles,
  parts:clearanceForVehicleParts(state),
  scene:assessScene(state),
+ verticalClearance:{
+  obstacleCount:sceneObstacles().filter(obstacle=>Number.isFinite(obstacle.zMin)&&Number.isFinite(obstacle.zMax)).length,
+  manualObstacleCount:(cfg.verticalObstacles||[]).length,
+  configuredProfileClasses:Object.keys(cfg.vehicleVerticalProfiles||{})
+ },
  cameraObstacles:cameraObstacles.map(obstacle=>({
   name:obstacle.name,
   measuredWidth:obstacle.measuredWidth,
@@ -1107,10 +1112,11 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
  }else{
   reasons.push('оболочки ступиц, подвески и кронштейнов не откалиброваны и не входят отдельно в проверку столкновений');
  }
- if(Array.isArray(cfg.verticalObstacles)&&cfg.verticalObstacles.length){
+ const verticalObstacleCount=sceneObstacles().filter(obstacle=>Number.isFinite(obstacle.zMin)&&Number.isFinite(obstacle.zMax)).length;
+ if(verticalObstacleCount){
   const unverifiedVerticalChecks=(trajectoryClearance?.verticalUnverifiedChecks||0)+(wheelClearance?.verticalUnverifiedChecks||0);
   if(unverifiedVerticalChecks>0){
-   reasons.push('вертикальные препятствия: '+cfg.verticalObstacles.length+'; для части компонентов высота не откалибрована, поэтому используется только консервативная нижняя оценка по горизонтальной проекции');
+   reasons.push('вертикальные препятствия: '+verticalObstacleCount+'; для части компонентов высота не откалибрована, поэтому используется только консервативная нижняя оценка по горизонтальной проекции');
   }else{
    reasons.push('вертикальные препятствия проверены по вручную заданным высотным интервалам и профилям компонентов; динамика подвески не моделируется');
   }
