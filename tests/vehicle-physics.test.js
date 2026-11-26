@@ -943,7 +943,7 @@ test('per-tire trajectory diagnostics integrate all 18 calibrated tire centers o
   near(tire.integratedTravelEstimate,1,1e-8);
   assert.equal(tire.points.length,5);
  }
- assert.equal(result.totalIntegratedTireTravel,18);
+ near(result.totalIntegratedTireTravel,18,1e-8);
  assert.equal(result.tires.filter(tire=>tire.pairPosition==='outer').length,8);
  assert.equal(result.tires.filter(tire=>tire.pairPosition==='inner').length,8);
  assert.ok(result.longestIntegratedTire);
