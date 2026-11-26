@@ -1461,6 +1461,42 @@ test('per-wheel trajectory clearance identifies the limiting outboard trailer ti
  assert.match(result.envelope,/circumscribed/);
 });
 
+test('per-wheel clearance expands sampled and circumscribed envelopes for configured dual-tire groups',()=>{
+ const base={
+  ...params,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerTrack:2.79,tireLength:0.72,tireWidth:0.44
+ };
+ const q={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
+ const firstAxle=physics.trailerAxlePoints(q,base)[0];
+ const obstacle={x:firstAxle.x,y:1.66,w:0.1,h:0.1,name:'dual tire outer edge'};
+ const single=planner.analyzeWheelTrajectoryClearance([q],[obstacle],base);
+ const dual=planner.analyzeWheelTrajectoryClearance([q],[obstacle],{
+  ...base,tractorRearTireGroupWidth:0.72,trailerTireGroupWidth:0.72
+ });
+ const singleWheel=single.wheels.find(item=>item.name==='левое колесо 1-й оси полуприцепа');
+ const dualWheel=dual.wheels.find(item=>item.name==='левое колесо 1-й оси полуприцепа');
+ assert.ok(singleWheel&&dualWheel);
+ assert.equal(singleWheel.footprintModel,'single-tire-fallback');
+ assert.equal(dualWheel.footprintModel,'configured-axle-side-group-envelope');
+ assert.equal(dualWheel.footprintWidth,0.72);
+ assert.ok(dualWheel.minimumSampledPolygonClearance<singleWheel.minimumSampledPolygonClearance);
+ assert.ok(dualWheel.minimumSampledEnvelopeClearance<singleWheel.minimumSampledEnvelopeClearance);
+ assert.ok(dualWheel.minimumClearanceLowerBound<singleWheel.minimumClearanceLowerBound);
+});
+
+test('trailer swept displacement rate includes the configured tire-group outer width',()=>{
+ const base={
+  ...params,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerTrack:2.79,tireLength:0.72,tireWidth:0.44
+ };
+ const single=planner.sweptDisplacementRatesPerMeter(0.2,base);
+ const dual=planner.sweptDisplacementRatesPerMeter(0.2,{
+  ...base,tractorRearTireGroupWidth:0.72,trailerTireGroupWidth:0.72
+ });
+ assert.ok(dual.trailer>single.trailer);
+ assert.ok(dual.tractor>=single.tractor);
+});
+
 test('per-wheel trajectory clearance applies a segment lower bound between sampled poses',()=>{
  const start={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
  const next={x:0.05,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0.1};
