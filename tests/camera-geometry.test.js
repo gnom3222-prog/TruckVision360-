@@ -9,6 +9,12 @@ const reference=[
 ];
 const near=(actual,expected,tolerance=1e-8)=>
  assert.ok(Math.abs(actual-expected)<=tolerance, `${actual} is not within ${tolerance} of ${expected}`);
+const stableUncertainty={
+ sigmaWidth:0.01,sigmaHeight:0.02,
+ nonlinearSensitivityAvailable:true,nonlinearWarning:false,
+ nonlinearSensitivityModel:'axiswise-one-sigma-finite-perturbations',
+ nonlinearMismatchWidth:0,maxAxisAsymmetryRatio:0
+};
 
 test('camera calibration accepts a convex four-corner reference in clockwise order',()=>{
  assert.equal(camera.validQuad(reference),true);
@@ -168,7 +174,7 @@ test('camera-measured gate registers its clear opening on a manually anchored ma
   {x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2}
  ];
  const result=camera.registerGateOnMap(
-  {width:4,points},
+  {width:4,points,...stableUncertainty},
   {x:12,y:-3},
   Math.PI/2
  );
@@ -185,8 +191,8 @@ test('camera-measured gate registers its clear opening on a manually anchored ma
 
 test('camera gate map registration rejects missing or invalid manual map pose',()=>{
  const measurement={width:4,points:[
-  {x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2}
- ]};
+  {x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2},
+ ],...stableUncertainty};
  assert.throws(()=>camera.registerGateOnMap(measurement,{x:NaN,y:0},0));
  assert.throws(()=>camera.registerGateOnMap(measurement,{x:0,y:0},Infinity));
  assert.throws(()=>camera.registerGateOnMap({...measurement,points:[]},{x:0,y:0},0));
@@ -198,7 +204,7 @@ test('camera registration carries a two-sigma width envelope into gate geometry'
   {x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2}
  ];
  const registration=camera.registerGateOnMap(
-  {width:4,sigmaWidth:0.03,points},
+  {width:4,sigmaWidth:0.03,points,...stableUncertainty},
   {x:12,y:0},
   Math.PI/2
  );
@@ -262,5 +268,62 @@ test('map registration rejects a non-rectangular measured gate and inconsistent 
  assert.throws(
   ()=>camera.registerGateOnMap({...rectangular,width:rectangular.width+0.2},{x:12,y:0},Math.PI/2),
   /не совпадает с шириной/
+ );
+});
+
+
+test('camera uncertainty cross-check agrees with finite one-sigma perturbations for an affine calibration',()=>{
+ const result=camera.estimateUncertainty({
+  referencePoints:rectangularReference,
+  referenceWidth:4,
+  referenceHeight:2,
+  measuredPoints:[{x:20,y:10},{x:80,y:10},{x:80,y:40},{x:20,y:40}],
+  sigmaPixels:2,
+  sigmaReferenceWidth:0.002,
+  sigmaReferenceHeight:0.002
+ });
+ assert.equal(result.nonlinearSensitivityAvailable,true);
+ assert.equal(result.nonlinearSensitivityChecks,18);
+ assert.equal(result.nonlinearSensitivityModel,'axiswise-one-sigma-finite-perturbations');
+ assert.ok(result.nonlinearSigmaWidth>0&&result.nonlinearSigmaHeight>0);
+ assert.ok(result.nonlinearMismatchWidth<1e-8);
+ assert.ok(result.nonlinearMismatchHeight<1e-8);
+ assert.equal(result.maxAxisAsymmetryRatio,0);
+ assert.equal(result.nonlinearWarning,false);
+});
+
+test('camera uncertainty flags a one-sigma perturbation that invalidates the reference dimensions',()=>{
+ const result=camera.estimateUncertainty({
+  referencePoints:rectangularReference,
+  referenceWidth:4,
+  referenceHeight:2,
+  measuredPoints:[{x:20,y:10},{x:80,y:10},{x:80,y:40},{x:20,y:40}],
+  sigmaPixels:2,
+  sigmaReferenceWidth:4,
+  sigmaReferenceHeight:0.002
+ });
+ assert.equal(result.nonlinearSensitivityAvailable,false);
+ assert.equal(result.nonlinearWarning,true);
+ assert.ok(result.nonlinearWarningReasons.includes('finite-perturbation-unavailable'));
+ assert.match(result.nonlinearSensitivityFailure,/Размеры эталона|корректны/);
+});
+
+test('gate map registration refuses measurements without a successful nonlinear sensitivity cross-check',()=>{
+ const measurement=camera.estimateUncertainty({
+  referencePoints:rectangularReference,
+  referenceWidth:4,
+  referenceHeight:2,
+  measuredPoints:[{x:20,y:10},{x:80,y:10},{x:80,y:40},{x:20,y:40}],
+  sigmaPixels:2,
+  sigmaReferenceWidth:0.002,
+  sigmaReferenceHeight:0.002
+ });
+ assert.throws(
+  ()=>camera.registerGateOnMap({...measurement,nonlinearWarning:true},{x:12,y:0},Math.PI/2),
+  /Нелинейная проверка неопределённости/
+ );
+ assert.throws(
+  ()=>camera.registerGateOnMap({width:measurement.width,points:measurement.points,sigmaWidth:measurement.sigmaWidth},{x:12,y:0},Math.PI/2),
+  /Нелинейная проверка неопределённости/
  );
 });
