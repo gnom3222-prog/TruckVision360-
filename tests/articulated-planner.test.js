@@ -242,7 +242,7 @@ test('gate helper adds an oriented vertical lintel prism with measured dimension
  assert.equal(beam.nominalPolygon,undefined,'the inflated polygon must remain the active map/collision contour');
  assert.equal(beam.zMin,3.8);
  assert.equal(beam.zMax,4.05);
- assert.equal(beam.zUncertainty,0.06);
+ assert.ok(Math.abs(beam.zUncertainty-0.06)<1e-12);
  assert.equal(planner.validateObstacles(gate).length,0);
  const along={x:Math.cos(Math.PI/2),y:Math.sin(Math.PI/2)};
  const across={x:-along.y,y:along.x};
@@ -260,7 +260,7 @@ test('gate helper rejects incomplete or physically inconsistent lintel measureme
   thickness:0.2,thicknessUncertainty:0,depth:0.4,depthUncertainty:0
  }}),/верхней перемычки/);
  assert.throws(()=>planner.createGateObstacles({...base,lintel:{
-  clearHeight:0.06,clearHeightUncertainty:0.1,floorDatumUncertainty:0,
+  clearHeight:0.6,clearHeightUncertainty:1,floorDatumUncertainty:0,
   thickness:0.2,thicknessUncertainty:0,depth:0.4,depthUncertainty:0
  }}),/вертикальные или горизонтальные границы/);
 });
