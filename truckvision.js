@@ -993,8 +993,9 @@ function planAStar(start,goal){
 function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDetail=null,trajectoryClearance=null){
  let length=0,gearChanges=0,steeringChanges=0,initialSteeringActions=0,reverseDistance=0,reverseSegments=0;
  let minClearance=Infinity,minClearanceDetail=null,maxBeta=0,collision=false;
- const routeObstacles=showObstacles?sceneObstacles():[];
- const checkClearance=showObstacles?planner.createClearanceChecker(routeObstacles,cfg):null;
+ // Obstacle visibility is a drawing preference; it must never disable route clearance checks.
+ const routeObstacles=sceneObstacles();
+ const checkClearance=planner.createClearanceChecker(routeObstacles,cfg);
  let previousGear=path[0]?.gear||1,previousSteer=path[0]?.steer||0;
  let previousGearKnown=path[0]?.gearKnown!==false;
  let previousSteerKnown=path[0]?.steerKnown!==false,wasReverse=false;
@@ -1022,7 +1023,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   }else wasReverse=currentGear<0;
   previousGear=currentGear;
   previousSteer=currentSteer;
-  if(showObstacles){
+  if(routeObstacles.length){
    const c=checkClearance(q);
    if(c.distance<minClearance){
     minClearance=c.distance;
@@ -1064,10 +1065,13 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   };
  });
  let wheelClearance=null,wheelClearanceError=null;
- if(showObstacles){
+ if(routeObstacles.length){
   try{
    const wheelObstacles=routeObstacles.map(obstacle=>({
-    name:obstacle.name||'препятствие',polygon:obstacleEnvelopePolygon(obstacle)
+    name:obstacle.name||'препятствие',polygon:obstacleEnvelopePolygon(obstacle),
+    ...(Number.isFinite(obstacle.zMin)&&Number.isFinite(obstacle.zMax)?{
+     zMin:obstacle.zMin,zMax:obstacle.zMax,zUncertainty:obstacle.zUncertainty??0
+    }: {})
    }));
    wheelClearance=planner.analyzeWheelTrajectoryClearance(path,wheelObstacles,{
     ...cfg,footprintUncertainty:cfg.vehicleFootprintUncertainty
