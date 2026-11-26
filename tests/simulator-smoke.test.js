@@ -457,6 +457,16 @@ function incompleteWheelSamplingWorkerResult(){
  };
 }
 
+function routeControlBoundaryWorkerResult(states){
+ const result=conservativeSelectionWorkerResult();
+ return {
+  ...result,
+  conservativeCandidateRoutes:result.conservativeCandidateRoutes.map(candidate=>({
+   ...candidate,states:states.map(state=>({...state}))
+  }))
+ };
+}
+
 test('selected alternative displays per-part swept clearance, limiting obstacles and route segment direction',async()=>{
  const simulator=bootSimulator({workerResult:perPartClearanceWorkerResult()});
  const {elements}=simulator;
@@ -674,4 +684,69 @@ test('simulator collision diagnostics use the current Ackermann steering angle f
  const tractor=diagnostics.parts.find(part=>part.vehiclePart==='тягач');
  assert.ok(tractor);
  assert.equal(tractor.component,'левое переднее колесо тягача');
+});
+
+test('route metrics does not count an unknown initial reverse selection as a transmission change',async()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  tractorFrontTrack:2.05,tractorSteeringTrack:2.05,tractorRearTrack:2.05,
+  trailerTrack:2.11,tireLength:0.72,tireWidth:0.44
+ };
+ const start={
+  x:0,y:0,psi:0,psiT:0,gear:1,steer:0,
+  gearKnown:false,steerKnown:false,stepDistance:0
+ };
+ const steer=-0.16,step=0.5;
+ const first=physics.rk4(start,-0.7,steer,step/0.7,p);
+ const second=physics.rk4(first,-0.7,steer,step/0.7,p);
+ const states=[
+  start,
+  {...first,gear:-1,steer,stepDistance:step},
+  {...second,gear:-1,steer,stepDistance:step}
+ ];
+ const simulator=bootSimulator({workerResult:routeControlBoundaryWorkerResult(states)});
+ const {elements}=simulator;
+ elements.goalX.value=String(second.x);
+ elements.goalY.value=String(second.y);
+ elements.goalHeading.value=String(second.psi*180/Math.PI);
+ await elements.planRoute.onclick();
+ elements.alternativeRouteSelect.value='0';
+ elements.alternativeRouteSelect.onchange();
+ const advice=elements.difficultyAdvice.textContent;
+ assert.match(advice,/задний ход/);
+ assert.equal(/переключений передачи: 1/.test(advice),false);
+ assert.match(advice,/первое рулевое действие при начале маршрута/);
+});
+
+test('route metrics still counts a measured in-route forward-to-reverse gear change',async()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  tractorFrontTrack:2.05,tractorSteeringTrack:2.05,tractorRearTrack:2.05,
+  trailerTrack:2.11,tireLength:0.72,tireWidth:0.44
+ };
+ const start={
+  x:0,y:0,psi:0,psiT:0,gear:1,steer:0,
+  gearKnown:true,steerKnown:true,stepDistance:0
+ };
+ const step=0.5;
+ const forward=physics.rk4(start,0.7,0,step/0.7,p);
+ const reverse=physics.rk4(forward,-0.7,0,step/0.7,p);
+ const states=[
+  start,
+  {...forward,gear:1,steer:0,stepDistance:step},
+  {...reverse,gear:-1,steer:0,stepDistance:step}
+ ];
+ const simulator=bootSimulator({workerResult:routeControlBoundaryWorkerResult(states)});
+ const {elements}=simulator;
+ elements.goalX.value=String(reverse.x);
+ elements.goalY.value=String(reverse.y);
+ elements.goalHeading.value=String(reverse.psi*180/Math.PI);
+ await elements.planRoute.onclick();
+ elements.alternativeRouteSelect.value='0';
+ elements.alternativeRouteSelect.onchange();
+ const advice=elements.difficultyAdvice.textContent;
+ assert.match(advice,/переключений передачи: 1/);
+ assert.equal(/первое рулевое действие при начале маршрута/.test(advice),false);
 });
