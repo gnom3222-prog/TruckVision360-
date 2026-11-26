@@ -754,20 +754,25 @@ test('route metrics still counts a measured in-route forward-to-reverse gear cha
  assert.equal(/первое рулевое действие при начале маршрута/.test(advice),false);
 });
 
-test('virtual playback holds after model stop until explicit virtual gear confirmation',()=>{
+test('virtual playback stops at the last waypoint before a gear change and requires explicit confirmation',()=>{
  const source=fs.readFileSync(path.join(__dirname,'..','truckvision.js'),'utf8');
- const start=source.indexOf('if(routePlayback.currentGear!==gear)');
+ const start=source.indexOf('const nextGearTransition=planner.nextGearTransitionBoundary');
  const end=source.indexOf('let nearest=Infinity',start);
  assert.ok(start>=0&&end>start);
  const block=source.slice(start,end);
+ assert.match(block,/shiftBoundaryIndex/);
+ assert.match(block,/index<shiftBoundaryIndex/);
+ assert.match(block,/const gear=routePlayback\.currentGear/);
  const stopCheck=block.indexOf('if(Math.abs(speed)>0.02)');
  const hold=block.indexOf('routePlayback.awaitingGearConfirmation=true');
  assert.ok(stopCheck>=0&&hold>stopCheck);
+ assert.match(block,/boundaryDistance<0\.025/);
  assert.match(block,/drive=0;braking=true/);
- assert.match(block,/routePlayback.pendingGear=gear/);
+ assert.match(block,/routePlayback.pendingGear=nextGearTransition\.to/);
  assert.match(block,/routeConfirmGear/);
- assert.match(block,/длительность реального переключения неизвестна/);
- assert.equal(block.includes('routePlayback.currentGear=gear'),false);
+ assert.match(block,/длительность переключения не измеряются/);
+ const targetStart=source.indexOf('let targetIndex=Math.min(plannedRoute.length-1,index+6,shiftBoundaryIndex)');
+ assert.ok(targetStart>0,'look-ahead target must not cross the gear-change boundary');
  const confirmStart=source.indexOf("$('routeConfirmGear').onclick");
  const confirmEnd=source.indexOf("$('routeStop').onclick",confirmStart);
  assert.ok(confirmStart>=0&&confirmEnd>confirmStart);
