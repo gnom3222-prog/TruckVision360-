@@ -77,7 +77,7 @@ let braking=false,distance=0,trace=[],showTrace=true;
 let camera={x:5.5,y:0},lastTime=0;
 let showObstacles=true,helperEnabled=true;
 let plannedRoute=[],alternativeRoutes=[],routeGoal=null,routeAssessment=null;
-let routePlayback={active:false,paused:false,index:1,stopReason:'',currentGear:1};
+let routePlayback={active:false,paused:false,index:1,stopReason:'',currentGear:1,pendingGear:null,awaitingGearConfirmation:false,confirmedGearChanges:0};
 let plannerWorker=null,plannerRequestId=0,plannerReject=null,routeBuildToken=0;
 
 // Учебный коридор: стены параллельны направлению движения (+X).
@@ -1017,6 +1017,8 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   clearanceLowerBound:clearanceForAssessment,effectiveClearance,
   clearanceByPart,limitingPartClearance,trajectoryClearance,sweptClearanceDetail,
   wheelClearance,limitingWheelClearance,wheelClearanceError,intermediateWheelContact,wheelClearanceIncomplete,
+  gearTransitionEvents:Array.isArray(wheelClearance?.temporalEvents)?wheelClearance.temporalEvents:[],
+  timeModelComplete:false,totalDurationSeconds:null,
   collision,reached,finalHeadingErrorDeg,finalArticulationDeg,clearanceInsufficient,articulationBlocked,reasons};
 }
 
@@ -1042,7 +1044,7 @@ function wheelClearanceSummaryText(metrics){
    ' Исходная передача не измерялась; первое направление рассматривается как выбранное действие планировщика.':'',
   wheelClearance.segmentsWithGearChangeAtStart>0?
    ' Переключений передачи на границах пространственных сегментов: '+wheelClearance.segmentsWithGearChangeAtStart+
-   '; новая передача применяется от общей начальной позы, время остановки и переключения не моделируется.':'',
+   '; пространственная модель не задаёт их длительность, а виртуальное воспроизведение требует отдельного подтверждения после модельной остановки.':'',
   wheelClearance.controlStartPosesAnalyzed>0?
    ' Проверено статических положений при выборе рулевого воздействия: '+wheelClearance.controlStartPosesAnalyzed+
    ' (проверок колёс: '+wheelClearance.controlStartWheelChecks+').':''
@@ -1968,6 +1970,10 @@ function updateSpeed(dt){
 function stopRoutePlayback(reason){
  routePlayback.active=false;
  routePlayback.paused=false;
+ routePlayback.awaitingGearConfirmation=false;
+ routePlayback.pendingGear=null;
+ $('routeConfirmGear').hidden=true;
+ $('routeConfirmGear').disabled=true;
  drive=0;
  braking=false;
  speed=0;
@@ -1994,12 +2000,18 @@ function updateRoutePlayback(){
  if(routePlayback.currentGear!==gear){
   if(Math.abs(speed)>0.02){
    drive=0;braking=true;steer=0;$('steer').value='0';
-   $('routeAdvice').textContent='Переключение передачи: торможение до модельной скорости не выше 0,02 м/с. Движение возобновится после остановки; задержка КПП и сцепления не моделируется.';
+   $('routeAdvice').textContent='Переключение передачи: виртуальная модель тормозит до скорости не выше 0,02 м/с. После остановки потребуется отдельное подтверждение; длительность реального переключения неизвестна.';
    return;
   }
-  routePlayback.currentGear=gear;
-  braking=false;
-  $('routeAdvice').textContent='Передача изменена после модельной остановки. Время переключения КПП и сцепления не моделируется.';
+  routePlayback.awaitingGearConfirmation=true;
+  routePlayback.pendingGear=gear;
+  routePlayback.paused=true;
+  drive=0;braking=false;speed=0;steer=0;
+  $('steer').value='0';
+  $('routeConfirmGear').hidden=false;
+  $('routeConfirmGear').disabled=false;
+  $('routeAdvice').textContent='Модельная остановка достигнута перед сменой передачи. Нажмите «Подтвердить виртуальное переключение», чтобы продолжить только симуляцию. Реальная передача, сцепление и длительность переключения не измеряются.';
+  return;
  }
  let nearest=Infinity;
  for(let i=Math.max(1,index-8);i<Math.min(plannedRoute.length,index+18);i++){
@@ -2473,22 +2485,49 @@ $('routeStart').onclick=()=>{
   $('routeAdvice').textContent='Автопроезд не запущен: предварительная проверка маршрута выявила риск или не смогла подтвердить прохождение. Перестройте маршрут и проверьте препятствия, угол сочленения и зазоры.';
   return;
  }
+ if(routePlayback.active&&routePlayback.awaitingGearConfirmation){
+  $('routeAdvice').textContent='Сначала подтвердите виртуальное переключение отдельной кнопкой. Кнопка «Старт» не обходит это подтверждение.';
+  return;
+ }
  if(routePlayback.active&&routePlayback.paused){
   routePlayback.paused=false;
   $('routePause').textContent='Ⅱ Пауза';
   return;
  }
- routePlayback={active:true,paused:false,index:1,stopReason:'',currentGear:plannedRoute[1].gear||1};
+ routePlayback={active:true,paused:false,index:1,stopReason:'',currentGear:plannedRoute[1].gear||1,
+  pendingGear:null,awaitingGearConfirmation:false,confirmedGearChanges:0};
+ $('routeConfirmGear').hidden=true;
+ $('routeConfirmGear').disabled=true;
  speed=0;drive=0;braking=false;
  targetSpeed=0.6;
  $('speedSet').value='0.6';
- $('routeAdvice').textContent='Виртуальный автопроезд начат на малой скорости. Наблюдайте за моделью; при предупреждении нажмите «Стоп».';
+ $('routeAdvice').textContent='Виртуальный автопроезд начат. Начальная передача выбрана только для симуляции; фактическая КПП автомобиля не подключена.';
 };
 $('routePause').onclick=()=>{
  if(!routePlayback.active)return;
+ if(routePlayback.awaitingGearConfirmation){
+  $('routeAdvice').textContent='Переключение ожидает отдельного подтверждения. Используйте кнопку «Подтвердить виртуальное переключение».';
+  return;
+ }
  routePlayback.paused=!routePlayback.paused;
  if(routePlayback.paused){drive=0;braking=false;speed=0;$('routePause').textContent='▶ Продолжить';}
  else $('routePause').textContent='Ⅱ Пауза';
+};
+$('routeConfirmGear').onclick=()=>{
+ if(!routePlayback.active||!routePlayback.awaitingGearConfirmation||
+    ![-1,1].includes(routePlayback.pendingGear))return;
+ const confirmedGear=routePlayback.pendingGear;
+ routePlayback.currentGear=confirmedGear;
+ routePlayback.pendingGear=null;
+ routePlayback.awaitingGearConfirmation=false;
+ routePlayback.paused=false;
+ routePlayback.confirmedGearChanges=(routePlayback.confirmedGearChanges||0)+1;
+ $('routeConfirmGear').hidden=true;
+ $('routeConfirmGear').disabled=true;
+ $('routePause').textContent='Ⅱ Пауза';
+ $('routeAdvice').textContent='Виртуальное переключение подтверждено для симуляции ('+
+  (confirmedGear<0?'задний ход':'движение вперёд')+
+  '). Реальная передача, сцепление и время переключения не измеряются.';
 };
 $('routeStop').onclick=()=>stopRoutePlayback('Виртуальный автопроезд остановлен пользователем.');
 $('planRoute').onclick=()=>{
