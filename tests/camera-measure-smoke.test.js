@@ -320,7 +320,7 @@ test('an ended camera track clears a partial obstacle repeatability series befor
  const camera=bootCamera();
  await camera.fire('cameraStart','click');
  await measureObstacleFrame(camera,null);
- assert.match(camera.elements.cameraObstacleRepeatabilityStatus.textContent,/1\\/3 отдельных кадров/);
+ assert.ok(camera.elements.cameraObstacleRepeatabilityStatus.textContent.includes('1/3 отдельных кадров'));
  camera.endTrack();
  assert.match(camera.elements.cameraObstacleRepeatabilityStatus.textContent,/Повторяемость препятствия не оценена/);
  assert.equal(camera.obstacleRegistrations.length,0);
@@ -328,8 +328,8 @@ test('an ended camera track clears a partial obstacle repeatability series befor
  assert.equal(camera.permissionRequests,2,'a restarted camera must request a new stream');
  camera.setVideoTime(0.2);
  await measureObstacleFrame(camera,null);
- assert.match(camera.elements.cameraObstacleRepeatabilityStatus.textContent,/1\\/3 отдельных кадров/);
- assert.doesNotMatch(camera.elements.cameraObstacleRepeatabilityStatus.textContent,/2\\/3 отдельных кадров/);
+ assert.ok(camera.elements.cameraObstacleRepeatabilityStatus.textContent.includes('1/3 отдельных кадров'));
+ assert.equal(camera.elements.cameraObstacleRepeatabilityStatus.textContent.includes('2/3 отдельных кадров'),false);
  assert.equal(camera.obstacleRegistrations.length,0);
  camera.fire('cameraStop','click');
 });
