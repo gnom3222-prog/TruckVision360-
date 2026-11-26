@@ -523,10 +523,10 @@
    const outerOffset=side*centerSpacing/2;
    const innerOffset=-outerOffset;
    add(vehiclePart,axleIndex,side,localPoint(groupCenter,heading,0,outerOffset),heading,
-    baseName+' наружная шина',tireWidth,'explicit-dual-tire-pair',
+    baseName+' — наружная покрышка',tireWidth,'explicit-dual-tire-pair',
     {pairPosition:'outer',pairLateralOffset:outerOffset,groupCenter,pairCenterSpacing:centerSpacing});
    add(vehiclePart,axleIndex,side,localPoint(groupCenter,heading,0,innerOffset),heading,
-    baseName+' внутренняя шина',tireWidth,'explicit-dual-tire-pair',
+    baseName+' — внутренняя покрышка',tireWidth,'explicit-dual-tire-pair',
     {pairPosition:'inner',pairLateralOffset:innerOffset,groupCenter,pairCenterSpacing:centerSpacing});
   };
   const [frontAxle,rearAxle]=tractorAxlePoints(q,params);
