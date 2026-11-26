@@ -644,7 +644,7 @@ test('route assessment blocks virtual driving when any wheel-sweep segment canno
  assert.match(elements.difficultyAdvice.textContent,/Промежуточная проверка не завершена на 2 сегментах/);
  assert.match(elements.difficultyAdvice.textContent,/Автопроезд остаётся заблокирован/);
  elements.routeStart.onclick();
- assert.match(elements.routeAdvice.textContent,/Автопроезд заблокирован/);
+ assert.match(elements.routeAdvice.textContent,/Автопроезд не запущен: предварительная проверка маршрута выявила риск/);
 });
 
 
