@@ -46,6 +46,34 @@
   });
  }
 
+ function validateTireGroupWidthUncertainty(params){
+  const errors=[];
+  if(!params||typeof params!=='object')return ['Параметры неопределённости групп шин отсутствуют.'];
+  const tireWidth=Number.isFinite(params.tireWidth)?params.tireWidth:0.44;
+  const tireWidthUncertainty=Number.isFinite(params.tireWidthUncertainty)?Math.max(0,params.tireWidthUncertainty):0;
+  const minimumGroupWidth=tireWidth+tireWidthUncertainty;
+  const groups=[
+   ['tractorRearTireGroupWidth','tractorRearTireGroupWidthUncertainty','задней группы шин тягача'],
+   ['trailerTireGroupWidth','trailerTireGroupWidthUncertainty','общей группы шин полуприцепа'],
+   ['trailerAxle1TireGroupWidth','trailerAxle1TireGroupWidthUncertainty','группы шин 1-й оси полуприцепа'],
+   ['trailerAxle2TireGroupWidth','trailerAxle2TireGroupWidthUncertainty','группы шин 2-й оси полуприцепа'],
+   ['trailerAxle3TireGroupWidth','trailerAxle3TireGroupWidthUncertainty','группы шин 3-й оси полуприцепа']
+  ];
+  groups.forEach(([widthKey,uncertaintyKey,label])=>{
+   const width=Number.isFinite(params[widthKey])?params[widthKey]:0;
+   const uncertainty=Number.isFinite(params[uncertaintyKey])?params[uncertaintyKey]:0;
+   if(uncertainty<=0)return;
+   if(width<=0){
+    errors.push(uncertaintyKey+': сначала задайте измеренную номинальную ширину '+label+'.');
+    return;
+   }
+   if(width-uncertainty<minimumGroupWidth-1e-9){
+    errors.push(uncertaintyKey+': нижняя граница ширины группы должна быть не меньше максимальной ширины одной шины ('+minimumGroupWidth.toFixed(3)+' м с учётом её допуска).');
+   }
+  });
+  return errors;
+ }
+
  function validateVehicleParams(params){
   const errors=[];
   if(!params||typeof params!=='object'){
@@ -789,5 +817,5 @@
   };
  }
 
- return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,validateVehicleParams,trailerAxleTireGroupWidths,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
+ return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,validateVehicleParams,validateTireGroupWidthUncertainty,trailerAxleTireGroupWidths,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
 });
