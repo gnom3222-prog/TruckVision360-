@@ -947,5 +947,235 @@
   };
  }
 
- return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,validateVehicleParams,validateTireGroupWidthUncertainty,trailerAxleTireGroupWidths,trailerAxleTireCenterSpacings,trailerAxleSpacings,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
+
+ // Returns separate sampled center paths and RK4/SImpson path-length estimates for every tire footprint.
+ // stepDistance is the tractor rear-axle reference distance; missing stepDistance permits sampled
+ // chords only and never produces an integrated estimate.
+ function wheelTireTrajectoryDiagnostics(path,params){
+  const errors=validateVehicleParams(params);
+  if(errors.length)throw new Error('Некорректная геометрия траекторий покрышек: '+errors.join(' '));
+  if(!Array.isArray(path))throw new Error('Траектория покрышек должна быть массивом состояний.');
+  if(path.length===0)throw new Error('Траектория покрышек должна содержать хотя бы одно состояние.');
+  const readState=(state,index)=>{
+   if(!state||![state.x,state.y,state.psi,state.psiT].every(Number.isFinite)){
+    throw new Error('Состояние траектории покрышек '+(index+1)+' содержит некорректные координаты или углы.');
+   }
+   const gear=state.gear===undefined?1:state.gear;
+   const steer=state.steer===undefined?0:state.steer;
+   if(gear!==1&&gear!==-1)throw new Error('Передача в состоянии траектории покрышек '+(index+1)+' должна быть +1 или -1.');
+   if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2){
+    throw new Error('Угол руля в состоянии траектории покрышек '+(index+1)+' некорректен.');
+   }
+   if(state.stepDistance!==undefined&&(
+    !Number.isFinite(state.stepDistance)||
+    (index===0?state.stepDistance!==0:state.stepDistance<=0)
+   )){
+    throw new Error('stepDistance в состоянии траектории покрышек '+(index+1)+' некорректен.');
+   }
+   return {q:state,gear,steer};
+  };
+  const states=Array.from(path,readState);
+  const axleOffsets=trailerAxleOffsets(params);
+  const axleTracks=trailerAxleTracks(params);
+  const sampleFractions=[0,0.25,0.5,0.75,1];
+  const endpointTolerance={position:1e-5,heading:1e-6};
+  const records=new Map();
+  let expectedNames=null,routeDistance=0,previousState=null,previousCenters=null;
+  let segmentsUsingStepDistance=0,segmentsUsingChordFallback=0;
+  let segmentsWithKinematicEstimate=0,segmentsWithoutKinematicEstimate=0;
+  let maxSegmentRefinementDelta=0;
+
+  const centerSpeedPerReferenceMetre=(q,wheel,gear,steer)=>{
+   const motion=derivative(q,gear,steer,params);
+   const sideSign=wheel.side==='left'?1:-1;
+   const pairOffset=Number.isFinite(wheel.pairLateralOffset)?wheel.pairLateralOffset:0;
+   let longitudinal,lateral,relativeX,relativeY,vx,vy;
+   if(wheel.vehiclePart==='тягач'){
+    const front=wheel.axleIndex===1;
+    const track=front?(params.tractorFrontTrack??2.05):(params.tractorRearTrack??2.05);
+    longitudinal=front?params.wheelbase:0;
+    lateral=sideSign*track/2+pairOffset;
+    relativeX=longitudinal*Math.cos(q.psi)-lateral*Math.sin(q.psi);
+    relativeY=longitudinal*Math.sin(q.psi)+lateral*Math.cos(q.psi);
+    vx=motion.x-motion.psi*relativeY;
+    vy=motion.y+motion.psi*relativeX;
+   }else if(wheel.vehiclePart==='полуприцеп'){
+    const axleIndex=wheel.axleIndex-1;
+    if(!Number.isInteger(axleIndex)||axleIndex<0||axleIndex>=3){
+     throw new Error('Индекс оси покрышки полуприцепа некорректен.');
+    }
+    longitudinal=-params.kingpinAxles+axleOffsets[axleIndex];
+    lateral=sideSign*axleTracks[axleIndex]/2+pairOffset;
+    relativeX=longitudinal*Math.cos(q.psiT)-lateral*Math.sin(q.psiT);
+    relativeY=longitudinal*Math.sin(q.psiT)+lateral*Math.cos(q.psiT);
+    const hitchX=-params.hitchOffset*Math.cos(q.psi);
+    const hitchY=-params.hitchOffset*Math.sin(q.psi);
+    const hitchVx=motion.x-motion.psi*hitchY;
+    const hitchVy=motion.y+motion.psi*hitchX;
+    vx=hitchVx-motion.psiT*relativeY;
+    vy=hitchVy+motion.psiT*relativeX;
+   }else{
+    throw new Error('Неизвестная часть автопоезда в траектории покрышки.');
+   }
+   return Math.hypot(vx,vy);
+  };
+  const simpson=(distance,values)=>
+   distance*(values[0]+4*values[1]+2*values[2]+4*values[3]+values[4])/12;
+  const coarseSimpson=(distance,values)=>
+   distance*(values[0]+4*values[2]+values[4])/6;
+
+  const segments=[];
+  for(let index=0;index<states.length;index++){
+   const state=states[index];
+   let segmentDistance=0,usesStepDistance=false;
+   if(index===0&&state.q.stepDistance!==undefined&&state.q.stepDistance!==0){
+    throw new Error('Начальное состояние траектории покрышек должно иметь stepDistance равный нулю.');
+   }
+   if(index>0){
+    const chord=Math.hypot(state.q.x-previousState.q.x,state.q.y-previousState.q.y);
+    if(state.q.stepDistance!==undefined){
+     if(!Number.isFinite(state.q.stepDistance)||state.q.stepDistance<=0){
+      throw new Error('Состояние траектории покрышек '+(index+1)+' содержит некорректный stepDistance.');
+     }
+     if(chord>state.q.stepDistance+1e-6){
+      throw new Error('Хорда траектории покрышек превышает stepDistance на сегменте '+index+'.');
+     }
+     segmentDistance=state.q.stepDistance;
+     usesStepDistance=true;
+     segmentsUsingStepDistance++;
+    }else{
+     segmentDistance=chord;
+     segmentsUsingChordFallback++;
+    }
+    routeDistance+=segmentDistance;
+   }
+
+   const footprints=wheelFootprints(state.q,params,state.steer);
+   const names=footprints.map(wheel=>wheel.name);
+   if(new Set(names).size!==names.length)throw new Error('Имена расчётных покрышек должны быть уникальными.');
+   if(expectedNames===null)expectedNames=names.slice().sort();
+   else if(names.length!==expectedNames.length||names.slice().sort().some((name,i)=>name!==expectedNames[i])){
+    throw new Error('Набор покрышек изменился между состояниями маршрута.');
+   }
+
+   const currentCenters=new Map();
+   for(const wheel of footprints){
+    if(!wheel.center||![wheel.center.x,wheel.center.y].every(Number.isFinite)){
+     throw new Error('Центр покрышки содержит некорректные координаты.');
+    }
+    let record=records.get(wheel.name);
+    if(!record){
+     record={
+      name:wheel.name,vehiclePart:wheel.vehiclePart,axleIndex:wheel.axleIndex,side:wheel.side,
+      pairPosition:wheel.pairPosition??null,pairCenterSpacing:wheel.pairCenterSpacing??null,
+      pairLateralOffset:wheel.pairLateralOffset??0,
+      footprintModel:wheel.footprintModel||'legacy-single-tire-fallback',
+      points:[],sampledTravel:0,integratedTravelAccumulator:0,
+      integratedTravelCoveredDistance:0,refinementIndicatorTotal:0,maxSegmentRefinementDelta:0
+     };
+     records.set(wheel.name,record);
+    }
+    const previous=previousCenters?.get(wheel.name);
+    const sampledSegmentDistance=previous?
+     Math.hypot(wheel.center.x-previous.center.x,wheel.center.y-previous.center.y):0;
+    record.sampledTravel+=sampledSegmentDistance;
+    record.points.push({
+     x:wheel.center.x,y:wheel.center.y,routeDistance,heading:wheel.heading,
+     gear:state.gear,steer:state.steer,sampleIndex:index
+    });
+    currentCenters.set(wheel.name,{wheel,center:wheel.center,sampledSegmentDistance});
+   }
+
+   if(index>0){
+    let integrationStatus=usesStepDistance?'kinematic-endpoint-mismatch':'step-distance-missing';
+    let endpointResidual=null,segmentRefinementDelta=0;
+    if(usesStepDistance){
+     // Unit signed reference speed makes elapsed time numerically equal to metres travelled.
+     // The kinematic path is invariant to the planner's constant 0.7 m/s scaling.
+     const reconstructed=sampleFractions.map(fraction=>
+      rk4(previousState.q,state.gear,state.steer,segmentDistance*fraction,params)
+     );
+     const predictedEnd=reconstructed[reconstructed.length-1];
+     endpointResidual={
+      position:Math.hypot(predictedEnd.x-state.q.x,predictedEnd.y-state.q.y),
+      tractorHeading:Math.abs(norm(predictedEnd.psi-state.q.psi)),
+      trailerHeading:Math.abs(norm(predictedEnd.psiT-state.q.psiT))
+     };
+     const endpointMatches=
+      endpointResidual.position<=endpointTolerance.position&&
+      endpointResidual.tractorHeading<=endpointTolerance.heading&&
+      endpointResidual.trailerHeading<=endpointTolerance.heading;
+     if(endpointMatches){
+      for(const [name,current] of currentCenters){
+       const record=records.get(name);
+       const values=reconstructed.map(q=>
+        centerSpeedPerReferenceMetre(q,current.wheel,state.gear,state.steer)
+       );
+       const integratedDistance=simpson(segmentDistance,values);
+       const coarseDistance=coarseSimpson(segmentDistance,values);
+       const refinementDelta=Math.abs(integratedDistance-coarseDistance);
+       if(!Number.isFinite(integratedDistance)||integratedDistance<0||!Number.isFinite(refinementDelta)){
+        throw new Error('Интегральная оценка длины пути покрышки некорректна.');
+       }
+       record.integratedTravelAccumulator+=integratedDistance;
+       record.integratedTravelCoveredDistance+=segmentDistance;
+       record.refinementIndicatorTotal+=refinementDelta;
+       record.maxSegmentRefinementDelta=Math.max(record.maxSegmentRefinementDelta,refinementDelta);
+       segmentRefinementDelta=Math.max(segmentRefinementDelta,refinementDelta);
+      }
+      integrationStatus='rk4-reconstructed-composite-simpson-4-subintervals';
+      segmentsWithKinematicEstimate++;
+      maxSegmentRefinementDelta=Math.max(maxSegmentRefinementDelta,segmentRefinementDelta);
+     }else{
+      segmentsWithoutKinematicEstimate++;
+     }
+    }else{
+     segmentsWithoutKinematicEstimate++;
+    }
+    segments.push({
+     fromSample:index-1,toSample:index,gear:state.gear,steer:state.steer,
+     routeDistance,stepDistance:usesStepDistance?segmentDistance:null,
+     integrationStatus,endpointResidual,refinementIndicator:segmentRefinementDelta
+    });
+   }
+   previousState=state;
+   previousCenters=currentCenters;
+  }
+
+  const complete=segmentsWithoutKinematicEstimate===0;
+  const tires=[...records.values()].map(record=>({
+   ...record,
+   integratedTravelEstimate:complete?record.integratedTravelAccumulator:null
+  }));
+  const totalSampledTireTravel=tires.reduce((sum,tire)=>sum+tire.sampledTravel,0);
+  const totalIntegratedTireTravel=complete?
+   tires.reduce((sum,tire)=>sum+tire.integratedTravelEstimate,0):null;
+  const longestSampledTire=tires.reduce((best,tire)=>!best||tire.sampledTravel>best.sampledTravel?tire:best,null);
+  const longestIntegratedTire=complete?
+   tires.reduce((best,tire)=>!best||tire.integratedTravelEstimate>best.integratedTravelEstimate?tire:best,null):null;
+  return {
+   samples:states.length,segments:segments.length,totalRouteDistance:routeDistance,
+   tires,totalSampledTireTravel,totalIntegratedTireTravel,longestSampledTire,longestIntegratedTire,
+   segmentsUsingStepDistance,segmentsUsingChordFallback,
+   segmentsWithKinematicEstimate,segmentsWithoutKinematicEstimate,
+   integratedTravelComplete:complete,
+   maxSegmentRefinementDelta,
+   integration:complete?'rk4-reconstructed-composite-simpson-4-subintervals':'incomplete',
+   distanceMethod:segmentsUsingStepDistance&&segmentsUsingChordFallback?
+    'step-distance-when-available-otherwise-chord':
+    (segmentsUsingStepDistance?'planner-step-distance':'chord-fallback'),
+   endpointTolerance,
+   refinementIndicator:'absolute difference between composite 4-subinterval and single-panel Simpson estimates; not an error bound',
+   model:'rigid-body tire-center kinematic proxy',
+   limitations:[
+    'sampledTravel — сумма хорд между узлами маршрута и может быть ниже фактической длины кривой.',
+    'integratedTravelEstimate доступна только если каждый сегмент имеет stepDistance и проходит проверку конечной позы RK4.',
+    'Интегрирование скорости центра покрышки использует жёсткую кинематику и составную формулу Симпсона; refinementIndicator — индикатор уточнения, не сертифицированная граница ошибки.',
+    'Смена передачи и рулевого воздействия трактуется как пространственная граница сегмента; остановка, время КПП и переходные процессы не моделируются.',
+    'Независимое руление осей, подвеска, деформация шин, скольжение, нагрузка и контактные силы не моделируются.'
+   ]
+  };
+ }
+
+ return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,validateVehicleParams,validateTireGroupWidthUncertainty,trailerAxleTireGroupWidths,trailerAxleTireCenterSpacings,trailerAxleSpacings,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,wheelTireTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
 });
