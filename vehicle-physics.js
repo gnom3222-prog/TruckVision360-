@@ -244,7 +244,7 @@
   const axleGroupWidths=trailerAxleTireGroupWidths(params);
   const axleTracks=trailerAxleTracks(params);
   const hasIndividualTrailerTrack=[1,2,3].some(index=>(params['trailerAxle'+index+'Track']??0)>0);
-  const hasIndividualTrailerGroupWidth=axleGroupInputs.some(value=>value>0);
+  const hasIndividualTrailerGroupWidth=axleGroupInputs.some(value=>value>0)||axlePairSpacings.some(value=>value>0);
   let commonTrailerEnvelopeErrorAdded=false;
   const commonTrailerTrack=params.trailerTrack??(Number.isFinite(params.trailerWidth)?params.trailerWidth+0.24:NaN);
   [1,2,3].forEach(index=>{
@@ -267,13 +267,14 @@
   });
   if([frontTrack,rearTrack,commonTrailerTrack,tireWidth,rearGroupWidth,...axleGroupWidths,...axleTracks].every(Number.isFinite)){
    if(rearGroupWidth>=rearTrack){
-    errors.push('tractorRearTireGroupWidth: левая и правая группы шин перекрываются при заданной колее.');
+    errors.push((rearPairSpacing>0?'tractorRearTireCenterSpacing':'tractorRearTireGroupWidth')+': левая и правая группы шин перекрываются при заданной колее.');
    }
    axleTracks.forEach((track,index)=>{
     const groupWidth=axleGroupWidths[index];
     const widthInput=axleGroupInputs[index];
-    const widthKey=widthInput>0?'trailerAxle'+(index+1)+'TireGroupWidth':
-     ((params.trailerTireGroupWidth??0)>0?'trailerTireGroupWidth':'tireWidth');
+    const widthKey=axlePairSpacings[index]>0?'trailerAxle'+(index+1)+'TireCenterSpacing':
+     (widthInput>0?'trailerAxle'+(index+1)+'TireGroupWidth':
+      ((params.trailerTireGroupWidth??0)>0?'trailerTireGroupWidth':'tireWidth'));
     if(groupWidth>=track){
      errors.push(widthKey+': левая и правая группы шин '+(index+1)+'-й оси перекрываются при заданной колее.');
     }
