@@ -2539,6 +2539,7 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,
      repeatability.maxDeviationWidth,repeatability.maxDeviationHeight,
      repeatability.rangeWidth,repeatability.rangeHeight,
      repeatability.widthTolerance,repeatability.heightTolerance,
+     repeatability.maxSigmaWidth,repeatability.maxSigmaHeight,
      repeatability.widthEnvelopeBound,repeatability.heightEnvelopeBound
     ].every(Number.isFinite)||
     repeatability.meanWidth<0.08||repeatability.meanWidth>20||
@@ -2546,6 +2547,13 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,
     repeatability.maxDeviationWidth<0||repeatability.maxDeviationHeight<0||
     repeatability.widthTolerance<0.001||repeatability.widthTolerance>0.5||
     repeatability.heightTolerance<0.001||repeatability.heightTolerance>0.5||
+    repeatability.maxSigmaWidth<=0||repeatability.maxSigmaWidth>2||
+    repeatability.maxSigmaHeight<=0||repeatability.maxSigmaHeight>2||
+    repeatability.maxSigmaWidth+1e-9<sigmaWidth||repeatability.maxSigmaHeight+1e-9<sigmaDepth||
+    repeatability.widthEnvelopeBound+1e-9<2*repeatability.maxSigmaWidth||
+    repeatability.heightEnvelopeBound+1e-9<2*repeatability.maxSigmaHeight||
+    repeatability.maxDeviationWidth>repeatability.rangeWidth+1e-8||
+    repeatability.maxDeviationHeight>repeatability.rangeHeight+1e-8||
     repeatability.maxDeviationWidth>repeatability.widthTolerance||
     repeatability.maxDeviationHeight>repeatability.heightTolerance||
     repeatability.rangeWidth<0||repeatability.rangeWidth>repeatability.widthTolerance||
