@@ -214,7 +214,7 @@ test('kinematic uncertainty settings include Ackermann, axle tracks and tire dim
  elements.trailerAxleSpacing23.value='1.4';
  elements.trailerAxle1Track.value='2.7';
  elements.trailerAxle2Track.value='2.8';
- elements.trailerAxle3Track.value='2.9';
+ elements.trailerAxle3Track.value='2.85';
  elements.trailerAxleSpacingUncertainty.value='0.02';
  elements.trailerAxleSpacing12Uncertainty.value='0.02';
  elements.trailerAxleSpacing23Uncertainty.value='0.02';
