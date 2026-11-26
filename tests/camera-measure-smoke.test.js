@@ -294,7 +294,13 @@ test('camera-measured obstacle is registered only after three distinct frames an
  assert.equal(registration.repeatability.count,3);
  assert.ok(registration.repeatability.widthEnvelopeBound>0);
  assert.ok(registration.repeatability.heightEnvelopeBound>0);
- assert.deepEqual(registration.verticalMeasurement,{height:2.5,heightUncertainty:0.03,baseDatumUncertainty:0.02,totalUncertainty:0.05,datum:'local-road-surface',source:'manual-independent-measurement',confirmed:true});
+ assert.equal(registration.verticalMeasurement.height,2.5);
+ assert.equal(registration.verticalMeasurement.heightUncertainty,0.03);
+ assert.equal(registration.verticalMeasurement.baseDatumUncertainty,0.02);
+ assert.equal(registration.verticalMeasurement.totalUncertainty,0.05);
+ assert.equal(registration.verticalMeasurement.datum,'local-road-surface');
+ assert.equal(registration.verticalMeasurement.source,'manual-independent-measurement');
+ assert.equal(registration.verticalMeasurement.confirmed,true);
  assert.match(camera.elements.cameraStatus.textContent,/Высота 2.50 м введена вручную/);
  await camera.fire('cameraClearObstacles','click');
  assert.equal(camera.clearCalls,1);
