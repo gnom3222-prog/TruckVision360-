@@ -833,7 +833,7 @@ test('independent adjacent axle spacings preserve the middle axle reference',()=
 test('per-axle track overrides are used by each left and right wheel-group footprint',()=>{
  const p={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
-  trailerLength:13.6,trailerWidth:2.55,
+  trailerLength:13.6,trailerWidth:2.7,
   trailerTrack:2.79,trailerAxle1Track:2.7,trailerAxle2Track:2.8,trailerAxle3Track:2.9,
   trailerAxle1TireGroupWidth:0.62,trailerAxle2TireGroupWidth:0.68,trailerAxle3TireGroupWidth:0.72
  };
@@ -892,4 +892,21 @@ test('zero per-axle values inherit common spacing and track settings',()=>{
  assert.deepEqual(physics.trailerAxleSpacings(p),[1.4,1.4]);
  assert.deepEqual(physics.trailerAxleOffsets(p),[1.4,0,-1.4]);
  assert.deepEqual(physics.trailerAxleTracks(p),[2.85,2.85,2.85]);
+});
+
+
+test('asymmetric axle spacings produce asymmetric rigid-group scrub diagnostics',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,
+  trailerAxleSpacing12:1.1,trailerAxleSpacing23:1.6
+ };
+ const diagnostic=physics.trailerAxleDiagnostics(
+  {x:0,y:0,psi:0.3,psiT:0},1,0.18,p
+ );
+ assert.ok(Math.abs(diagnostic.axles[0].lateralVelocity)>0);
+ near(
+  Math.abs(diagnostic.axles[2].lateralVelocity)/Math.abs(diagnostic.axles[0].lateralVelocity),
+  1.6/1.1,1e-9
+ );
 });
