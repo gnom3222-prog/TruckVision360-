@@ -1079,10 +1079,11 @@ test('vehicle parameter bounds evaluate all endpoint combinations for one active
  assert.deepEqual(bounds,{wheelbase:{min:3.7999,max:3.8}});
 });
 
-test('vehicle parameter bounds pairwise covering array checks every endpoint pair for seven active dimensions',()=>{
+test('vehicle parameter bounds pairwise covering array includes independent axle spacing and track',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
+ const calibratedParams={...params,trailerAxleSpacing12:1.3,trailerAxle2Track:2.11};
  let target={...start};
- for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.24,0.05/0.7,params);
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.24,0.05/0.7,calibratedParams);
  const bounds={
   wheelbase:{min:3.799,max:3.801},
   hitchOffset:{min:0.574,max:0.576},
@@ -1090,11 +1091,13 @@ test('vehicle parameter bounds pairwise covering array checks every endpoint pai
   trailerLength:{min:13.599,max:13.601},
   trailerWidth:{min:2.549,max:2.551},
   trailerAxleSpacing:{min:1.299,max:1.301},
+  trailerAxleSpacing12:{min:1.299,max:1.301},
+  trailerAxle2Track:{min:2.109,max:2.111},
   tractorSteeringTrack:{min:2.049,max:2.051}
  };
  const result=planner.planAlternativesWithVehicleParameterBounds({
   start,goal:{x:target.x,y:target.y,heading:target.psi},
-  params,obstacles:[],integrate,
+  params:calibratedParams,obstacles:[],integrate,
   alternativeMaxExpansions:1200,
   positionTolerance:0.05,headingTolerance:0.02,
   maxTerminalArticulation:0.5,minClearance:0.30,
@@ -1108,7 +1111,8 @@ test('vehicle parameter bounds pairwise covering array checks every endpoint pai
  const sensitivity=result.parameterSensitivity;
  assert.equal(sensitivity.status,'stable-across-pairwise-endpoint-scenarios');
  assert.equal(sensitivity.coverage,'pairwise-endpoint-covering-array');
- assert.equal(sensitivity.testedScenarioCount,9);
+ assert.equal(sensitivity.testedScenarioCount,17);
+ assert.equal(sensitivity.scenarioCount,17);
  assert.equal(sensitivity.midpointScenarioCount,0);
  assert.equal(sensitivity.testedMidpointScenarioCount,0);
  assert.equal(sensitivity.interiorCoverage,'one-factor-midpoints');
