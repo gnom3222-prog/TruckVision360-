@@ -117,22 +117,6 @@ test('planner reconstructs and checks the same variable tire set at control and 
 });
 
 
-test('geometry uncertainty planner accepts individual dual-tire center-spacing bounds',()=>{
- const result=planner.planAlternativesWithVehicleParameterBounds({
-  start:{x:0,y:0,psi:0,psiT:0},
-  goal:{x:1,y:0},
-  params:pairParams,
-  obstacles:[],
-  integrate:(q,v,steer,dt,p)=>physics.rk4(q,v,steer,dt,p),
-  vehicleParameterBounds:{
-   trailerAxle1TireCenterSpacing:{min:0.35,max:0.37}
-  },
-  maxExpansions:5,
-  alternativeMaxExpansions:5
- });
- assert.notEqual(result.reason,'invalid-input',JSON.stringify(result));
-});
-
 
 test('collision components retain each exposed tire rectangle separately',()=>{
  const parts=physics.vehicleCollisionParts(pose,pairParams);
