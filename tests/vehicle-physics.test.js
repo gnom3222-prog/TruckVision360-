@@ -759,3 +759,56 @@ test('collision components use the calibrated steering angle for protruding fron
  assert.deepEqual(steeredFromState.polygon,expected.polygon);
  assert.throws(()=>physics.vehicleCollisionParts(q,p,Math.PI/2),/Угол поворота колёс/);
 });
+ 
+test('trailer axle-specific tire group widths override the shared fallback independently',()=>{
+ const p={
+  ...params,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerTrack:2.79,tireLength:0.72,tireWidth:0.44,
+  trailerTireGroupWidth:0.70,
+  trailerAxle1TireGroupWidth:0.74,
+  trailerAxle3TireGroupWidth:0.72
+ };
+ const q={x:0,y:0,psi:0,psiT:0};
+ const groups=physics.wheelFootprints(q,p);
+ const widths=[1,2,3].map(axle=>{
+  const group=groups.find(item=>item.vehiclePart==='полуприцеп'&&item.axleIndex===axle&&item.side==='left');
+  assert.ok(group);
+  return group.footprintWidth;
+ });
+ assert.deepEqual(widths,[0.74,0.70,0.72]);
+ assert.equal(groups.filter(item=>item.vehiclePart==='полуприцеп').length,6);
+ assert.ok(groups.filter(item=>item.vehiclePart==='полуприцеп').every(item=>
+  item.footprintModel==='configured-axle-side-group-envelope'
+ ));
+});
+
+test('trailer axle-specific tire group widths are range-checked against single tire width and track',()=>{
+ const base={
+  ...params,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerTrack:2.79,tireWidth:0.44
+ };
+ const tooNarrow=physics.validateVehicleParams({...base,trailerAxle2TireGroupWidth:0.4});
+ assert.ok(tooNarrow.some(message=>message.includes('trailerAxle2TireGroupWidth')));
+ const overlapping=physics.validateVehicleParams({...base,trailerTrack:1.2,trailerAxle3TireGroupWidth:1.2});
+ assert.ok(overlapping.some(message=>message.includes('trailerAxle3TireGroupWidth')));
+ const valid=physics.validateVehicleParams({...base,trailerTireGroupWidth:0.7,trailerAxle1TireGroupWidth:0.74});
+ assert.deepEqual(valid,[]);
+});
+ 
+test('tire group uncertainty lower bounds stay above the maximum single tire width',()=>{
+ const base={
+  tireWidth:0.44,tireWidthUncertainty:0.05,
+  tractorRearTireGroupWidth:0.72,tractorRearTireGroupWidthUncertainty:0.2,
+  trailerTireGroupWidth:0.70,trailerTireGroupWidthUncertainty:0.2,
+  trailerAxle1TireGroupWidth:0.72,trailerAxle1TireGroupWidthUncertainty:0.2
+ };
+ assert.deepEqual(physics.validateTireGroupWidthUncertainty(base),[]);
+ const tooNarrow=physics.validateTireGroupWidthUncertainty({
+  ...base,trailerAxle2TireGroupWidth:0.60,trailerAxle2TireGroupWidthUncertainty:0.15
+ });
+ assert.ok(tooNarrow.some(message=>message.includes('trailerAxle2TireGroupWidthUncertainty')));
+ const missingNominal=physics.validateTireGroupWidthUncertainty({
+  ...base,trailerAxle3TireGroupWidth:0,trailerAxle3TireGroupWidthUncertainty:0.1
+ });
+ assert.ok(missingNominal.some(message=>message.includes('trailerAxle3TireGroupWidthUncertainty')));
+});

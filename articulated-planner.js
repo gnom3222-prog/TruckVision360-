@@ -390,11 +390,14 @@
   }
   const hitchYawCoupling=hitchOffset*tractorYawPerMeter;
   const trailerTrack=p.trailerTrack??(trailerWidth+0.24);
-  // The tire outer track can extend beyond the cargo-body width and therefore
-  // must be included in the trailer point-motion bound.
+  // Each axle may have its own measured tire-group envelope. The swept bound
+  // uses the widest effective group because it must cover every axle-side point.
+  const trailerAxleGroupWidths=typeof rootPhysics.trailerAxleTireGroupWidths==='function'?
+   rootPhysics.trailerAxleTireGroupWidths(p):[trailerGroupWidth,trailerGroupWidth,trailerGroupWidth];
+  const maxTrailerGroupWidth=Math.max(...trailerAxleGroupWidths);
   const trailerWidthWithUncertainty=Math.max(
    trailerWidth+2*footprintUncertainty,
-   trailerTrack+trailerGroupWidth+2*footprintUncertainty
+   trailerTrack+maxTrailerGroupWidth+2*footprintUncertainty
   );
   const trailerLongitudinalOffsets=[trailerFrontFromAxle,trailerRearFromAxle,...trailerWheelLongitudinals];
   let trailerPointRate=0;

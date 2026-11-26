@@ -2135,3 +2135,29 @@ test('gear transition boundary is the last waypoint reached before the new gear 
  const initialReverse=[{gear:1},{gear:-1},{gear:-1}];
  assert.equal(planner.nextGearTransitionBoundary(initialReverse,1,-1),null);
 });
+ 
+test('per-axle trailer tire widths are used by individual clearance and swept bounds',()=>{
+ const base={
+  ...params,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerTrack:2.79,tireLength:0.72,tireWidth:0.44
+ };
+ const q={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
+ const firstAxle=physics.trailerAxlePoints(q,base)[0];
+ const obstacle={x:firstAxle.x,y:1.92,w:0.1,h:0.1,name:'axle-specific outer tire edge'};
+ const single=planner.analyzeWheelTrajectoryClearance([q],[obstacle],base);
+ const calibrated=planner.analyzeWheelTrajectoryClearance([q],[obstacle],{
+  ...base,trailerAxle1TireGroupWidth:0.74
+ });
+ const first=calibrated.wheels.find(item=>item.name==='левое колесо 1-й оси полуприцепа');
+ const second=calibrated.wheels.find(item=>item.name==='левое колесо 2-й оси полуприцепа');
+ const baselineFirst=single.wheels.find(item=>item.name==='левое колесо 1-й оси полуприцепа');
+ assert.ok(first&&second&&baselineFirst);
+ assert.equal(first.footprintWidth,0.74);
+ assert.equal(second.footprintWidth,0.44);
+ assert.ok(first.minimumSampledPolygonClearance<baselineFirst.minimumSampledPolygonClearance);
+ const baselineRate=planner.sweptDisplacementRatesPerMeter(0.2,base);
+ const calibratedRate=planner.sweptDisplacementRatesPerMeter(0.2,{
+  ...base,trailerAxle1TireGroupWidth:0.74
+ });
+ assert.ok(calibratedRate.trailer>baselineRate.trailer);
+});
