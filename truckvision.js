@@ -47,6 +47,8 @@ const cfg={
  tireLength:0.72,
  tireWidth:0.44,
  auxiliaryEnvelopes:[],
+ vehicleVerticalProfiles:{},
+ verticalObstacles:[],
  trailerMass:30000,
  mu:0.7,
  crr:0.008,
@@ -146,6 +148,9 @@ function sceneObstacles(){
  const result=perceptionFrameTimestamp?[]:obstacles.map(obstacle=>({...obstacle}));
  // User-registered camera obstacles remain part of the map while live perception is active.
  result.push(...cameraObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point})),nominalPolygon:obstacle.nominalPolygon.map(point=>({...point})),anchor:{...obstacle.anchor},mapPoseUncertainty:{...obstacle.mapPoseUncertainty}})));
+ result.push(...(cfg.verticalObstacles||[]).map(obstacle=>({...obstacle,
+  polygon:Array.isArray(obstacle.polygon)?obstacle.polygon.map(point=>({...point})):undefined
+ })));
  result.push(...perceptionObstacles.map(obstacle=>({...obstacle,polygon:obstacle.polygon.map(point=>({...point}))})));
  const gateGeometry=gateGeometryForPlanner();
  if(gateGeometry)result.push(...planner.createGateObstacles(gateGeometry));
@@ -189,14 +194,12 @@ window.TruckVisionClearPerceptionFrame=()=>{
 function readSettings(){
  const candidate={...cfg};
  for(const key of Object.keys(candidate)){
-  if(key==='auxiliaryEnvelopes'){
-   const input=$('auxiliaryEnvelopes');
+  if(['auxiliaryEnvelopes','vehicleVerticalProfiles','verticalObstacles'].includes(key)){
+   const input=$(key);
    if(input){
-    try{
-     candidate[key]=JSON.parse(String(input.value||'[]'));
-    }catch(error){
-     return {ok:false,changed:false,errors:['auxiliaryEnvelopes: введите корректный JSON-массив измеренных оболочек.']};
-    }
+    const fallback=key==='vehicleVerticalProfiles'?'{}':'[]';
+    try{candidate[key]=JSON.parse(String(input.value||fallback));}
+    catch(error){return {ok:false,changed:false,errors:[key+': введите корректный JSON.']};}
    }
    continue;
   }
@@ -207,6 +210,16 @@ function readSettings(){
   }
  }
  const errors=physics.validateVehicleParams(candidate);
+ if(!Array.isArray(candidate.verticalObstacles)){
+  errors.push('verticalObstacles: ожидается JSON-массив вертикальных препятствий.');
+ }else{
+  errors.push(...planner.validateObstacles(candidate.verticalObstacles));
+  candidate.verticalObstacles.forEach((obstacle,index)=>{
+   if(!obstacle||!Number.isFinite(obstacle.zMin)||!Number.isFinite(obstacle.zMax)){
+    errors.push('verticalObstacles['+index+']: задайте измеренные zMin и zMax.');
+   }
+  });
+ }
  const limits={
   tractorMass:[1000,50000],
   engineForce:[1000,200000],
@@ -352,8 +365,11 @@ function readSettings(){
  }
  physics.validateTireGroupWidthUncertainty(candidate).forEach(message=>errors.push(message));
  if(errors.length)return {ok:false,changed:false,errors};
- const changed=Object.keys(cfg).some(key=>Array.isArray(cfg[key])?
-  JSON.stringify(cfg[key])!==JSON.stringify(candidate[key]):!Object.is(cfg[key],candidate[key]));
+ const changed=Object.keys(cfg).some(key=>{
+  const before=cfg[key],after=candidate[key];
+  if((before&&typeof before==='object')||(after&&typeof after==='object'))return JSON.stringify(before)!==JSON.stringify(after);
+  return !Object.is(before,after);
+ });
  Object.assign(cfg,candidate);
  return {ok:true,changed,errors:[]};
 }
@@ -1090,6 +1106,14 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   reasons.push('дополнительные измеренные оболочки осевых узлов: '+cfg.auxiliaryEnvelopes.length+'; их размеры и опорные точки заданы вручную');
  }else{
   reasons.push('оболочки ступиц, подвески и кронштейнов не откалиброваны и не входят отдельно в проверку столкновений');
+ }
+ if(Array.isArray(cfg.verticalObstacles)&&cfg.verticalObstacles.length){
+  const unverifiedVerticalChecks=(trajectoryClearance?.verticalUnverifiedChecks||0)+(wheelClearance?.verticalUnverifiedChecks||0);
+  if(unverifiedVerticalChecks>0){
+   reasons.push('вертикальные препятствия: '+cfg.verticalObstacles.length+'; для части компонентов высота не откалибрована, поэтому используется только консервативная нижняя оценка по горизонтальной проекции');
+  }else{
+   reasons.push('вертикальные препятствия проверены по вручную заданным высотным интервалам и профилям компонентов; динамика подвески не моделируется');
+  }
  }
  if(reverseDistance>0)reasons.push('задний ход: '+reverseSegments+' участков, '+reverseDistance.toFixed(1)+' м');
  if(gearChanges)reasons.push('переключений передачи: '+gearChanges);
