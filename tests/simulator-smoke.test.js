@@ -117,7 +117,10 @@ test('simulator starts and exposes route controls',()=>{
  assert.equal(elements.goalArticulationLimit.value,'12');
  assert.equal(typeof elements.routeStart.onclick,'function');
  assert.equal(typeof elements.routePause.onclick,'function');
+ assert.equal(typeof elements.routeConfirmGear.onclick,'function');
  assert.equal(typeof elements.routeStop.onclick,'function');
+ assert.equal(elements.routeConfirmGear.hidden,true);
+ assert.equal(elements.routeConfirmGear.disabled,true);
 });
 
 test('simulator exposes measured gate geometry and invalidates a route when gate obstacles are enabled',()=>{
@@ -751,15 +754,31 @@ test('route metrics still counts a measured in-route forward-to-reverse gear cha
  assert.equal(/первое рулевое действие при начале маршрута/.test(advice),false);
 });
 
-test('virtual playback brakes to near-zero model speed before changing gear and discloses unmodelled shift delay',()=>{
+test('virtual playback holds after model stop until explicit virtual gear confirmation',()=>{
  const source=fs.readFileSync(path.join(__dirname,'..','truckvision.js'),'utf8');
  const start=source.indexOf('if(routePlayback.currentGear!==gear)');
  const end=source.indexOf('let nearest=Infinity',start);
  assert.ok(start>=0&&end>start);
  const block=source.slice(start,end);
  const stopCheck=block.indexOf('if(Math.abs(speed)>0.02)');
- const gearUpdate=block.indexOf('routePlayback.currentGear=gear');
- assert.ok(stopCheck>=0&&gearUpdate>stopCheck);
+ const hold=block.indexOf('routePlayback.awaitingGearConfirmation=true');
+ assert.ok(stopCheck>=0&&hold>stopCheck);
  assert.match(block,/drive=0;braking=true/);
- assert.match(block,/задержка КПП и сцепления не моделируется/);
+ assert.match(block,/routePlayback.pendingGear=gear/);
+ assert.match(block,/routeConfirmGear/);
+ assert.match(block,/длительность реального переключения неизвестна/);
+ assert.equal(block.includes('routePlayback.currentGear=gear'),false);
+ const confirmStart=source.indexOf("$('routeConfirmGear').onclick");
+ const confirmEnd=source.indexOf("$('routeStop').onclick",confirmStart);
+ assert.ok(confirmStart>=0&&confirmEnd>confirmStart);
+ const confirmBlock=source.slice(confirmStart,confirmEnd);
+ assert.match(confirmBlock,/routePlayback.currentGear=confirmedGear/);
+ assert.match(confirmBlock,/routePlayback.awaitingGearConfirmation=false/);
+ assert.match(confirmBlock,/Реальная передача, сцепление и время переключения не измеряются/);
+ const pauseStart=source.indexOf("$('routePause').onclick");
+ const pauseEnd=source.indexOf("$('routeConfirmGear').onclick",pauseStart);
+ assert.ok(pauseStart>=0&&pauseEnd>pauseStart);
+ assert.match(source.slice(pauseStart,pauseEnd),/routePlayback.awaitingGearConfirmation/);
+ const startHandler=source.slice(source.indexOf("$('routeStart').onclick"),pauseStart);
+ assert.match(startHandler,/routePlayback.awaitingGearConfirmation/);
 });
