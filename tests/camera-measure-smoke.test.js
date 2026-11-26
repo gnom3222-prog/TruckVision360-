@@ -78,6 +78,19 @@ function bootCamera(options={}){
  };
 }
 
+const referenceFramePoints=[{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}];
+const defaultObstaclePoints=[{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}];
+async function measureObstacleFrame(camera,time,points=defaultObstaclePoints){
+ if(time!==null){
+  camera.fire('cameraReset','click');
+  camera.setVideoTime(time);
+ }
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap(referenceFramePoints);
+ await camera.fire('cameraMeasureObstacle','click');
+ await camera.tap(points);
+}
+
 test('camera permission is requested only on tap; measurement reports uncertainty and orientation invalidates calibration',async()=>{
  const camera=bootCamera();
  assert.equal(camera.permissionRequests,0,'loading the camera module must not request permission');
@@ -257,13 +270,15 @@ test('camera rejects a skewed gate quadrilateral and keeps the previous width an
 });
 
 
-test('camera-measured obstacle is registered with manual map pose and can be cleared',async()=>{
+test('camera-measured obstacle is registered only after three distinct frames and can be cleared',async()=>{
  const camera=bootCamera();
  await camera.fire('cameraStart','click');
- await camera.fire('cameraCalibrate','click');
- await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
- await camera.fire('cameraMeasureObstacle','click');
- await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
+ await measureObstacleFrame(camera,null);
+ assert.equal(camera.obstacleRegistrations.length,0,'one frame must not update the obstacle map');
+ assert.match(camera.elements.cameraObstacleRepeatabilityStatus.textContent,/1\/3 отдельных кадров/);
+ await measureObstacleFrame(camera,0.2);
+ assert.equal(camera.obstacleRegistrations.length,0,'two frames must not update the obstacle map');
+ await measureObstacleFrame(camera,0.3);
  assert.equal(camera.obstacleRegistrations.length,1);
  const registration=camera.obstacleRegistrations[0];
  assert.equal(registration.anchor.x,3);
@@ -275,10 +290,47 @@ test('camera-measured obstacle is registered with manual map pose and can be cle
  assert.equal(registration.poseUncertainty.headingDeg,2);
  assert.ok(registration.measurement.width>0);
  assert.ok(registration.measurement.height>0);
- assert.match(camera.elements.cameraStatus.textContent,/Препятствие добавлено на карту/);
+ assert.equal(registration.repeatability.count,3);
+ assert.ok(registration.repeatability.widthEnvelopeBound>0);
+ assert.ok(registration.repeatability.heightEnvelopeBound>0);
+ assert.match(camera.elements.cameraStatus.textContent,/Препятствие добавлено после трёх отдельных кадров/);
  await camera.fire('cameraClearObstacles','click');
  assert.equal(camera.clearCalls,1);
  assert.match(camera.elements.cameraStatus.textContent,/препятствия удалены с карты/);
+ camera.fire('cameraStop','click');
+});
+
+test('camera obstacle measurement cannot reuse one frozen frame',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ await measureObstacleFrame(camera,null);
+ await camera.fire('cameraMeasureObstacle','click');
+ assert.equal(camera.obstacleRegistrations.length,0);
+ assert.match(camera.elements.cameraStatus.textContent,/Этот кадр уже использован/);
+ camera.fire('cameraStop','click');
+});
+
+test('camera obstacle repeatability rejects dimensions outside operator tolerances',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ await measureObstacleFrame(camera,null);
+ const narrower=[{x:160,y:150},{x:440,y:150},{x:440,y:250},{x:160,y:250}];
+ await measureObstacleFrame(camera,0.2,narrower);
+ await measureObstacleFrame(camera,0.3,narrower);
+ assert.equal(camera.obstacleRegistrations.length,0);
+ assert.match(camera.elements.cameraObstacleRepeatabilityStatus.textContent,/Разброс превышает допуск/);
+ assert.match(camera.elements.cameraStatus.textContent,/не подтверждена/);
+ camera.fire('cameraStop','click');
+});
+
+test('camera obstacle repeatability locks the manual map pose across frames',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ await measureObstacleFrame(camera,null);
+ camera.elements.cameraObstacleX.value='3.5';
+ await measureObstacleFrame(camera,0.2);
+ assert.equal(camera.obstacleRegistrations.length,0);
+ assert.match(camera.elements.cameraStatus.textContent,/изменились внутри серии/);
  camera.fire('cameraStop','click');
 });
 
