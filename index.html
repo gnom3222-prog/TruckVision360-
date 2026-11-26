@@ -478,6 +478,14 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <p id="cameraRepeatabilityStatus" class="small" aria-live="polite">Повторяемость не оценена. Нужны минимум три отдельно зафиксированных кадра.</p>
 <div class="section">Измерить отдельное препятствие</div>
 <p class="small">Для основания препятствия эталон должен находиться в той же плоскости пола. Если вы калибровали камеру по вертикальной плоскости ворот, сбросьте калибровку и выполните её заново с эталоном на полу. Центр X/Y задаётся относительно начала координат карты, направление — от оси +X; оба параметра вводятся вручную. Камера определяет только размеры основания.</p>
+<div class="section">Повторяемость основания препятствия</div>
+<p class="small">На карту объект переносится только после трёх отдельных кадров. После каждого измерения сбросьте калибровку, дождитесь нового кадра, заново отметьте эталон и основание. Название, координаты, курс, допуски привязки, размеры эталона и допущения неопределённости должны оставаться неизменными. Это проверка разброса, а не доказательство независимости ошибок.</p>
+<div class="grid">
+ <div><label for="cameraObstacleRepeatabilityWidthTolerance">Допустимый разброс ширины основания, м</label><input id="cameraObstacleRepeatabilityWidthTolerance" type="number" min="0.001" max="0.5" step="0.001" placeholder="Введите допуск" required></div>
+ <div><label for="cameraObstacleRepeatabilityDepthTolerance">Допустимый разброс глубины основания, м</label><input id="cameraObstacleRepeatabilityDepthTolerance" type="number" min="0.001" max="0.5" step="0.001" placeholder="Введите допуск" required></div>
+</div>
+<div class="camera-actions"><button id="cameraClearObstacleRepeats">Очистить серию повторов препятствия</button></div>
+<p id="cameraObstacleRepeatabilityStatus" class="small" aria-live="polite">Повторяемость препятствия не оценена. Нужны минимум три отдельно зафиксированных кадра.</p>
 <div class="grid">
  <div><label for="cameraObstacleName">Название препятствия</label><input id="cameraObstacleName" type="text" maxlength="48" value="Опорный столб"></div>
  <div><label for="cameraObstacleHeading">Направление основания от оси +X, °</label><input id="cameraObstacleHeading" type="number" min="-180" max="180" step="1" placeholder="Введите направление"></div>
