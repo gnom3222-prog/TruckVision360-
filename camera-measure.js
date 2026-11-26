@@ -62,12 +62,14 @@ function readObstacleMapPose(){
   headingDeg:Number(headingUncertaintyText)
  };
  if(![anchor.x,anchor.y,headingDeg].every(Number.isFinite)||
-    Math.abs(anchor.x)>100||Math.abs(anchor.y)>100||headingDeg< -180||headingDeg>180||
-    ![poseUncertainty.positionX,poseUncertainty.positionY,poseUncertainty.headingDeg].every(Number.isFinite)||
+    Math.abs(anchor.x)>100||Math.abs(anchor.y)>100||headingDeg< -180||headingDeg>180){
+  throw new Error('Проверьте координаты центра и направление препятствия на карте.');
+ }
+ if(![poseUncertainty.positionX,poseUncertainty.positionY,poseUncertainty.headingDeg].every(Number.isFinite)||
     poseUncertainty.positionX<0||poseUncertainty.positionX>2||
     poseUncertainty.positionY<0||poseUncertainty.positionY>2||
     poseUncertainty.headingDeg<0||poseUncertainty.headingDeg>45){
-  throw new Error('Проверьте координаты, направление и допуски ручной привязки препятствия.');
+  throw new Error('Допуски привязки должны быть 0–2 м по X/Y и 0–45° по направлению.');
  }
  return {anchor,headingDeg,name,poseUncertainty};
 }
