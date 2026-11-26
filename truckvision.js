@@ -2526,6 +2526,7 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,
   headingDeg:poseUncertainty?.headingDeg
  };
  if(!measurement||!Number.isFinite(measurement.width)||!Number.isFinite(measurement.height)||
+    measurement.width<0.08||measurement.width>20||measurement.height<0.08||measurement.height>20||
     !Number.isFinite(sigmaWidth)||!Number.isFinite(sigmaDepth)||sigmaWidth<=0||sigmaDepth<=0||
     sigmaWidth>2||sigmaDepth>2||
     measurement.conditioningWarning===true||measurement.shapeWarning===true||
@@ -2536,6 +2537,7 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,
     ![
      repeatability.meanWidth,repeatability.meanHeight,
      repeatability.maxDeviationWidth,repeatability.maxDeviationHeight,
+     repeatability.rangeWidth,repeatability.rangeHeight,
      repeatability.widthTolerance,repeatability.heightTolerance,
      repeatability.widthEnvelopeBound,repeatability.heightEnvelopeBound
     ].every(Number.isFinite)||
@@ -2546,10 +2548,12 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,
     repeatability.heightTolerance<0.001||repeatability.heightTolerance>0.5||
     repeatability.maxDeviationWidth>repeatability.widthTolerance||
     repeatability.maxDeviationHeight>repeatability.heightTolerance||
+    repeatability.rangeWidth<0||repeatability.rangeWidth>repeatability.widthTolerance||
+    repeatability.rangeHeight<0||repeatability.rangeHeight>repeatability.heightTolerance||
     repeatability.widthEnvelopeBound<=0||repeatability.widthEnvelopeBound>2||
     repeatability.heightEnvelopeBound<=0||repeatability.heightEnvelopeBound>2||
-    repeatability.widthEnvelopeBound+1e-9<2*sigmaWidth||
-    repeatability.heightEnvelopeBound+1e-9<2*sigmaDepth||
+    repeatability.widthEnvelopeBound+1e-9<repeatability.maxDeviationWidth+2*sigmaWidth||
+    repeatability.heightEnvelopeBound+1e-9<repeatability.maxDeviationHeight+2*sigmaDepth||
     Math.abs(repeatability.meanWidth-measurement.width)>repeatability.maxDeviationWidth+1e-8||
     Math.abs(repeatability.meanHeight-measurement.height)>repeatability.maxDeviationHeight+1e-8||
     repeatability.widthEnvelopeBound>=repeatability.meanWidth-0.05||
