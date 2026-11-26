@@ -431,6 +431,8 @@
    };
   };
   const width=stats('width'),height=stats('height');
+  const maxSigmaWidth=Math.max(...readings.map(reading=>reading.sigmaWidth));
+  const maxSigmaHeight=Math.max(...readings.map(reading=>reading.sigmaHeight));
   // Keep each frame's local 2σ sensitivity separate: shared reference-size
   // error may be correlated across captures and must not be reduced by 1/sqrt(n).
   const widthEnvelopeBound=Math.max(...readings.map(reading=>
@@ -452,6 +454,8 @@
    maxDeviationHeight:height.maxDeviation,
    widthTolerance,
    heightTolerance,
+   maxSigmaWidth,
+   maxSigmaHeight,
    widthEnvelopeBound,
    heightEnvelopeBound,
    withinTolerance,
