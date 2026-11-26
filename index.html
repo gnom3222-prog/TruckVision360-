@@ -226,7 +226,7 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
   </div>
   <aside class="cockpit-readouts"><div class="readout-title">ТЕЛЕМЕТРИЯ</div><div class="readout"><span>Скорость</span><strong id="cockpitSpeedLarge">0,0 м/с</strong></div><div class="readout"><span>Нижняя оценка зазора</span><strong id="cockpitClearance">—</strong><small id="cockpitNearest">Ближайшее препятствие</small></div><div class="readout"><span>Угол сочленения</span><strong id="cockpitBetaLarge">0,0°</strong></div><div class="readout"><span>Рулевое управление</span><strong id="cockpitSteer">0°</strong></div><div class="sensor-state"><span class="status-dot muted"></span>LiDAR / камеры: ожидание подключения</div></aside>
  </div>
- <div class="cockpit-actions"><button id="planRoute" class="primary">Построить маршрут</button><button id="routeStart" class="drive-action">▶ Старт</button><button id="routePause">Ⅱ Пауза</button><button id="routeStop" class="stop">■ Стоп</button></div>
+ <div class="cockpit-actions"><button id="planRoute" class="primary">Построить маршрут</button><button id="routeStart" class="drive-action">▶ Старт</button><button id="routePause">Ⅱ Пауза</button><button id="routeConfirmGear" class="drive-action" hidden disabled>Подтвердить виртуальное переключение</button><button id="routeStop" class="stop">■ Стоп</button></div>
  <div class="cockpit-disclaimer">Демонстрационная модель. Реальные камеры и LiDAR пока не подключены. Расчёт не подтверждает безопасность манёвра.</div>
 </div>
 </section>
@@ -448,7 +448,7 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <script src="vehicle-physics.js?v=20261125-10"></script>
 <script src="articulated-planner.js?v=20261125-20"></script>
 <script src="sensor-perception.js?v=20261124-1"></script>
-<script src="truckvision.js?v=20261125-31"></script>
+<script src="truckvision.js?v=20261125-32"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261124-13"></script>
 <script src="camera-measure.js?v=20261125-19"></script>
