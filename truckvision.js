@@ -764,7 +764,8 @@ window.TruckVisionGetClearanceDiagnostics=()=>({
  verticalClearance:{
   obstacleCount:sceneObstacles().filter(obstacle=>Number.isFinite(obstacle.zMin)&&Number.isFinite(obstacle.zMax)).length,
   manualObstacleCount:(cfg.verticalObstacles||[]).length,
-  configuredProfileClasses:Object.keys(cfg.vehicleVerticalProfiles||{})
+  configuredProfileClasses:Object.keys(cfg.vehicleVerticalProfiles||{}),
+  suspensionTravelStatus:physics.suspensionTravelStatus(cfg)
  },
  cameraObstacles:cameraObstacles.map(obstacle=>({
   name:obstacle.name,
