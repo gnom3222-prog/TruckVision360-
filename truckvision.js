@@ -888,11 +888,11 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
     else initialSteeringActions++;
    }
    wasReverse=reversing;
+   previousGearKnown=true;
+   previousSteerKnown=true;
   }else wasReverse=currentGear<0;
   previousGear=currentGear;
   previousSteer=currentSteer;
-  previousGearKnown=true;
-  previousSteerKnown=true;
   if(showObstacles){
    const c=checkClearance(q);
    if(c.distance<minClearance){
