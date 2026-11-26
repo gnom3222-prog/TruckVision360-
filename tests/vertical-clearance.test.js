@@ -19,7 +19,7 @@ const allProfiles={
  'tractor-wheel':{zMin:0,zMax:1.1,uncertaintyMargin:0.02},
  'trailer-wheel':{zMin:0,zMax:1.1,uncertaintyMargin:0.02}
 };
-const overheadAtCab={name:'Балка над кабиной',x:1.8,y:-0.1,w:0.4,h:0.2,zMin:4.5,zMax:4.8,zUncertainty:0.05};
+const overheadAtCab={name:'Балка над кабиной',x:2.5,y:-0.1,w:0.4,h:0.2,zMin:4.5,zMax:4.8,zUncertainty:0.05};
 
 test('vertical vehicle profiles are optional but strictly validated when supplied',()=>{
  assert.deepEqual(physics.validateVehicleVerticalProfiles(undefined),[]);
@@ -68,7 +68,8 @@ test('auxiliary axle hardware can carry its own measured vertical interval',()=>
  const envelope=physics.auxiliaryEnvelopePolygons(pose,p)[0];
  assert.ok(Math.abs(envelope.verticalRange.min-0.31)<1e-12);
  assert.ok(Math.abs(envelope.verticalRange.max-0.94)<1e-12);
- assert.ok(physics.validateVehicleParams({...p,auxiliaryEnvelopes:[{...p.auxiliaryEnvelopes[0],zMin:0.5}]}).length>0);
+ const partial={...p.auxiliaryEnvelopes[0],zMin:0.5};delete partial.zMax;
+ assert.ok(physics.validateVehicleParams({...p,auxiliaryEnvelopes:[partial]}).length>0);
 });
 
 test('per-wheel swept diagnostics apply measured tire height intervals',()=>{
