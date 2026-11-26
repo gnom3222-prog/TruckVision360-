@@ -19,7 +19,7 @@ const allProfiles={
  'tractor-wheel':{zMin:0,zMax:1.1,uncertaintyMargin:0.02},
  'trailer-wheel':{zMin:0,zMax:1.1,uncertaintyMargin:0.02}
 };
-const overheadAtCab={name:'Балка над кабиной',x:2.5,y:-0.1,w:0.4,h:0.2,zMin:4.5,zMax:4.8,zUncertainty:0.05};
+const overheadAtCab={name:'Балка над кабиной',x:3.0,y:-0.1,w:0.4,h:0.2,zMin:4.5,zMax:4.8,zUncertainty:0.05};
 
 test('vertical vehicle profiles are optional but strictly validated when supplied',()=>{
  assert.deepEqual(physics.validateVehicleVerticalProfiles(undefined),[]);
