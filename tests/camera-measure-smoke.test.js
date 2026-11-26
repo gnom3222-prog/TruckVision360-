@@ -9,16 +9,17 @@ const geometry=require('../camera-geometry.js');
 function bootCamera(options={}){
  const elements={},windowListeners={},documentListeners={};
  const context={clearRect(){},beginPath(){},moveTo(){},lineTo(){},closePath(){},stroke(){},arc(){},fill(){},fillText(){}};
- const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateWidthUncertainty','gateCenterX','gateCenterY','gateHeadingDeg','gateResult','cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg'];
+ const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateWidthUncertainty','gateCenterX','gateCenterY','gateHeadingDeg','gateResult','cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg','cameraRepeatabilityWidthTolerance','cameraRepeatabilityHeightTolerance','cameraRepeatabilityStatus','cameraClearGateRepeats'];
  for(const id of ids){
   elements[id]={
    id,value:({
     cameraReferenceWidth:'2.970',cameraReferenceHeight:'2.100',
-    cameraPointSigma:'2',cameraReferenceSigma:'2',gateWidth:'3.50',gateWidthUncertainty:'0',gateCenterX:'12',gateCenterY:'0',gateHeadingDeg:'90',cameraObstacleName:'Опорный столб',cameraObstacleX:'3',cameraObstacleY:'4',cameraObstacleHeading:'90',cameraObstaclePositionUncertaintyX:'0.10',cameraObstaclePositionUncertaintyY:'0.15',cameraObstacleHeadingUncertaintyDeg:'2'
+    cameraPointSigma:'2',cameraReferenceSigma:'2',cameraRepeatabilityWidthTolerance:'0.02',cameraRepeatabilityHeightTolerance:'0.02',gateWidth:'3.50',gateWidthUncertainty:'0',gateCenterX:'12',gateCenterY:'0',gateHeadingDeg:'90',cameraObstacleName:'Опорный столб',cameraObstacleX:'3',cameraObstacleY:'4',cameraObstacleHeading:'90',cameraObstaclePositionUncertaintyX:'0.10',cameraObstaclePositionUncertaintyY:'0.15',cameraObstacleHeadingUncertaintyDeg:'2'
    })[id]||'',
    textContent:'',style:{},listeners:{},width:0,height:0,
    videoWidth:id==='measureVideo'?640:0,
    videoHeight:id==='measureVideo'?480:0,
+   currentTime:id==='measureVideo'?0.1:undefined,
    clientWidth:640,clientHeight:480,offsetLeft:0,offsetTop:0,
    addEventListener(type,fn){(this.listeners[type]??=[]).push(fn);},
    getBoundingClientRect(){return{left:0,top:0,width:640,height:480};},
@@ -69,6 +70,7 @@ function bootCamera(options={}){
  return {
   elements,windowListeners,fire,tap,appliedRegistrations,obstacleRegistrations,
   setVisibility(state){sandbox.document.visibilityState=state;for(const fn of documentListeners.visibilitychange||[])fn();},
+  setVideoTime(time){elements.measureVideo.currentTime=time;},
   endTrack(index=mediaTracks.length-1){mediaTracks[index]?.emit('ended');},
   get clearCalls(){return clearCalls;},
   get permissionRequests(){return permissionRequests;},
@@ -90,11 +92,24 @@ test('camera permission is requested only on tap; measurement reports uncertaint
  camera.fire('cameraMeasureGate','click');
  assert.match(camera.elements.cameraStatus.textContent,/Сначала выполните калибровку/);
 
+ const referencePoints=[{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}];
+ const gatePoints=[{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}];
  await camera.fire('cameraCalibrate','click');
- await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
+ await camera.tap(referencePoints);
  await camera.fire('cameraMeasureGate','click');
- await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
+ await camera.tap(gatePoints);
+ assert.equal(camera.appliedRegistrations.length,0,'one frame must not update the gate map');
+ assert.match(camera.elements.cameraRepeatabilityStatus.textContent,/1\/3 независимых кадров/);
+ for(const time of [0.2,0.3]){
+  camera.fire('cameraReset','click');
+  camera.setVideoTime(time);
+  await camera.fire('cameraCalibrate','click');
+  await camera.tap(referencePoints);
+  await camera.fire('cameraMeasureGate','click');
+  await camera.tap(gatePoints);
+ }
  assert.match(camera.elements.gateResult.textContent,/оценка чувствительности/);
+ assert.match(camera.elements.gateResult.textContent,/Повторяемость по 3 независимым кадрам/);
  assert.match(camera.elements.cameraStatus.textContent,/1σ/);
  assert.ok(Number(camera.elements.gateWidth.value)>1);
  assert.notEqual(camera.elements.gateWidth.value,'3.50','successful registration must replace the previous gate width');
@@ -107,8 +122,9 @@ test('camera permission is requested only on tap; measurement reports uncertaint
  assert.equal(camera.appliedRegistrations[0].headingDeg,90);
  assert.ok(camera.appliedRegistrations[0].widthSigma>0);
  assert.ok(camera.appliedRegistrations[0].widthUncertaintyBound>0);
- assert.ok(Math.abs(camera.appliedRegistrations[0].widthUncertaintyBound-2*camera.appliedRegistrations[0].widthSigma)<1e-10);
- assert.equal(camera.appliedRegistrations[0].widthUncertaintyModel,'2-sigma-normal-approximation');
+ assert.ok(camera.appliedRegistrations[0].widthUncertaintyBound>=2*camera.appliedRegistrations[0].widthSigma-1e-10);
+ assert.equal(camera.appliedRegistrations[0].widthUncertaintyModel,'observed-range-plus-per-frame-2sigma-screening');
+ assert.equal(camera.appliedRegistrations[0].repeatability.count,3);
  assert.equal(camera.elements.gateWidthUncertainty.value,camera.appliedRegistrations[0].widthUncertaintyBound.toFixed(3));
  assert.match(camera.elements.gateResult.textContent,/Ширина оболочки/);
  camera.fire('cameraStop','click');
@@ -432,4 +448,112 @@ test('manual stop invalidates a pending request without allowing it to replace a
  assert.equal(camera.trackStops,1,'the stale stream must be stopped');
  camera.fire('cameraStop','click');
  assert.equal(camera.trackStops,2,'the current stream must also be released on stop');
+});
+
+test('camera refuses a second gate measurement from the same frozen frame',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
+ await camera.fire('cameraMeasureGate','click');
+ assert.match(camera.elements.cameraStatus.textContent,/Этот кадр уже использован/);
+ assert.equal(camera.elements.cameraRepeatabilityStatus.textContent.includes('1/3'),true);
+ assert.equal(camera.appliedRegistrations.length,0);
+ camera.fire('cameraStop','click');
+});
+
+test('camera gate is registered only after three independent frames within operator tolerances',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ const referencePoints=[{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}];
+ const gatePoints=[{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}];
+ for(const [index,time] of [0.1,0.2,0.3].entries()){
+  if(index)camera.fire('cameraReset','click');
+  camera.setVideoTime(time);
+  await camera.fire('cameraCalibrate','click');
+  await camera.tap(referencePoints);
+  await camera.fire('cameraMeasureGate','click');
+  await camera.tap(gatePoints);
+  assert.equal(camera.appliedRegistrations.length,index===2?1:0);
+ }
+ assert.equal(camera.appliedRegistrations[0].repeatability.count,3);
+ assert.match(camera.elements.cameraRepeatabilityStatus.textContent,/Допуск повторяемости выполнен/);
+ camera.fire('cameraStop','click');
+});
+
+test('camera gate repeatability failure never overwrites the previous gate registration',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ const referencePoints=[{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}];
+ const gates=[
+  [{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}],
+  [{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}],
+  [{x:150,y:150},{x:400,y:150},{x:400,y:250},{x:150,y:250}]
+ ];
+ for(let i=0;i<3;i++){
+  if(i)camera.fire('cameraReset','click');
+  camera.setVideoTime(0.1+i*0.1);
+  await camera.fire('cameraCalibrate','click');
+  await camera.tap(referencePoints);
+  await camera.fire('cameraMeasureGate','click');
+  await camera.tap(gates[i]);
+ }
+ assert.equal(camera.appliedRegistrations.length,0);
+ assert.equal(camera.elements.gateWidth.value,'3.50');
+ assert.match(camera.elements.cameraRepeatabilityStatus.textContent,/Разброс превышает операторский допуск/);
+ assert.match(camera.elements.gateResult.textContent,/Повторяемость не подтверждена/);
+ camera.fire('cameraStop','click');
+});
+
+test('camera repeatability series cannot mix operator tolerances',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ const referencePoints=[{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}];
+ const gatePoints=[{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}];
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap(referencePoints);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap(gatePoints);
+ camera.fire('cameraReset','click');
+ camera.setVideoTime(0.2);
+ camera.elements.cameraRepeatabilityWidthTolerance.value='0.03';
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap(referencePoints);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap(gatePoints);
+ assert.equal(camera.appliedRegistrations.length,0);
+ assert.match(camera.elements.cameraStatus.textContent,/Допуски повторяемости изменились/);
+ camera.fire('cameraStop','click');
+});
+
+test('camera refuses a repeat capture until the video time advances',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ const referencePoints=[{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}];
+ const gatePoints=[{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}];
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap(referencePoints);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap(gatePoints);
+ camera.fire('cameraReset','click');
+ await camera.fire('cameraCalibrate','click');
+ assert.match(camera.elements.cameraStatus.textContent,/дождитесь следующего видеокадра/);
+ assert.equal(camera.elements.measureVideo.paused,false);
+ camera.fire('cameraStop','click');
+});
+
+test('clearing repeat readings does not allow reuse of the same frozen frame',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
+ camera.fire('cameraClearGateRepeats','click');
+ assert.match(camera.elements.cameraRepeatabilityStatus.textContent,/Повторяемость не оценена/);
+ await camera.fire('cameraMeasureGate','click');
+ assert.match(camera.elements.cameraStatus.textContent,/Этот кадр уже использован/);
+ camera.fire('cameraStop','click');
 });
