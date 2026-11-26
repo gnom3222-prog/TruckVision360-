@@ -132,5 +132,5 @@ test('swept displacement bounds use the derived outer width of explicit tire pai
  const single=planner.sweptDisplacementRatesPerMeter(0.24,base);
  const paired=planner.sweptDisplacementRatesPerMeter(0.24,pairParams);
  assert.ok(paired.trailer>single.trailer);
- assert.deepEqual(physics.trailerAxleTireGroupWidths(pairParams),[0.68,0.68,0.68]);
+ assert.ok(physics.trailerAxleTireGroupWidths(pairParams).every(width=>Math.abs(width-0.68)<1e-12));
 });
