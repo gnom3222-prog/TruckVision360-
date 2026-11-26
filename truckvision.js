@@ -2640,7 +2640,13 @@ $('gateEnabled').onchange=()=>{
  draw();
 };
 $('gateLintelEnabled').onchange=()=>{
- invalidateRouteForSettingsChange();
+ const result=readSettings();
+ if(!result.ok){
+  $('routeAdvice').textContent='Параметры верхней перемычки не применены: '+result.errors.join(' ');
+  $('difficultyAdvice').textContent='Построение маршрута заблокировано до проверки измерений перемычки.';
+ }else if(result.changed){
+  invalidateRouteForSettingsChange();
+ }
  draw();
 };
 
