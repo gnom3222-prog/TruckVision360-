@@ -407,7 +407,7 @@
  function summarizeRepeatability(readings,options){
   const {widthTolerance,heightTolerance}=options||{};
   if(!Array.isArray(readings)||readings.length<3||readings.length>10){
-   throw new Error('Для оценки повторяемости нужны от 3 до 10 независимых измерений.');
+   throw new Error('Для оценки повторяемости нужны от 3 до 10 отдельно зафиксированных кадров.');
   }
   if(!Number.isFinite(widthTolerance)||widthTolerance<=0||widthTolerance>0.5||
      !Number.isFinite(heightTolerance)||heightTolerance<=0||heightTolerance>0.5){
