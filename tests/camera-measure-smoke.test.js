@@ -99,7 +99,7 @@ test('camera permission is requested only on tap; measurement reports uncertaint
  await camera.fire('cameraMeasureGate','click');
  await camera.tap(gatePoints);
  assert.equal(camera.appliedRegistrations.length,0,'one frame must not update the gate map');
- assert.match(camera.elements.cameraRepeatabilityStatus.textContent,/1\/3 независимых кадров/);
+ assert.match(camera.elements.cameraRepeatabilityStatus.textContent,/1\/3 отдельных кадров/);
  for(const time of [0.2,0.3]){
   camera.fire('cameraReset','click');
   camera.setVideoTime(time);
