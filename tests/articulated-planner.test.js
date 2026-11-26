@@ -1079,9 +1079,12 @@ test('vehicle parameter bounds evaluate all endpoint combinations for one active
  assert.deepEqual(bounds,{wheelbase:{min:3.7999,max:3.8}});
 });
 
-test('vehicle parameter bounds pairwise covering array includes independent axle spacing and track',()=>{
+test('vehicle parameter bounds pairwise covering array includes per-axle spacing, track and tire-group widths',()=>{
  const start={x:0,y:0,psi:0,psiT:0};
- const calibratedParams={...params,trailerAxleSpacing12:1.3,trailerAxle2Track:2.11};
+ const calibratedParams={
+  ...params,trailerAxleSpacing12:1.3,trailerAxle2Track:2.11,
+  trailerAxle1TireGroupWidth:0.5,trailerAxle2TireGroupWidth:0.5,trailerAxle3TireGroupWidth:0.5
+ };
  let target={...start};
  for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.24,0.05/0.7,calibratedParams);
  const bounds={
@@ -1093,6 +1096,9 @@ test('vehicle parameter bounds pairwise covering array includes independent axle
   trailerAxleSpacing:{min:1.299,max:1.301},
   trailerAxleSpacing12:{min:1.299,max:1.301},
   trailerAxle2Track:{min:2.109,max:2.111},
+  trailerAxle1TireGroupWidth:{min:0.499,max:0.501},
+  trailerAxle2TireGroupWidth:{min:0.499,max:0.501},
+  trailerAxle3TireGroupWidth:{min:0.499,max:0.501},
   tractorSteeringTrack:{min:2.049,max:2.051}
  };
  const result=planner.planAlternativesWithVehicleParameterBounds({
