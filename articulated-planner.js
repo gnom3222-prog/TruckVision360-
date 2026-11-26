@@ -542,10 +542,14 @@
    return Math.hypot(1+lateral*curvature,longitudinal*curvature);
   }
   if(wheel.vehiclePart==='полуприцеп'){
-   const spacing=p.trailerAxleSpacing??1.3;
-   const longitudinal=[spacing,0,-spacing][wheel.axleIndex-1];
+   const offsets=typeof rootPhysics.trailerAxleOffsets==='function'?
+    rootPhysics.trailerAxleOffsets(p):[(p.trailerAxleSpacing??1.3),0,-(p.trailerAxleSpacing??1.3)];
+   const longitudinal=offsets[wheel.axleIndex-1];
    if(!Number.isFinite(longitudinal))throw new Error('Trailer wheel axle index is invalid for swept-clearance analysis.');
-   const track=p.trailerTrack??(p.trailerWidth+0.24);
+   const tracks=typeof rootPhysics.trailerAxleTracks==='function'?
+    rootPhysics.trailerAxleTracks(p):[p.trailerTrack??(p.trailerWidth+0.24),p.trailerTrack??(p.trailerWidth+0.24),p.trailerTrack??(p.trailerWidth+0.24)];
+   const track=tracks[wheel.axleIndex-1];
+   if(!Number.isFinite(track)||track<=0)throw new Error('Trailer wheel track is invalid for swept-clearance analysis.');
    const lateral=(wheel.side==='left'?1:-1)*track/2;
    const couplingMagnitude=p.hitchOffset*curvature;
    let maximum=0;
