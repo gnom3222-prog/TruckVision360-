@@ -404,7 +404,63 @@
    nonlinearWarningReasons
   };
  }
- function registerGateOnMap(measurement,anchor,headingRadians){
+ function summarizeRepeatability(readings,options){
+  const {widthTolerance,heightTolerance}=options||{};
+  if(!Array.isArray(readings)||readings.length<3||readings.length>10){
+   throw new Error('Для оценки повторяемости нужны от 3 до 10 независимых измерений.');
+  }
+  if(!Number.isFinite(widthTolerance)||widthTolerance<=0||widthTolerance>0.5||
+     !Number.isFinite(heightTolerance)||heightTolerance<=0||heightTolerance>0.5){
+   throw new Error('Допуски повторяемости ширины и высоты должны быть положительными значениями до 0,5 м.');
+  }
+  for(const reading of readings){
+   if(!reading||![reading.width,reading.height,reading.sigmaWidth,reading.sigmaHeight].every(Number.isFinite)||
+      reading.width<=0||reading.height<=0||reading.sigmaWidth<=0||reading.sigmaHeight<=0){
+    throw new Error('Каждое повторное измерение должно содержать положительные размеры и оценки чувствительности 1σ.');
+   }
+  }
+  const stats=key=>{
+   const values=readings.map(reading=>reading[key]);
+   const mean=values.reduce((sum,value)=>sum+value,0)/values.length;
+   const variance=values.reduce((sum,value)=>sum+(value-mean)**2,0)/(values.length-1);
+   return {
+    mean,
+    sampleStdDev:Math.sqrt(variance),
+    range:Math.max(...values)-Math.min(...values),
+    maxDeviation:Math.max(...values.map(value=>Math.abs(value-mean)))
+   };
+  };
+  const width=stats('width'),height=stats('height');
+  // Keep each frame's local 2σ sensitivity separate: shared reference-size
+  // error may be correlated across captures and must not be reduced by 1/sqrt(n).
+  const widthEnvelopeBound=Math.max(...readings.map(reading=>
+   Math.abs(reading.width-width.mean)+2*reading.sigmaWidth
+  ));
+  const heightEnvelopeBound=Math.max(...readings.map(reading=>
+   Math.abs(reading.height-height.mean)+2*reading.sigmaHeight
+  ));
+  const withinTolerance=width.range<=widthTolerance&&height.range<=heightTolerance;
+  return {
+   count:readings.length,
+   meanWidth:width.mean,
+   meanHeight:height.mean,
+   sampleStdDevWidth:width.sampleStdDev,
+   sampleStdDevHeight:height.sampleStdDev,
+   rangeWidth:width.range,
+   rangeHeight:height.range,
+   maxDeviationWidth:width.maxDeviation,
+   maxDeviationHeight:height.maxDeviation,
+   widthTolerance,
+   heightTolerance,
+   widthEnvelopeBound,
+   heightEnvelopeBound,
+   withinTolerance,
+   status:withinTolerance?'repeatable-within-operator-tolerance':'repeatability-exceeds-operator-tolerance',
+   uncertaintyModel:'observed-range-plus-per-frame-2sigma-screening'
+  };
+ }
+
+ function registerGateOnMap(measurement,anchor,headingRadians,repeatability){
   if(!measurement||!Array.isArray(measurement.points)||measurement.points.length!==4||
      !Number.isFinite(measurement.width)||measurement.width<=0||measurement.width>50){
    throw new Error('Измерение ворот должно содержать четыре угла и положительную конечную ширину.');
@@ -422,8 +478,22 @@
   if(shapeDiagnostics.warning){
    throw new Error('Форма измеренного проёма заметно отличается от прямоугольника. Проверьте четыре угла и положение эталона в той же плоскости.');
   }
-  if(Math.abs(measurement.width-derivedWidth)>Math.max(0.01,derivedWidth*0.01)){
-   throw new Error('Ширина измерения не совпадает с шириной, рассчитанной по четырём углам. Повторите измерение.');
+  if(repeatability!==undefined&&repeatability!==null){
+   if(repeatability.withinTolerance!==true||repeatability.count<3||
+      repeatability.status!=='repeatable-within-operator-tolerance'||
+      ![repeatability.meanWidth,repeatability.meanHeight,repeatability.widthTolerance,repeatability.heightTolerance,
+        repeatability.widthEnvelopeBound,repeatability.heightEnvelopeBound].every(Number.isFinite)||
+      repeatability.widthTolerance<=0||repeatability.heightTolerance<=0||
+      repeatability.widthEnvelopeBound<=0||repeatability.heightEnvelopeBound<=0){
+    throw new Error('Повторяемость ворот не подтверждена. Измерение нельзя переносить на карту.');
+   }
+  }
+  const clearWidth=repeatability?repeatability.meanWidth:measurement.width;
+  const widthConsistencyTolerance=repeatability?
+   Math.max(0.01,derivedWidth*0.01,repeatability.widthTolerance):
+   Math.max(0.01,derivedWidth*0.01);
+  if(Math.abs(clearWidth-derivedWidth)>widthConsistencyTolerance){
+   throw new Error('Средняя ширина повторных измерений не согласуется с последним контуром. Повторите серию измерений.');
   }
   if(measurement.nonlinearSensitivityAvailable!==true||measurement.nonlinearWarning===true){
    throw new Error('Нелинейная проверка неопределённости не пройдена. Повторите калибровку с более крупным эталоном и устойчивым ракурсом; измерение нельзя переносить на карту.');
@@ -434,11 +504,11 @@
   }
   // Convert the camera's local 1σ sensitivity into a clearly-labelled 2σ
   // screening envelope. This is not a deterministic bound or a safety claim.
-  const widthUncertaintyBound=2*sigmaWidth;
+  const widthUncertaintyBound=repeatability?repeatability.widthEnvelopeBound:2*sigmaWidth;
   if(widthUncertaintyBound>2){
    throw new Error('Оболочка неопределённости ширины превышает поддерживаемый предел 2 м. Измерение нельзя переносить на карту.');
   }
-  if(widthUncertaintyBound>=measurement.width-0.05){
+  if(widthUncertaintyBound>=clearWidth-0.05){
    throw new Error('Неопределённость ширины сопоставима с самим проёмом. Измерение нельзя переносить на карту.');
   }
   const leftMid={
@@ -454,17 +524,18 @@
    throw new Error('Невозможно определить ось измеренного проёма.');
   }
   const heading=Math.atan2(Math.sin(headingRadians),Math.cos(headingRadians));
-  const ux=Math.cos(heading),uy=Math.sin(heading),half=measurement.width/2;
+  const ux=Math.cos(heading),uy=Math.sin(heading),half=clearWidth/2;
   return {
    centerX:anchor.x,
    centerY:anchor.y,
    headingRadians:heading,
    headingDeg:heading*180/Math.PI,
-   clearWidth:measurement.width,
+   clearWidth,
    widthSigma:sigmaWidth,
    widthUncertaintyBound,
    widthUncertaintyMultiplier:2,
-   widthUncertaintyModel:'2-sigma-normal-approximation',
+   widthUncertaintyModel:repeatability?repeatability.uncertaintyModel:'2-sigma-normal-approximation',
+   repeatability:repeatability?{count:repeatability.count,meanWidth:repeatability.meanWidth,meanHeight:repeatability.meanHeight,sampleStdDevWidth:repeatability.sampleStdDevWidth,sampleStdDevHeight:repeatability.sampleStdDevHeight,rangeWidth:repeatability.rangeWidth,rangeHeight:repeatability.rangeHeight,widthTolerance:repeatability.widthTolerance,heightTolerance:repeatability.heightTolerance,heightEnvelopeBound:repeatability.heightEnvelopeBound}:null,
    nonlinearSensitivityModel:measurement.nonlinearSensitivityModel,
    nonlinearMismatchWidth:measurement.nonlinearMismatchWidth,
    maxAxisAsymmetryRatio:measurement.maxAxisAsymmetryRatio,
@@ -477,7 +548,7 @@
  }
 
  return Object.freeze({
-  validQuad,solve,homography,map,measureQuad,estimateUncertainty,registerGateOnMap,quadShapeDiagnostics,
+  validQuad,solve,homography,map,measureQuad,estimateUncertainty,summarizeRepeatability,registerGateOnMap,quadShapeDiagnostics,
   MAX_CONDITION_ESTIMATE,CONDITION_WARNING_ESTIMATE,
   MAX_QUAD_EDGE_SPREAD_RATIO,MAX_QUAD_ANGLE_ERROR_DEG,MAX_QUAD_DIAGONAL_SPREAD_RATIO,
   NONLINEAR_UNCERTAINTY_WARNING_RATIO
