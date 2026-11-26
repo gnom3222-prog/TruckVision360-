@@ -2082,3 +2082,18 @@ test('unknown initial gear is represented as route-start selection, not a timed 
  assert.equal(event.durationSeconds,null);
  assert.equal(event.durationKnown,false);
 });
+
+
+test('gear transition boundary is the last waypoint reached before the new gear segment',()=>{
+ const states=[
+  {gear:1},{gear:1},{gear:-1},{gear:-1},{gear:1},{gear:1}
+ ];
+ const forwardToReverse=planner.nextGearTransitionBoundary(states,1,1);
+ assert.deepEqual(forwardToReverse,{from:1,to:-1,changeIndex:2,boundaryIndex:1});
+ const afterReverseConfirmation=planner.nextGearTransitionBoundary(states,1,-1);
+ assert.deepEqual(afterReverseConfirmation,{from:-1,to:1,changeIndex:4,boundaryIndex:3});
+ const noFurtherShift=planner.nextGearTransitionBoundary(states,3,1);
+ assert.equal(noFurtherShift,null);
+ const initialReverse=[{gear:1},{gear:-1},{gear:-1}];
+ assert.equal(planner.nextGearTransitionBoundary(initialReverse,1,-1),null);
+});
