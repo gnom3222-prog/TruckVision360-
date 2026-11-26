@@ -2331,3 +2331,42 @@ test('per-wheel swept lower-bound rate includes the configured road-surface grad
  assert.ok(flatWheel&&gradedWheel);
  assert.ok(gradedWheel.limitingDetail.displacementRate>flatWheel.limitingDetail.displacementRate);
 });
+
+
+function suspensionPoint(compression=0,rebound=0.08,uncertainty=0.005){
+ return {compression,rebound,uncertainty};
+}
+function calibratedSuspension(){
+ const axle=()=>({left:suspensionPoint(),right:suspensionPoint()});
+ return {
+  tractor:{front:axle(),rear:axle()},
+  trailer:{axle1:axle(),axle2:axle(),axle3:axle()}
+ };
+}
+
+test('vertical clearance includes bounded suspension heave pitch and roll envelope for the cab',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const obstacle=[{name:'overhead beam',x:2.1,y:0,w:0.1,h:0.1,zMin:2.24,zMax:2.30,zUncertainty:0}];
+ const base={
+  ...params,
+  wheelbaseUncertainty:0.02,
+  tractorFrontTrackUncertainty:0.02,
+  tractorRearTrackUncertainty:0.02,
+  trailerAxleSpacingUncertainty:0.02,
+  trailerTrackUncertainty:0.02,
+  vehicleVerticalProfiles:{
+   'tractor-body':{zMin:0.4,zMax:0.8},
+   'tractor-cab':{zMin:2.0,zMax:2.2},
+   'trailer-body':{zMin:0.5,zMax:4.0}
+  }
+ };
+ const staticResult=planner.clearance(q,obstacle,base);
+ const boundedResult=planner.clearance(q,obstacle,{
+  ...base,suspensionTravel:calibratedSuspension()
+ });
+ assert.ok(staticResult.distance>0,'static reference profile should remain vertically separated');
+ assert.equal(boundedResult.verticalStatus,'vertical-overlap');
+ assert.equal(boundedResult.suspensionStatus,'bounded-rigid-plane-support-envelope');
+ assert.ok(boundedResult.suspensionDisplacement&&boundedResult.suspensionDisplacement.max>0);
+ assert.equal(boundedResult.distance,0,'the support-travel envelope must prevent a false vertical-separation result');
+});

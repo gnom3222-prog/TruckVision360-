@@ -49,6 +49,7 @@ const cfg={
  auxiliaryEnvelopes:[],
  vehicleVerticalProfiles:{},
  roadSurface:null,
+ suspensionTravel:null,
  verticalObstacles:[],
  trailerMass:30000,
  mu:0.7,
@@ -195,10 +196,10 @@ window.TruckVisionClearPerceptionFrame=()=>{
 function readSettings(){
  const candidate={...cfg};
  for(const key of Object.keys(candidate)){
-  if(['auxiliaryEnvelopes','vehicleVerticalProfiles','roadSurface','verticalObstacles'].includes(key)){
+  if(['auxiliaryEnvelopes','vehicleVerticalProfiles','roadSurface','suspensionTravel','verticalObstacles'].includes(key)){
    const input=$(key);
    if(input){
-    const fallback=key==='roadSurface'?'null':key==='vehicleVerticalProfiles'?'{}':'[]';
+    const fallback=key==='roadSurface'||key==='suspensionTravel'?'null':key==='vehicleVerticalProfiles'?'{}':'[]';
     try{candidate[key]=JSON.parse(String(input.value||fallback));}
     catch(error){return {ok:false,changed:false,errors:[key+': введите корректный JSON.']};}
    }
@@ -763,7 +764,8 @@ window.TruckVisionGetClearanceDiagnostics=()=>({
  verticalClearance:{
   obstacleCount:sceneObstacles().filter(obstacle=>Number.isFinite(obstacle.zMin)&&Number.isFinite(obstacle.zMax)).length,
   manualObstacleCount:(cfg.verticalObstacles||[]).length,
-  configuredProfileClasses:Object.keys(cfg.vehicleVerticalProfiles||{})
+  configuredProfileClasses:Object.keys(cfg.vehicleVerticalProfiles||{}),
+  suspensionTravelStatus:physics.suspensionTravelStatus(cfg)
  },
  cameraObstacles:cameraObstacles.map(obstacle=>({
   name:obstacle.name,
@@ -1122,7 +1124,12 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   if(unverifiedVerticalChecks>0){
    reasons.push('вертикальные препятствия: '+verticalObstacleCount+'; для части компонентов высота не откалибрована, поэтому используется только консервативная нижняя оценка по горизонтальной проекции');
   }else{
-   reasons.push('вертикальные препятствия проверены по вручную заданным высотным интервалам и профилям компонентов; динамика подвески не моделируется');
+   const suspensionStatus=physics.suspensionTravelStatus(cfg);
+   if(suspensionStatus==='bounded-rigid-plane-support-envelope'){
+    reasons.push('вертикальные препятствия проверены по измеренным профилям; учтён ограниченный статический диапазон heave/pitch/roll по независимым интервалам опорных точек; динамика, демпфирование, нелинейная кинематика подвески и изменение под нагрузкой не моделируются');
+   }else{
+    reasons.push('вертикальные препятствия проверены по измеренным профилям, но диапазоны хода подвески не откалиброваны; изменение высоты и наклона кузова не подтверждено');
+   }
   }
   if(wheelClearance?.roadSurfaceStatus==='flat-reference-assumed'){
    reasons.push('уклон дороги не откалиброван: вертикальные интервалы сопоставлены при допущении плоской поверхности');
@@ -1323,7 +1330,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261126-9');
+   worker=new Worker('./planner-worker.js?v=20261126-10');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);

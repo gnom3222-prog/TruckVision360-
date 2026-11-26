@@ -228,11 +228,13 @@
   const horizontalDistance=polyDist(poly,obstacle.poly);
   const roadSurfaceStatus=obstacle.roadSurfaceStatus||
    (vehicleRange&&vehicleRange.roadSurfaceStatus)||null;
-  if(!obstacle.verticalRange)return {distance:horizontalDistance,horizontalDistance,verticalGap:null,verticalStatus:'2d-obstacle',roadSurfaceStatus};
-  if(!vehicleRange)return {distance:horizontalDistance,horizontalDistance,verticalGap:null,verticalStatus:'vehicle-height-unverified',roadSurfaceStatus};
+  const suspensionStatus=vehicleRange&&vehicleRange.suspensionStatus||null;
+  const suspensionDisplacement=vehicleRange&&vehicleRange.suspensionDisplacement||null;
+  if(!obstacle.verticalRange)return {distance:horizontalDistance,horizontalDistance,verticalGap:null,verticalStatus:'2d-obstacle',roadSurfaceStatus,suspensionStatus,suspensionDisplacement};
+  if(!vehicleRange)return {distance:horizontalDistance,horizontalDistance,verticalGap:null,verticalStatus:'vehicle-height-unverified',roadSurfaceStatus,suspensionStatus,suspensionDisplacement};
   const verticalGap=Math.max(0,obstacle.verticalRange.min-vehicleRange.max,vehicleRange.min-obstacle.verticalRange.max);
   return {distance:Math.hypot(horizontalDistance,verticalGap),horizontalDistance,verticalGap,
-   verticalStatus:verticalGap>1e-9?'vertical-separated':'vertical-overlap',roadSurfaceStatus};
+   verticalStatus:verticalGap>1e-9?'vertical-separated':'vertical-overlap',roadSurfaceStatus,suspensionStatus,suspensionDisplacement};
  }
  function polygonBounds(poly){
   let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
@@ -349,7 +351,7 @@
    const groups=rootPhysics.vehicleCollisionParts(q,p,steer,includeInternalComponentsForVertical);
    const perPart=groups.map(group=>({
     distance:Infinity,obstacle:null,vehiclePart:group.vehiclePart,bodyIndex:group.bodyIndex,component:null,
-    horizontalDistance:Infinity,verticalGap:null,verticalStatus:null,roadSurfaceStatus:null,verticalUnverifiedObstacleCount:0,verticalEvaluatedObstacleCount:0
+    horizontalDistance:Infinity,verticalGap:null,verticalStatus:null,roadSurfaceStatus:null,suspensionStatus:null,suspensionDisplacement:null,verticalUnverifiedObstacleCount:0,verticalEvaluatedObstacleCount:0
    }));
    for(const obstacle of prepared){
     for(let i=0;i<groups.length;i++){
@@ -361,7 +363,7 @@
       if(obstacle.verticalRange){if(component.verticalRange)perPart[i].verticalEvaluatedObstacleCount++;else perPart[i].verticalUnverifiedObstacleCount++;}
       if(measure.distance<perPart[i].distance){
        perPart[i]={distance:measure.distance,horizontalDistance:measure.horizontalDistance,verticalGap:measure.verticalGap,verticalStatus:measure.verticalStatus,
-        roadSurfaceStatus:measure.roadSurfaceStatus,
+        roadSurfaceStatus:measure.roadSurfaceStatus,suspensionStatus:measure.suspensionStatus,suspensionDisplacement:measure.suspensionDisplacement,
         obstacle:obstacle.name,vehiclePart:groups[i].vehiclePart,bodyIndex:groups[i].bodyIndex,component:component.name,
         verticalUnverifiedObstacleCount:perPart[i].verticalUnverifiedObstacleCount,verticalEvaluatedObstacleCount:perPart[i].verticalEvaluatedObstacleCount};
       }
@@ -372,6 +374,7 @@
    for(let i=1;i<perPart.length;i++)if(perPart[i].distance<nearest.distance)nearest=perPart[i];
    return {distance:nearest.distance,hit:nearest.obstacle,obstacle:nearest.obstacle,
     vehiclePart:nearest.vehiclePart,bodyIndex:nearest.bodyIndex,component:nearest.component,verticalStatus:nearest.verticalStatus,verticalGap:nearest.verticalGap,
+    suspensionStatus:nearest.suspensionStatus,suspensionDisplacement:nearest.suspensionDisplacement,
     roadSurfaceStatus:nearest.roadSurfaceStatus||((obstacles||[]).some(obstacle=>Number.isFinite(obstacle.zMin)&&Number.isFinite(obstacle.zMax))?
      (p.roadSurface?'configured-planar-surface-with-bounds':'flat-reference-assumed'):'not-used'),
     verticalUnverifiedCount:perPart.reduce((sum,item)=>sum+item.verticalUnverifiedObstacleCount,0),verticalEvaluatedCount:perPart.reduce((sum,item)=>sum+item.verticalEvaluatedObstacleCount,0),perPart};
