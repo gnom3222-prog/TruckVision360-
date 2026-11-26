@@ -632,6 +632,8 @@ test('route assessment fails closed when per-wheel swept clearance cannot valida
  assert.match(elements.difficultyAdvice.textContent,/Проверка отдельных колёс не подтверждена/);
  assert.match(elements.difficultyAdvice.textContent,/stepDistance/);
  assert.match(elements.difficultyAdvice.textContent,/Автопроезд остаётся заблокирован/);
+ elements.routeStart.onclick();
+ assert.match(elements.routeAdvice.textContent,/Автопроезд не запущен: проверка отдельных колёс не завершена или не подтверждена/);
 });
 
 
