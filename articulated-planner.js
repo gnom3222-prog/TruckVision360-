@@ -321,9 +321,10 @@
    return {poly,bounds:polygonBounds(poly),name:o.name||'препятствие',
     verticalRange:Number.isFinite(o.zMin)&&Number.isFinite(o.zMax)?{min:o.zMin-zUncertainty,max:o.zMax+zUncertainty}:null};
   });
+  const includeInternalComponentsForVertical=prepared.some(obstacle=>!!obstacle.verticalRange);
   return function(q,steerOverride){
    const steer=steerOverride!==undefined?steerOverride:(q&&q.steer!==undefined?q.steer:0);
-   const groups=rootPhysics.vehicleCollisionParts(q,p,steer);
+   const groups=rootPhysics.vehicleCollisionParts(q,p,steer,includeInternalComponentsForVertical);
    const perPart=groups.map(group=>({
     distance:Infinity,obstacle:null,vehiclePart:group.vehiclePart,bodyIndex:group.bodyIndex,component:null,
     horizontalDistance:Infinity,verticalGap:null,verticalStatus:null,verticalUnverifiedObstacleCount:0,verticalEvaluatedObstacleCount:0
