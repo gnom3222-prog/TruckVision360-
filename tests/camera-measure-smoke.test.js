@@ -125,6 +125,9 @@ test('camera permission is requested only on tap; measurement reports uncertaint
  assert.ok(camera.appliedRegistrations[0].widthUncertaintyBound>=2*camera.appliedRegistrations[0].widthSigma-1e-10);
  assert.equal(camera.appliedRegistrations[0].widthUncertaintyModel,'observed-range-plus-per-frame-2sigma-screening');
  assert.equal(camera.appliedRegistrations[0].repeatability.count,3);
+ assert.ok(camera.appliedRegistrations[0].clearHeight>0);
+ assert.ok(camera.appliedRegistrations[0].heightUncertaintyBound>0);
+ assert.equal(camera.appliedRegistrations[0].heightUncertaintyBound,camera.appliedRegistrations[0].repeatability.heightEnvelopeBound);
  assert.equal(camera.elements.gateWidthUncertainty.value,camera.appliedRegistrations[0].widthUncertaintyBound.toFixed(3));
  assert.match(camera.elements.gateResult.textContent,/Ширина оболочки/);
  camera.fire('cameraStop','click');
@@ -292,6 +295,23 @@ test('camera obstacle registration requires explicit map coordinates and heading
  camera.fire('cameraStop','click');
 });
 
+
+test('measured gate height is exposed only as an optional overhead lintel input',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
+ const app=fs.readFileSync(path.join(__dirname,'..','truckvision.js'),'utf8');
+ for(const id of [
+  'gateLintelEnabled','gateLintelClearHeight','gateLintelCameraHeightUncertainty',
+  'gateLintelFloorUncertainty','gateLintelThickness','gateLintelThicknessUncertainty',
+  'gateLintelDepth','gateLintelDepthUncertainty'
+ ]){
+  assert.match(html,new RegExp('id="'+id+'"'),'missing lintel control '+id);
+ }
+ assert.match(app,/registration\.clearHeight/);
+ assert.match(app,/registration\.heightUncertaintyBound/);
+ assert.match(app,/gateLintelEnabled/);
+ assert.match(app,/lintelEnabled\)gate\.lintel=lintel/);
+ assert.match(html,/вертикальный datum пола/);
+});
 
 test('measurement page exposes the complete camera obstacle workflow',()=>{
  const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
