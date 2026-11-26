@@ -397,7 +397,7 @@ test('map registration uses repeat mean and range-plus-per-frame envelope only a
  const points=[{x:0,y:0},{x:4,y:0},{x:4,y:2},{x:0,y:2}];
  const repeatability=camera.summarizeRepeatability(repeatableReadings,{widthTolerance:0.02,heightTolerance:0.02});
  const result=camera.registerGateOnMap(
-  {width:4,points,...stableUncertainty},{x:12,y:0},Math.PI/2,repeatability
+  {width:4,points,...stableUncertainty,sigmaWidth:0.011,sigmaHeight:0.016},{x:12,y:0},Math.PI/2,repeatability
  );
  near(result.clearWidth,repeatability.meanWidth);
  near(result.widthUncertaintyBound,repeatability.widthEnvelopeBound);
