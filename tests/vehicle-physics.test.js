@@ -505,6 +505,9 @@ test('configured dual-tire group envelopes span the measured outer width on each
  assert.equal(trailer.footprintModel,'configured-axle-side-group-envelope');
  assert.equal(rear.groupWidthConfigured,true);
  assert.equal(trailer.groupWidthConfigured,true);
+ const trailerGroups=wheels.filter(wheel=>wheel.vehiclePart==='полуприцеп');
+ assert.equal(trailerGroups.length,6);
+ assert.ok(trailerGroups.every(wheel=>wheel.footprintWidth===0.68&&wheel.groupWidthConfigured));
  near(Math.max(...rear.polygon.map(point=>point.y))-Math.min(...rear.polygon.map(point=>point.y)),0.72);
  near(Math.max(...trailer.polygon.map(point=>point.y))-Math.min(...trailer.polygon.map(point=>point.y)),0.68);
  const parts=physics.vehicleCollisionParts(q,p);
