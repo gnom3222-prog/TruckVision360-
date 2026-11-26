@@ -2517,7 +2517,7 @@ function applyCameraGateRegistration(registration){
 }
 window.TruckVisionApplyGateRegistration=applyCameraGateRegistration;
 
-function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,poseUncertainty,repeatability){
+function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,poseUncertainty,repeatability,verticalMeasurement){
  const sigmaWidth=Number(measurement?.sigmaWidth);
  const sigmaDepth=Number(measurement?.sigmaHeight);
  const mapPoseUncertainty={
@@ -2525,6 +2525,10 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,
   positionY:poseUncertainty?.positionY,
   headingDeg:poseUncertainty?.headingDeg
  };
+ const verticalHeight=verticalMeasurement?.height;
+ const verticalHeightUncertainty=verticalMeasurement?.heightUncertainty;
+ const verticalBaseDatumUncertainty=verticalMeasurement?.baseDatumUncertainty;
+ const verticalTotalUncertainty=verticalMeasurement?.totalUncertainty;
  if(!measurement||!Number.isFinite(measurement.width)||!Number.isFinite(measurement.height)||
     measurement.width<0.08||measurement.width>20||measurement.height<0.08||measurement.height>20||
     !Number.isFinite(sigmaWidth)||!Number.isFinite(sigmaDepth)||sigmaWidth<=0||sigmaDepth<=0||
@@ -2575,6 +2579,15 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,
     mapPoseUncertainty.positionX<0||mapPoseUncertainty.positionX>2||
     mapPoseUncertainty.positionY<0||mapPoseUncertainty.positionY>2||
     mapPoseUncertainty.headingDeg<0||mapPoseUncertainty.headingDeg>45||
+    !verticalMeasurement||verticalMeasurement.confirmed!==true||
+    verticalMeasurement.datum!=='local-road-surface'||
+    verticalMeasurement.source!=='manual-independent-measurement'||
+    ![verticalHeight,verticalHeightUncertainty,verticalBaseDatumUncertainty,verticalTotalUncertainty].every(Number.isFinite)||
+    verticalHeight<0.05||verticalHeight>15||
+    verticalHeightUncertainty<0.001||verticalHeightUncertainty>1||
+    verticalBaseDatumUncertainty<0.001||verticalBaseDatumUncertainty>1||
+    verticalTotalUncertainty>2||
+    Math.abs(verticalTotalUncertainty-(verticalHeightUncertainty+verticalBaseDatumUncertainty))>1e-9||
     cameraObstacles.length>=30)return false;
  const meanWidth=repeatability.meanWidth,meanDepth=repeatability.meanHeight;
  const ux=Math.cos(headingRadians),uy=Math.sin(headingRadians);
@@ -2593,6 +2606,9 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,
   poseEnvelope=planner.inflateObstaclePoseUncertainty(nominalPolygon,anchor,mapPoseUncertainty);
   conservativePolygon=planner.inflateConvexPolygon(poseEnvelope.polygon,measurementInflation);
  }catch(_){return false;}
+ const roadSurfaceErrors=cfg.roadSurface&&typeof physics.validateRoadSurface==='function'?
+  physics.validateRoadSurface(cfg.roadSurface):['Калибровка поверхности дороги отсутствует.'];
+ const verticalDatumCalibrated=!!cfg.roadSurface&&Array.isArray(roadSurfaceErrors)&&roadSurfaceErrors.length===0;
  const obstacle={
   kind:'camera-obstacle',
   name:String(name||'Препятствие камеры').trim().slice(0,48)||'Препятствие камеры',
@@ -2620,9 +2636,27 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,
    rangeDepth:repeatability.rangeHeight
   },
   measurementInflation,
-  uncertaintyModel:'observed-range-plus-per-frame-2sigma-screening-plus-bounded-map-pose'
+  verticalHeightMeasurement:{
+   height:verticalHeight,
+   heightUncertainty:verticalHeightUncertainty,
+   baseDatumUncertainty:verticalBaseDatumUncertainty,
+   totalUncertainty:verticalTotalUncertainty,
+   datum:'local-road-surface',
+   source:'manual-independent-measurement',
+   confirmed:true
+  },
+  verticalClearanceMode:verticalDatumCalibrated?
+   'calibrated-road-surface-relative-height-range':
+   'horizontal-only-until-road-surface-calibrated',
+  ...(verticalDatumCalibrated?{
+   zMin:0,zMax:verticalHeight,zUncertainty:verticalTotalUncertainty
+  }:{}),
+  uncertaintyModel:'observed-range-plus-per-frame-2sigma-screening-plus-bounded-map-pose-plus-manual-height'
  };
  try{if(planner.validateObstacles([obstacle]).length)return false;}catch(_){return false;}
+ window.TruckVisionCameraObstacleVerticalStatus=verticalDatumCalibrated?
+  'Высота введена вручную. Вертикальный диапазон привязан к откалиброванной плоскости дороги; вертикальное разделение проверяется только для компонентов с измеренными профилями.':
+  'Высота введена вручную, но плоскость дороги не откалибрована. Препятствие учитывается только по горизонтальной 2D-оболочке; вертикальное разделение не используется.';
  cameraObstacles.push(obstacle);
  invalidateRouteForSettingsChange();
  draw();
