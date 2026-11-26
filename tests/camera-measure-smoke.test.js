@@ -369,12 +369,14 @@ test('measured gate height is exposed only as an optional overhead lintel input'
 
 test('measurement page exposes the complete camera obstacle workflow',()=>{
  const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
- for(const id of ['cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg']){
+ for(const id of ['cameraMeasureObstacle','cameraClearObstacles','cameraClearObstacleRepeats','cameraObstacleRepeatabilityWidthTolerance','cameraObstacleRepeatabilityDepthTolerance','cameraObstacleRepeatabilityStatus','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg']){
   assert.match(html,new RegExp('id="'+id+'"'),'missing camera obstacle control '+id);
  }
  assert.match(html,/в той же плоскости пола/);
  assert.match(html,/Центр основания X на карте/);
  assert.match(html,/placeholder="Введите направление"/);
+ assert.match(html,/трёх отдельных кадров/);
+ assert.match(html,/Допустимый разброс ширины основания/);
 });
 
 test('camera-registered obstacles remain in planner input while live perception is active',()=>{
