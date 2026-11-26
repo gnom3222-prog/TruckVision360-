@@ -1153,8 +1153,11 @@ function wheelClearanceSummaryText(metrics){
    ' (проверок колёс: '+wheelClearance.controlStartWheelChecks+').':''
  ].join(''):'';
  const wheelItems=Array.isArray(wheelClearance?.wheels)?wheelClearance.wheels:[];
+ const perWheelLabel=wheelItems.length===10?
+  ' Нижние оценки по каждому из 10 колёс: ':
+  ' Нижние оценки по каждой из '+wheelItems.length+' расчётных шинных оболочек: ';
  const perWheel=wheelItems.length>=10?
-  ' Нижние оценки по каждой из '+wheelItems.length+' расчётных шинных оболочек: '+wheelItems.map(item=>
+  perWheelLabel+wheelItems.map(item=>
    item.name+' — '+(Number.isFinite(item.minimumClearanceLowerBound)?item.minimumClearanceLowerBound.toFixed(2)+' м':'не ограничен')+
    (Number.isFinite(item.minimumIntermediatePolygonClearance)?
     '; промежуточная выборка '+item.minimumIntermediatePolygonClearance.toFixed(2)+' м':'')
