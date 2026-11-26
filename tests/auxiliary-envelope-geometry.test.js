@@ -101,3 +101,8 @@ test('swept displacement rates include protruding measured axle hardware envelop
  assert.ok(hardwareRates.trailer>baseRates.trailer,
   'trailer swept bound must include every measured auxiliary-envelope corner');
 });
+
+test('null auxiliary envelope configuration is rejected instead of treated as an empty list',()=>{
+ const errors=physics.validateAuxiliaryEnvelopes(null);
+ assert.ok(errors.some(message=>message.includes('массивом JSON')));
+});
