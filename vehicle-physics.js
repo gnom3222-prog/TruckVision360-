@@ -190,6 +190,9 @@
   const axleGroupInputs=[1,2,3].map(index=>params['trailerAxle'+index+'TireGroupWidth']??0);
   const axleGroupWidths=trailerAxleTireGroupWidths(params);
   const axleTracks=trailerAxleTracks(params);
+  const hasIndividualTrailerTrack=[1,2,3].some(index=>(params['trailerAxle'+index+'Track']??0)>0);
+  const hasIndividualTrailerGroupWidth=axleGroupInputs.some(value=>value>0);
+  let commonTrailerEnvelopeErrorAdded=false;
   const commonTrailerTrack=params.trailerTrack??(Number.isFinite(params.trailerWidth)?params.trailerWidth+0.24:NaN);
   [1,2,3].forEach(index=>{
    const key='trailerAxle'+index+'Track';
@@ -222,7 +225,14 @@
      errors.push(widthKey+': левая и правая группы шин '+(index+1)+'-й оси перекрываются при заданной колее.');
     }
     if(Number.isFinite(params.trailerWidth)&&track+groupWidth>params.trailerWidth+1.0+1e-9){
-     errors.push('trailerAxle'+(index+1)+'Track/trailerAxle'+(index+1)+'TireGroupWidth: наружная ширина колёсной группы выходит за допустимую калибровочную оболочку относительно ширины полуприцепа.');
+     if(!hasIndividualTrailerTrack&&!hasIndividualTrailerGroupWidth){
+      if(!commonTrailerEnvelopeErrorAdded){
+       errors.push('trailerTrack/trailerTireGroupWidth: колёсные группы выходят за допустимую калибровочную оболочку относительно ширины полуприцепа.');
+       commonTrailerEnvelopeErrorAdded=true;
+      }
+     }else{
+      errors.push('trailerAxle'+(index+1)+'Track/trailerAxle'+(index+1)+'TireGroupWidth: наружная ширина колёсной группы выходит за допустимую калибровочную оболочку относительно ширины полуприцепа.');
+     }
     }
    });
    if(frontTrack+tireWidth>3.2+1e-9||rearTrack+rearGroupWidth>3.2+1e-9){
