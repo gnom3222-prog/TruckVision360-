@@ -1044,6 +1044,15 @@ test('camera obstacle vertical range is enabled only after a valid road-surface 
   height:2.5,heightUncertainty:0.03,baseDatumUncertainty:0.02,totalUncertainty:0.05,
   datum:'local-road-surface',source:'manual-independent-measurement',confirmed:true
  };
+ elements.roadSurface.value='null';
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(
+  measurement,{x:3,y:4},Math.PI/2,'Опорный столб',
+  {positionX:0.1,positionY:0.15,headingDeg:2},repeatability,verticalMeasurement
+ ),true);
+ assert.match(windowObject.TruckVisionCameraObstacleVerticalStatus,/только по горизонтальной 2D-оболочке/);
+ assert.equal(windowObject.TruckVisionClearCameraObstacles(),true);
+ elements.roadSurface.value=JSON.stringify(surface);
+ elements.apply.onclick();
  assert.equal(windowObject.TruckVisionAddCameraObstacle(
   measurement,{x:3,y:4},Math.PI/2,'Опорный столб',
   {positionX:0.1,positionY:0.15,headingDeg:2},repeatability,verticalMeasurement
