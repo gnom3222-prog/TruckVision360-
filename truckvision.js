@@ -2517,19 +2517,44 @@ function applyCameraGateRegistration(registration){
 }
 window.TruckVisionApplyGateRegistration=applyCameraGateRegistration;
 
-function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,poseUncertainty){
- const sigmaWidth=Number(measurement?.sigmaWidth)||0;
- const sigmaDepth=Number(measurement?.sigmaHeight)||0;
+function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,poseUncertainty,repeatability){
+ const sigmaWidth=Number(measurement?.sigmaWidth);
+ const sigmaDepth=Number(measurement?.sigmaHeight);
  const mapPoseUncertainty={
   positionX:poseUncertainty?.positionX,
   positionY:poseUncertainty?.positionY,
   headingDeg:poseUncertainty?.headingDeg
  };
  if(!measurement||!Number.isFinite(measurement.width)||!Number.isFinite(measurement.height)||
-    !Number.isFinite(sigmaWidth)||!Number.isFinite(sigmaDepth)||sigmaWidth<0||sigmaDepth<0||
+    !Number.isFinite(sigmaWidth)||!Number.isFinite(sigmaDepth)||sigmaWidth<=0||sigmaDepth<=0||
     sigmaWidth>2||sigmaDepth>2||
-    measurement.width<0.08||measurement.height<0.08||
-    measurement.width>20||measurement.height>20||
+    measurement.conditioningWarning===true||measurement.shapeWarning===true||
+    measurement.nonlinearSensitivityAvailable!==true||measurement.nonlinearWarning===true||
+    !repeatability||repeatability.withinTolerance!==true||
+    repeatability.status!=='repeatable-within-operator-tolerance'||
+    !Number.isInteger(repeatability.count)||repeatability.count<3||repeatability.count>10||
+    ![
+     repeatability.meanWidth,repeatability.meanHeight,
+     repeatability.maxDeviationWidth,repeatability.maxDeviationHeight,
+     repeatability.widthTolerance,repeatability.heightTolerance,
+     repeatability.widthEnvelopeBound,repeatability.heightEnvelopeBound
+    ].every(Number.isFinite)||
+    repeatability.meanWidth<0.08||repeatability.meanWidth>20||
+    repeatability.meanHeight<0.08||repeatability.meanHeight>20||
+    repeatability.maxDeviationWidth<0||repeatability.maxDeviationHeight<0||
+    repeatability.widthTolerance<0.001||repeatability.widthTolerance>0.5||
+    repeatability.heightTolerance<0.001||repeatability.heightTolerance>0.5||
+    repeatability.maxDeviationWidth>repeatability.widthTolerance||
+    repeatability.maxDeviationHeight>repeatability.heightTolerance||
+    repeatability.widthEnvelopeBound<=0||repeatability.widthEnvelopeBound>2||
+    repeatability.heightEnvelopeBound<=0||repeatability.heightEnvelopeBound>2||
+    repeatability.widthEnvelopeBound+1e-9<2*sigmaWidth||
+    repeatability.heightEnvelopeBound+1e-9<2*sigmaDepth||
+    Math.abs(repeatability.meanWidth-measurement.width)>repeatability.maxDeviationWidth+1e-8||
+    Math.abs(repeatability.meanHeight-measurement.height)>repeatability.maxDeviationHeight+1e-8||
+    repeatability.widthEnvelopeBound>=repeatability.meanWidth-0.05||
+    repeatability.heightEnvelopeBound>=repeatability.meanHeight-0.05||
+    repeatability.meanWidth<0.08||repeatability.meanHeight<0.08||
     !anchor||![anchor.x,anchor.y,headingRadians].every(Number.isFinite)||
     Math.abs(anchor.x)>100||Math.abs(anchor.y)>100||
     Math.abs(headingRadians)>Math.PI+1e-9||
@@ -2537,24 +2562,30 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,
     mapPoseUncertainty.positionX<0||mapPoseUncertainty.positionX>2||
     mapPoseUncertainty.positionY<0||mapPoseUncertainty.positionY>2||
     mapPoseUncertainty.headingDeg<0||mapPoseUncertainty.headingDeg>45||
-    measurement.conditioningWarning===true||measurement.shapeWarning===true||
     cameraObstacles.length>=30)return false;
+ const meanWidth=repeatability.meanWidth,meanDepth=repeatability.meanHeight;
  const ux=Math.cos(headingRadians),uy=Math.sin(headingRadians);
- const nx=-uy,ny=ux,hw=measurement.width/2,hh=measurement.height/2;
- const polygon=[
+ const nx=-uy,ny=ux,hw=meanWidth/2,hh=meanDepth/2;
+ const nominalPolygon=[
   {x:anchor.x-hw*ux-hh*nx,y:anchor.y-hw*uy-hh*ny},
   {x:anchor.x+hw*ux-hh*nx,y:anchor.y+hw*uy-hh*ny},
   {x:anchor.x+hw*ux+hh*nx,y:anchor.y+hw*uy+hh*ny},
   {x:anchor.x-hw*ux+hh*nx,y:anchor.y-hw*uy+hh*ny}
  ];
- const measurementInflation=2*Math.max(sigmaWidth,sigmaDepth);
+ // The repeatability envelope is a bound on each full dimension. A uniform
+ // half-margin using the larger bound is conservative for both axes.
+ const measurementInflation=Math.max(repeatability.widthEnvelopeBound,repeatability.heightEnvelopeBound)/2;
  let poseEnvelope,conservativePolygon;
  try{
-  poseEnvelope=planner.inflateObstaclePoseUncertainty(polygon,anchor,mapPoseUncertainty);
+  poseEnvelope=planner.inflateObstaclePoseUncertainty(nominalPolygon,anchor,mapPoseUncertainty);
   conservativePolygon=planner.inflateConvexPolygon(poseEnvelope.polygon,measurementInflation);
  }catch(_){return false;}
- const obstacle={kind:'camera-obstacle',name:String(name||'Препятствие камеры').trim().slice(0,48)||'Препятствие камеры',
-  polygon:conservativePolygon,nominalPolygon:polygon,anchor:{x:anchor.x,y:anchor.y},
+ const obstacle={
+  kind:'camera-obstacle',
+  name:String(name||'Препятствие камеры').trim().slice(0,48)||'Препятствие камеры',
+  polygon:conservativePolygon,
+  nominalPolygon,
+  anchor:{x:anchor.x,y:anchor.y},
   mapPoseUncertainty,
   positionUncertaintyX:mapPoseUncertainty.positionX,
   positionUncertaintyY:mapPoseUncertainty.positionY,
@@ -2562,8 +2593,22 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,
   positionInflation:poseEnvelope.positionInflation,
   headingInflation:poseEnvelope.headingInflation,
   poseInflation:poseEnvelope.totalInflation,
-  measuredWidth:measurement.width,measuredDepth:measurement.height,
-  sigmaWidth,sigmaDepth,measurementInflation,uncertaintyModel:'2-sigma-size-plus-bounded-map-pose'};
+  measuredWidth:meanWidth,
+  measuredDepth:meanDepth,
+  sigmaWidth,
+  sigmaDepth,
+  widthUncertaintyBound:repeatability.widthEnvelopeBound,
+  depthUncertaintyBound:repeatability.heightEnvelopeBound,
+  repeatability:{
+   count:repeatability.count,
+   widthTolerance:repeatability.widthTolerance,
+   depthTolerance:repeatability.heightTolerance,
+   rangeWidth:repeatability.rangeWidth,
+   rangeDepth:repeatability.rangeHeight
+  },
+  measurementInflation,
+  uncertaintyModel:'observed-range-plus-per-frame-2sigma-screening-plus-bounded-map-pose'
+ };
  try{if(planner.validateObstacles([obstacle]).length)return false;}catch(_){return false;}
  cameraObstacles.push(obstacle);
  invalidateRouteForSettingsChange();
