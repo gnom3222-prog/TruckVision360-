@@ -381,23 +381,25 @@
   }
   const trailerFrontFromAxle=kingpinAxles+1.5+footprintUncertainty;
   const trailerRearFromAxle=kingpinAxles-(trailerLength-1.5+footprintUncertainty);
-  const trailerAxleSpacing=p.trailerAxleSpacing??1.3;
+  const trailerAxleOffsets=typeof rootPhysics.trailerAxleOffsets==='function'?
+   rootPhysics.trailerAxleOffsets(p):[(p.trailerAxleSpacing??1.3),0,-(p.trailerAxleSpacing??1.3)];
   const trailerWheelHalfLength=tireLength/2+footprintUncertainty;
-  const trailerWheelLongitudinals=[trailerAxleSpacing,0,-trailerAxleSpacing]
+  const trailerWheelLongitudinals=trailerAxleOffsets
    .flatMap(offset=>[offset-trailerWheelHalfLength,offset+trailerWheelHalfLength]);
   if(q&&(!Number.isFinite(q.psi)||!Number.isFinite(q.psiT))){
    throw new Error('Articulation state is invalid for swept-clearance checking.');
   }
   const hitchYawCoupling=hitchOffset*tractorYawPerMeter;
-  const trailerTrack=p.trailerTrack??(trailerWidth+0.24);
-  // Each axle may have its own measured tire-group envelope. The swept bound
-  // uses the widest effective group because it must cover every axle-side point.
+  // Every axle may have its own measured track and tire-group width. The swept
+  // envelope uses the largest combined outer width and all actual axle offsets.
+  const trailerAxleTracks=typeof rootPhysics.trailerAxleTracks==='function'?
+   rootPhysics.trailerAxleTracks(p):[p.trailerTrack??(trailerWidth+0.24),p.trailerTrack??(trailerWidth+0.24),p.trailerTrack??(trailerWidth+0.24)];
   const trailerAxleGroupWidths=typeof rootPhysics.trailerAxleTireGroupWidths==='function'?
    rootPhysics.trailerAxleTireGroupWidths(p):[trailerGroupWidth,trailerGroupWidth,trailerGroupWidth];
-  const maxTrailerGroupWidth=Math.max(...trailerAxleGroupWidths);
+  const maxTrailerOuterWidth=Math.max(...trailerAxleTracks.map((track,index)=>track+trailerAxleGroupWidths[index]));
   const trailerWidthWithUncertainty=Math.max(
    trailerWidth+2*footprintUncertainty,
-   trailerTrack+maxTrailerGroupWidth+2*footprintUncertainty
+   maxTrailerOuterWidth+2*footprintUncertainty
   );
   const trailerLongitudinalOffsets=[trailerFrontFromAxle,trailerRearFromAxle,...trailerWheelLongitudinals];
   let trailerPointRate=0;
