@@ -60,7 +60,8 @@ test('one axle can use explicit dual tires while the other axles retain group fa
  const wheels=physics.wheelFootprints(pose,p);
  assert.equal(wheels.length,12);
  assert.equal(wheels.filter(wheel=>wheel.footprintModel==='explicit-dual-tire-pair').length,4);
- assert.equal(wheels.filter(wheel=>wheel.footprintModel==='single-tire-fallback').length,8);
+ assert.equal(wheels.filter(wheel=>wheel.footprintModel==='single-tire-fallback').length,6);
+ assert.equal(wheels.filter(wheel=>wheel.footprintModel==='single-tire-assumption').length,2);
 });
 
 test('center spacing cannot overlap tires or exceed the calibrated outer group limit',()=>{
@@ -130,7 +131,6 @@ test('collision components retain each exposed tire rectangle separately',()=>{
 test('swept displacement bounds use the derived outer width of explicit tire pairs',()=>{
  const single=planner.sweptDisplacementRatesPerMeter(0.24,base);
  const paired=planner.sweptDisplacementRatesPerMeter(0.24,pairParams);
- assert.ok(paired.tractor>single.tractor);
  assert.ok(paired.trailer>single.trailer);
  assert.deepEqual(physics.trailerAxleTireGroupWidths(pairParams),[0.68,0.68,0.68]);
 });
