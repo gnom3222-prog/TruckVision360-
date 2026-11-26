@@ -369,7 +369,7 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <div class="section">Вертикальные профили и препятствия · измерения относительно местной поверхности дороги</div>
 <label for="vehicleVerticalProfiles">JSON-объект высотных профилей компонентов автопоезда</label>
 <textarea id="vehicleVerticalProfiles" rows="6" spellcheck="false">{}</textarea>
-<p class="small">Допустимые ключи: tractor-body, tractor-cab, trailer-body, mirror, tractor-wheel, trailer-wheel. Для каждого профиля задайте zMin, zMax и при необходимости uncertaintyMargin в метрах относительно местной поверхности дороги. Высоты не имеют заводских значений по умолчанию: вводите только измеренные диапазоны. Отсутствующий профиль не считается нулевой высотой: при вертикальном препятствии используется только нижняя оценка расстояния по горизонтальной проекции; если она меньше требуемого зазора, маршрут блокируется.</p>
+<p class="small">Общие ключи: tractor-body, tractor-cab, trailer-body, mirror, tractor-wheel, trailer-wheel. Индивидуальные ключи колёс: tractor-front-wheel, tractor-rear-wheel, trailer-axle-1-wheel, trailer-axle-2-wheel, trailer-axle-3-wheel. Индивидуальный профиль имеет приоритет над общим профилем соответствующей машины/оси; если индивидуальный ключ отсутствует, используется общий профиль. Для каждого профиля задайте zMin, zMax и при необходимости uncertaintyMargin в метрах относительно местной поверхности дороги. Высоты не имеют заводских значений по умолчанию: вводите только измеренные диапазоны. Отсутствующий профиль не считается нулевой высотой: при вертикальном препятствии используется только нижняя оценка расстояния по горизонтальной проекции; если она меньше требуемого зазора, маршрут блокируется.</p>
 <label for="verticalObstacles">JSON-массив вертикальных препятствий</label>
 <textarea id="verticalObstacles" rows="5" spellcheck="false">[]</textarea>
 <p class="small">Каждое препятствие должно иметь name, zMin, zMax и горизонтальный контур x/y/w/h либо выпуклый polygon в координатах карты. zMin/zMax и zUncertainty задаются в метрах относительно той же местной поверхности дороги. Пример структуры, не реальные размеры: [{"name":"Балка над проёмом","x":12,"y":0,"w":4,"h":0.2,"zMin":3.8,"zMax":4.1,"zUncertainty":0.05}]. При известном высотном профиле компонента рассчитывается расстояние между горизонтальными проекциями и вертикальными интервалами. Если профиль компонента неизвестен, вертикальное разделение не предполагается. Карта остаётся двумерной и показывает горизонтальную проекцию; вертикальная проверка отражается в диагностике маршрута. Неровный пол, наклон площадки, подъём/опускание подвески, крен, динамика груза и деформация не моделируются.</p>
@@ -484,10 +484,10 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 </section>
 </main>
 
-<script src="vehicle-physics.js?v=20261126-10"></script>
+<script src="vehicle-physics.js?v=20261126-11"></script>
 <script src="articulated-planner.js?v=20261126-6"></script>
 <script src="sensor-perception.js?v=20261126-2"></script>
-<script src="truckvision.js?v=20261126-11"></script>
+<script src="truckvision.js?v=20261126-12"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261126-2"></script>
 <script src="camera-measure.js?v=20261126-2"></script>

@@ -212,7 +212,9 @@
  }
 
  const VEHICLE_VERTICAL_PROFILE_KEYS=Object.freeze([
-  'tractor-body','tractor-cab','trailer-body','mirror','tractor-wheel','trailer-wheel'
+  'tractor-body','tractor-cab','trailer-body','mirror','tractor-wheel','trailer-wheel',
+  'tractor-front-wheel','tractor-rear-wheel',
+  'trailer-axle-1-wheel','trailer-axle-2-wheel','trailer-axle-3-wheel'
  ]);
 
  function validateVehicleVerticalProfiles(profiles){
@@ -252,6 +254,14 @@
  function vehicleVerticalRange(params,key){
   const profiles=params&&params.vehicleVerticalProfiles;
   return profiles&&profiles[key]?verticalRangeFromProfile(profiles[key]):null;
+ }
+
+ function wheelVerticalRange(params,vehiclePart,axleIndex){
+  const specificKey=vehiclePart==='тягач'?
+   (axleIndex===1?'tractor-front-wheel':'tractor-rear-wheel'):
+   'trailer-axle-'+axleIndex+'-wheel';
+  const sharedKey=vehiclePart==='тягач'?'tractor-wheel':'trailer-wheel';
+  return vehicleVerticalRange(params,specificKey)||vehicleVerticalRange(params,sharedKey);
  }
 
  function validateVehicleParams(params){
@@ -680,7 +690,7 @@
    wheels.push({
     vehiclePart,axleIndex,side,center,heading,name,
     footprintWidth,footprintModel,...metadata,
-    verticalRange:vehicleVerticalRange(params,vehiclePart==='тягач'?'tractor-wheel':'trailer-wheel'),
+    verticalRange:wheelVerticalRange(params,vehiclePart,axleIndex),
     groupWidthConfigured:footprintModel==='configured-axle-side-group-envelope'||footprintModel==='explicit-dual-tire-pair',
     polygon:bodyCorners(center,heading,
      tireLength/2+uncertainty,-tireLength/2-uncertainty,footprintWidth+2*uncertainty)

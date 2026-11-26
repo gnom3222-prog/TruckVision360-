@@ -187,3 +187,47 @@ test('unknown mirror height is not inferred from the cab height profile',()=>{
  assert.equal(result.verticalStatus,'vehicle-height-unverified');
  assert.ok(result.verticalUnverifiedCount>0);
 });
+
+
+test('individual trailer axle vertical profiles override the shared trailer-wheel fallback',()=>{
+ const p={...params,vehicleVerticalProfiles:{
+  'trailer-wheel':{zMin:0,zMax:1.1,uncertaintyMargin:0.02},
+  'trailer-axle-1-wheel':{zMin:1.4,zMax:1.9,uncertaintyMargin:0.05},
+  'trailer-axle-3-wheel':{zMin:0.2,zMax:1.2,uncertaintyMargin:0.01}
+ }};
+ assert.deepEqual(physics.validateVehicleParams(p),[]);
+ const wheels=physics.wheelFootprints(pose,p,0).filter(w=>w.vehiclePart==='полуприцеп');
+ const axle1=wheels.filter(w=>w.axleIndex===1);
+ const axle2=wheels.filter(w=>w.axleIndex===2);
+ const axle3=wheels.filter(w=>w.axleIndex===3);
+ assert.ok(axle1.every(w=>Math.abs(w.verticalRange.min-1.35)<1e-12&&Math.abs(w.verticalRange.max-1.95)<1e-12));
+ assert.ok(axle2.every(w=>Math.abs(w.verticalRange.min+0.02)<1e-12&&Math.abs(w.verticalRange.max-1.12)<1e-12));
+ assert.ok(axle3.every(w=>Math.abs(w.verticalRange.min-0.19)<1e-12&&Math.abs(w.verticalRange.max-1.21)<1e-12));
+});
+
+test('tractor front and rear wheel height profiles can be calibrated independently',()=>{
+ const p={...params,vehicleVerticalProfiles:{
+  'tractor-wheel':{zMin:0,zMax:1.1},
+  'tractor-front-wheel':{zMin:0.1,zMax:0.9,uncertaintyMargin:0.02},
+  'tractor-rear-wheel':{zMin:0.3,zMax:1.2,uncertaintyMargin:0.04}
+ }};
+ const wheels=physics.wheelFootprints(pose,p,0).filter(w=>w.vehiclePart==='тягач');
+ const front=wheels.filter(w=>w.axleIndex===1);
+ const rear=wheels.filter(w=>w.axleIndex===2);
+ assert.ok(front.every(w=>Math.abs(w.verticalRange.min-0.08)<1e-12&&Math.abs(w.verticalRange.max-0.92)<1e-12));
+ assert.ok(rear.every(w=>Math.abs(w.verticalRange.min-0.26)<1e-12&&Math.abs(w.verticalRange.max-1.24)<1e-12));
+});
+
+test('per-wheel vertical clearance uses the selected axle-specific profile',()=>{
+ const p={...params,vehicleVerticalProfiles:{
+  'trailer-wheel':{zMin:0,zMax:1.1},
+  'trailer-axle-1-wheel':{zMin:1.4,zMax:1.9}
+ }};
+ const wheel=physics.wheelFootprints(pose,p,0).find(w=>w.vehiclePart==='полуприцеп'&&w.axleIndex===1&&w.side==='left');
+ const obstacle={name:'Балка на высоте первой оси',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:1.5,zMax:1.6};
+ const result=planner.analyzeWheelTrajectoryClearance([pose],[obstacle],p);
+ const record=result.wheels.find(item=>item.name===wheel.name);
+ assert.ok(record);
+ assert.equal(record.minimumSampledEnvelopeClearance,0);
+ assert.equal(record.minimumSampledEnvelopeDetail.verticalStatus,'vertical-overlap');
+});
