@@ -116,16 +116,18 @@ test('measured wheel height is checked even when the wheel footprint lies inside
 
 test('measured auxiliary height remains a separate component even inside the body footprint',()=>{
  const p={...params,vehicleVerticalProfiles:{
-  ...allProfiles,'tractor-body':{zMin:0.5,zMax:3.0}
+  ...allProfiles,'trailer-body':{zMin:1.0,zMax:3.0}
  },auxiliaryEnvelopes:[{
-  name:'Верхний кронштейн внутри контура',anchor:'tractor-rear-axle',
+  name:'Верхний кронштейн внутри контура',anchor:'trailer-axle-1',
   longitudinalOffset:0,lateralOffset:0,length:0.4,width:0.4,
   zMin:3.4,zMax:3.8,verticalUncertaintyMargin:0
  }]};
- const parts=physics.vehicleCollisionParts(pose,p);
- const tractor=parts.find(part=>part.vehiclePart==='тягач');
- assert.ok(tractor.components.some(component=>component.name==='Верхний кронштейн внутри контура'));
- const obstacle={name:'Низкая балка',x:0,y:0,w:0.1,h:0.1,zMin:3.5,zMax:3.6};
+ const envelope=physics.auxiliaryEnvelopePolygons(pose,p)[0];
+ const center=envelope.polygon.reduce((sum,point)=>({x:sum.x+point.x/4,y:sum.y+point.y/4}),{x:0,y:0});
+ const parts=physics.vehicleCollisionParts(pose,p,0,true);
+ const trailer=parts.find(part=>part.vehiclePart==='полуприцеп');
+ assert.ok(trailer.components.some(component=>component.name==='Верхний кронштейн внутри контура'));
+ const obstacle={name:'Низкая балка',x:center.x,y:center.y,w:0.1,h:0.1,zMin:3.5,zMax:3.6};
  const result=planner.clearance(pose,[obstacle],p);
  assert.equal(result.distance,0);
  assert.equal(result.verticalStatus,'vertical-overlap');
