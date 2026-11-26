@@ -48,6 +48,7 @@ const cfg={
  tireWidth:0.44,
  auxiliaryEnvelopes:[],
  vehicleVerticalProfiles:{},
+ roadSurface:null,
  verticalObstacles:[],
  trailerMass:30000,
  mu:0.7,
@@ -194,10 +195,10 @@ window.TruckVisionClearPerceptionFrame=()=>{
 function readSettings(){
  const candidate={...cfg};
  for(const key of Object.keys(candidate)){
-  if(['auxiliaryEnvelopes','vehicleVerticalProfiles','verticalObstacles'].includes(key)){
+  if(['auxiliaryEnvelopes','vehicleVerticalProfiles','roadSurface','verticalObstacles'].includes(key)){
    const input=$(key);
    if(input){
-    const fallback=key==='vehicleVerticalProfiles'?'{}':'[]';
+    const fallback=key==='roadSurface'?'null':key==='vehicleVerticalProfiles'?'{}':'[]';
     try{candidate[key]=JSON.parse(String(input.value||fallback));}
     catch(error){return {ok:false,changed:false,errors:[key+': введите корректный JSON.']};}
    }
@@ -1313,7 +1314,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261126-8');
+   worker=new Worker('./planner-worker.js?v=20261126-9');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
