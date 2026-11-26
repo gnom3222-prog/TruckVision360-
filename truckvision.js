@@ -150,7 +150,7 @@ function gateGeometryForPlanner(){
   positionUncertainty:cfg.gatePositionUncertainty,
   headingUncertaintyDeg:cfg.gateHeadingUncertaintyDeg
  };
- if(cfg.gateLintelEnabled&&$('gateLintelEnabled')&&$('gateLintelEnabled').checked){
+ if(cfg.gateLintelEnabled&&$('gateLintelEnabled')&&$('gateLintelEnabled').checked&&$('gateLintelAlignmentConfirmed')&&$('gateLintelAlignmentConfirmed').checked){
   geometry.lintel={
    clearHeight:cfg.gateLintelClearHeight,
    clearHeightUncertainty:cfg.gateLintelCameraHeightUncertainty,
@@ -347,6 +347,9 @@ function readSettings(){
   errors.push('gateWidthUncertainty: консервативная ширина проёма должна оставаться больше 0,05 м.');
  }
  if(candidate.gateLintelEnabled){
+  if(!$('gateLintelAlignmentConfirmed')||!$('gateLintelAlignmentConfirmed').checked){
+   errors.push('gateLintelAlignmentConfirmed: подтвердите, что перемычка центрирована, параллельна линии ворот и горизонтальна; иначе эту упрощённую призму использовать нельзя.');
+  }
   if(!$('gateEnabled')||!$('gateEnabled').checked){
    errors.push('gateLintelEnabled: сначала включите учёт косяков ворот на карте.');
   }else{
@@ -2439,6 +2442,7 @@ function applyCameraGateRegistration(registration){
  const positionUncertainty=readGateSetting('gatePositionUncertainty','gatePositionUncertainty');
  const headingUncertaintyDeg=readGateSetting('gateHeadingUncertaintyDeg','gateHeadingUncertaintyDeg');
  const lintelEnabled=!!($('gateLintelEnabled')&&$('gateLintelEnabled').checked);
+ const lintelAlignmentConfirmed=!!($('gateLintelAlignmentConfirmed')&&$('gateLintelAlignmentConfirmed').checked);
  const lintel=lintelEnabled?{
   clearHeight,
   clearHeightUncertainty:heightUncertaintyBound,
@@ -2450,6 +2454,7 @@ function applyCameraGateRegistration(registration){
   depth:readGateSetting('gateLintelDepth','gateLintelDepth'),
   depthUncertainty:readGateSetting('gateLintelDepthUncertainty','gateLintelDepthUncertainty')
  }:null;
+ if(lintelEnabled&&!lintelAlignmentConfirmed)return false;
  if(![centerX,centerY,clearWidth,headingDeg,widthUncertaintyBound,
       postWidth,depth,positionUncertainty,headingUncertaintyDeg].every(Number.isFinite)||
     Math.abs(centerX)>100||Math.abs(centerY)>100||
@@ -2657,6 +2662,15 @@ $('gateLintelEnabled').onchange=()=>{
  if(!result.ok){
   $('routeAdvice').textContent='Параметры верхней перемычки не применены: '+result.errors.join(' ');
   $('difficultyAdvice').textContent='Построение маршрута заблокировано до проверки измерений перемычки.';
+ }
+ draw();
+};
+$('gateLintelAlignmentConfirmed').onchange=()=>{
+ const result=readSettings();
+ invalidateRouteForSettingsChange();
+ if(!result.ok){
+  $('routeAdvice').textContent='Подтверждение геометрии перемычки отсутствует или настройки невалидны: '+result.errors.join(' ');
+  $('difficultyAdvice').textContent='Построение маршрута заблокировано до повторной проверки вертикальной геометрии.';
  }
  draw();
 };
