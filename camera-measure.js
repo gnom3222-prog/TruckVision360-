@@ -139,6 +139,7 @@ async function start(){
    Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;
    ctx.clearRect(0,0,c.width,c.height);
    clearGateRepeatability(true);
+   clearObstacleRepeatability(true);
    say('Видеопоток камеры завершился или был прерван. Калибровка сброшена; нажмите «Включить камеру» и повторите измерение.');
   };
   for(const track of activeStream.getTracks()){
@@ -148,7 +149,7 @@ async function start(){
   v.srcObject=activeStream;
   await v.play();
   if(stream!==activeStream||requestId!==streamRequestId)throw new Error('Видеопоток камеры завершился до запуска.');
-  Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;clearGateRepeatability(true);
+  Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;clearGateRepeatability(true);clearObstacleRepeatability(true);
   say('Камера включена. Установите прямоугольный эталон в ту же плоскость, что и объект. При нажатии «Калибровать» текущий кадр будет зафиксирован: отметьте эталон и объект на одном неподвижном изображении.');
   draw();
  }catch(e){
