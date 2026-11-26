@@ -193,8 +193,65 @@
    if(!Number.isFinite(uncertaintyMargin)||uncertaintyMargin<0||uncertaintyMargin>1){
     errors.push(prefix+'запас неопределённости должен находиться в диапазоне 0–1 м.');
    }
+   const hasZMin=entry.zMin!==undefined,hasZMax=entry.zMax!==undefined;
+   const verticalUncertaintyMargin=entry.verticalUncertaintyMargin??0;
+   if(hasZMin!==hasZMax){
+    errors.push(prefix+'вертикальный диапазон должен содержать одновременно zMin и zMax.');
+   }else if(hasZMin&&(!Number.isFinite(entry.zMin)||!Number.isFinite(entry.zMax)||
+      entry.zMin< -2||entry.zMax>15||entry.zMax<=entry.zMin)){
+    errors.push(prefix+'zMin/zMax должны задавать измеренный интервал высоты от −2 до 15 м.');
+   }
+   if(!Number.isFinite(verticalUncertaintyMargin)||verticalUncertaintyMargin<0||verticalUncertaintyMargin>1){
+    errors.push(prefix+'вертикальная неопределённость должна находиться в диапазоне 0–1 м.');
+   }
+   if(!hasZMin&&verticalUncertaintyMargin>0){
+    errors.push(prefix+'вертикальную неопределённость можно задавать только вместе с zMin/zMax.');
+   }
   });
   return errors;
+ }
+
+ const VEHICLE_VERTICAL_PROFILE_KEYS=Object.freeze([
+  'tractor-body','tractor-cab','trailer-body','mirror','tractor-wheel','trailer-wheel'
+ ]);
+
+ function validateVehicleVerticalProfiles(profiles){
+  const errors=[];
+  if(profiles===undefined)return errors;
+  if(!profiles||typeof profiles!=='object'||Array.isArray(profiles)){
+   return ['Вертикальные профили автопоезда должны быть JSON-объектом.'];
+  }
+  for(const [key,profile] of Object.entries(profiles)){
+   const prefix='Вертикальный профиль '+key+': ';
+   if(!VEHICLE_VERTICAL_PROFILE_KEYS.includes(key)){
+    errors.push(prefix+'неизвестный класс компонента.');
+    continue;
+   }
+   if(!profile||typeof profile!=='object'||Array.isArray(profile)){
+    errors.push(prefix+'ожидается объект с zMin и zMax.');
+    continue;
+   }
+   if(!Number.isFinite(profile.zMin)||!Number.isFinite(profile.zMax)||
+      profile.zMin< -2||profile.zMax>15||profile.zMax<=profile.zMin){
+    errors.push(prefix+'zMin/zMax должны задавать измеренный интервал высоты от −2 до 15 м.');
+   }
+   const margin=profile.uncertaintyMargin??0;
+   if(!Number.isFinite(margin)||margin<0||margin>1){
+    errors.push(prefix+'uncertaintyMargin должен находиться в диапазоне 0–1 м.');
+   }
+  }
+  return errors;
+ }
+
+ function verticalRangeFromProfile(profile,extraMargin=0){
+  if(!profile||!Number.isFinite(profile.zMin)||!Number.isFinite(profile.zMax)||profile.zMax<=profile.zMin)return null;
+  const margin=(profile.uncertaintyMargin??0)+extraMargin;
+  return {min:profile.zMin-margin,max:profile.zMax+margin};
+ }
+
+ function vehicleVerticalRange(params,key){
+  const profiles=params&&params.vehicleVerticalProfiles;
+  return profiles&&profiles[key]?verticalRangeFromProfile(profiles[key]):null;
  }
 
  function validateVehicleParams(params){
@@ -352,6 +409,7 @@
    }
   }
   errors.push(...validateAuxiliaryEnvelopes(params.auxiliaryEnvelopes));
+  errors.push(...validateVehicleVerticalProfiles(params.vehicleVerticalProfiles));
   return errors;
  }
 
@@ -474,7 +532,8 @@
    const center=localPoint(q,q.psi,longitudinal,side*(cabWidth/2+outboard/2));
    return {
     name:index===0?'левое зеркало':'правое зеркало',
-    polygon:bodyCorners(center,q.psi,length/2+uncertainty,-length/2-uncertainty,outboard+2*uncertainty)
+    polygon:bodyCorners(center,q.psi,length/2+uncertainty,-length/2-uncertainty,outboard+2*uncertainty),
+    verticalRange:vehicleVerticalRange(params,'mirror')
    };
   });
  }
@@ -504,6 +563,9 @@
     vehiclePart:isTractor?'тягач':'полуприцеп',
     componentType:'measured-auxiliary-envelope',
     uncertaintyMargin:margin,
+    verticalRange:entry.zMin!==undefined?verticalRangeFromProfile({
+     zMin:entry.zMin,zMax:entry.zMax,uncertaintyMargin:entry.verticalUncertaintyMargin??0
+    }):null,
     polygon:bodyCorners(center,heading,entry.length/2+margin,-entry.length/2-margin,entry.width+2*margin)
    };
   });
@@ -545,18 +607,18 @@
   );
   return [
    {vehiclePart:'тягач',bodyIndex:0,components:[
-    {name:'основной контур тягача',polygon:bodies[0]},
-    ...tractorWheelComponents.map(wheel=>({name:wheel.name,polygon:wheel.polygon})),
-    ...tractorAuxiliaryComponents.map(component=>({name:component.name,polygon:component.polygon,componentType:component.componentType}))
+    {name:'основной контур тягача',polygon:bodies[0],verticalRange:vehicleVerticalRange(params,'tractor-body')},
+    ...tractorWheelComponents.map(wheel=>({name:wheel.name,polygon:wheel.polygon,verticalRange:wheel.verticalRange})),
+    ...tractorAuxiliaryComponents.map(component=>({name:component.name,polygon:component.polygon,componentType:component.componentType,verticalRange:component.verticalRange}))
    ]},
    {vehiclePart:'кабина',bodyIndex:1,components:[
-    {name:'кабина',polygon:bodies[1]},
+    {name:'кабина',polygon:bodies[1],verticalRange:vehicleVerticalRange(params,'tractor-cab')},
     ...mirrors
    ]},
    {vehiclePart:'полуприцеп',bodyIndex:2,components:[
-    {name:'кузов полуприцепа',polygon:bodies[2]},
-    ...trailerWheelComponents.map(wheel=>({name:wheel.name,polygon:wheel.polygon})),
-    ...trailerAuxiliaryComponents.map(component=>({name:component.name,polygon:component.polygon,componentType:component.componentType}))
+    {name:'кузов полуприцепа',polygon:bodies[2],verticalRange:vehicleVerticalRange(params,'trailer-body')},
+    ...trailerWheelComponents.map(wheel=>({name:wheel.name,polygon:wheel.polygon,verticalRange:wheel.verticalRange})),
+    ...trailerAuxiliaryComponents.map(component=>({name:component.name,polygon:component.polygon,componentType:component.componentType,verticalRange:component.verticalRange}))
    ]}
   ];
  }
@@ -618,6 +680,7 @@
    wheels.push({
     vehiclePart,axleIndex,side,center,heading,name,
     footprintWidth,footprintModel,...metadata,
+    verticalRange:vehicleVerticalRange(params,vehiclePart==='тягач'?'tractor-wheel':'trailer-wheel'),
     groupWidthConfigured:footprintModel==='configured-axle-side-group-envelope'||footprintModel==='explicit-dual-tire-pair',
     polygon:bodyCorners(center,heading,
      tireLength/2+uncertainty,-tireLength/2-uncertainty,footprintWidth+2*uncertainty)
@@ -1280,5 +1343,5 @@
   };
  }
 
- return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,validateVehicleParams,validateTireGroupWidthUncertainty,validateAuxiliaryEnvelopes,auxiliaryEnvelopePolygons,trailerAxleTireGroupWidths,trailerAxleTireCenterSpacings,trailerAxleSpacings,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,wheelTireTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
+ return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,VEHICLE_VERTICAL_PROFILE_KEYS,validateVehicleParams,validateTireGroupWidthUncertainty,validateAuxiliaryEnvelopes,validateVehicleVerticalProfiles,verticalRangeFromProfile,vehicleVerticalRange,auxiliaryEnvelopePolygons,trailerAxleTireGroupWidths,trailerAxleTireCenterSpacings,trailerAxleSpacings,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,wheelTireTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
 });
