@@ -37,15 +37,29 @@
   trailerAxle1TireGroupWidth:{min:0,max:1.5,optional:true},
   trailerAxle2TireGroupWidth:{min:0,max:1.5,optional:true},
   trailerAxle3TireGroupWidth:{min:0,max:1.5,optional:true},
+  tractorRearTireCenterSpacing:{min:0,max:1.5,optional:true},
+  trailerAxle1TireCenterSpacing:{min:0,max:1.5,optional:true},
+  trailerAxle2TireCenterSpacing:{min:0,max:1.5,optional:true},
+  trailerAxle3TireCenterSpacing:{min:0,max:1.5,optional:true},
   tireLength:{min:0.2,max:1.5,optional:true},
   tireWidth:{min:0.1,max:0.8,optional:true}
  });
+
+ function trailerAxleTireCenterSpacings(params){
+  return [1,2,3].map(index=>{
+   const value=params&&params['trailerAxle'+index+'TireCenterSpacing'];
+   return Number.isFinite(value)&&value>0?value:0;
+  });
+ }
 
  function trailerAxleTireGroupWidths(params){
   const tireWidth=Number.isFinite(params&&params.tireWidth)?params.tireWidth:0.44;
   const common=Number.isFinite(params&&params.trailerTireGroupWidth)&&params.trailerTireGroupWidth>0?
    params.trailerTireGroupWidth:tireWidth;
+  const pairSpacings=trailerAxleTireCenterSpacings(params);
   return [1,2,3].map(index=>{
+   const pairSpacing=pairSpacings[index-1];
+   if(pairSpacing>0)return pairSpacing+tireWidth;
    const specific=params&&params['trailerAxle'+index+'TireGroupWidth'];
    return Number.isFinite(specific)&&specific>0?specific:common;
   });
@@ -79,15 +93,19 @@
   const tireWidthUncertainty=Number.isFinite(params.tireWidthUncertainty)?Math.max(0,params.tireWidthUncertainty):0;
   const minimumGroupWidth=tireWidth+tireWidthUncertainty;
   const groups=[
-   ['tractorRearTireGroupWidth','tractorRearTireGroupWidthUncertainty','группы задних шин тягача'],
-   ['trailerTireGroupWidth','trailerTireGroupWidthUncertainty','группы шин полуприцепа'],
-   ['trailerAxle1TireGroupWidth','trailerAxle1TireGroupWidthUncertainty','группы шин 1-й оси полуприцепа'],
-   ['trailerAxle2TireGroupWidth','trailerAxle2TireGroupWidthUncertainty','группы шин 2-й оси полуприцепа'],
-   ['trailerAxle3TireGroupWidth','trailerAxle3TireGroupWidthUncertainty','группы шин 3-й оси полуприцепа']
+   ['tractorRearTireGroupWidth','tractorRearTireGroupWidthUncertainty','группы задних шин тягача','tractorRearTireCenterSpacing','tractorRearTireCenterSpacingUncertainty'],
+   ['trailerTireGroupWidth','trailerTireGroupWidthUncertainty','группы шин полуприцепа',null,null],
+   ['trailerAxle1TireGroupWidth','trailerAxle1TireGroupWidthUncertainty','группы шин 1-й оси полуприцепа','trailerAxle1TireCenterSpacing','trailerAxle1TireCenterSpacingUncertainty'],
+   ['trailerAxle2TireGroupWidth','trailerAxle2TireGroupWidthUncertainty','группы шин 2-й оси полуприцепа','trailerAxle2TireCenterSpacing','trailerAxle2TireCenterSpacingUncertainty'],
+   ['trailerAxle3TireGroupWidth','trailerAxle3TireGroupWidthUncertainty','группы шин 3-й оси полуприцепа','trailerAxle3TireCenterSpacing','trailerAxle3TireCenterSpacingUncertainty']
   ];
-  groups.forEach(([widthKey,uncertaintyKey,label])=>{
+  groups.forEach(([widthKey,uncertaintyKey,label,pairSpacingKey,pairUncertaintyKey])=>{
    const width=Number.isFinite(params[widthKey])?params[widthKey]:0;
    const uncertainty=Number.isFinite(params[uncertaintyKey])?params[uncertaintyKey]:0;
+   if(pairSpacingKey&&Number.isFinite(params[pairSpacingKey])&&params[pairSpacingKey]>0){
+    if(uncertainty>0)errors.push(uncertaintyKey+': при раздельной модели покрышек используйте '+pairUncertaintyKey+' и tireWidthUncertainty.');
+    return;
+   }
    if(uncertainty<=0)return;
    if(width<=0){
     errors.push(uncertaintyKey+': сначала задайте измеренную номинальную ширину '+label+'.');
@@ -95,6 +113,27 @@
    }
    if(width-uncertainty<minimumGroupWidth-1e-9){
     errors.push(uncertaintyKey+': нижняя граница ширины группы должна быть не меньше максимальной ширины одной шины ('+minimumGroupWidth.toFixed(3)+' м с учётом её допуска).');
+   }
+  });
+  const pairSpacings=[
+   ['tractorRearTireCenterSpacing','tractorRearTireCenterSpacingUncertainty','сдвоенной группы задней оси тягача'],
+   ['trailerAxle1TireCenterSpacing','trailerAxle1TireCenterSpacingUncertainty','сдвоенной группы 1-й оси полуприцепа'],
+   ['trailerAxle2TireCenterSpacing','trailerAxle2TireCenterSpacingUncertainty','сдвоенной группы 2-й оси полуприцепа'],
+   ['trailerAxle3TireCenterSpacing','trailerAxle3TireCenterSpacingUncertainty','сдвоенной группы 3-й оси полуприцепа']
+  ];
+  pairSpacings.forEach(([spacingKey,uncertaintyKey,label])=>{
+   const spacing=Number.isFinite(params[spacingKey])?params[spacingKey]:0;
+   const uncertainty=Number.isFinite(params[uncertaintyKey])?params[uncertaintyKey]:0;
+   if(uncertainty<=0)return;
+   if(spacing<=0){
+    errors.push(uncertaintyKey+': сначала задайте измеренное расстояние между центрами покрышек '+label+'.');
+    return;
+   }
+   if(spacing-uncertainty<tireWidth+tireWidthUncertainty-1e-9){
+    errors.push(uncertaintyKey+': нижняя граница расстояния между центрами не должна допускать перекрытие покрышек.');
+   }
+   if(spacing+uncertainty+tireWidth+tireWidthUncertainty>1.5+1e-9){
+    errors.push(uncertaintyKey+': верхняя граница наружной ширины пары превышает 1,50 м.');
    }
   });
   return errors;
@@ -186,12 +225,26 @@
   const rearTrack=params.tractorRearTrack??2.05;
   const tireWidth=params.tireWidth??0.44;
   const rearGroupInput=params.tractorRearTireGroupWidth??0;
-  const rearGroupWidth=rearGroupInput>0?rearGroupInput:tireWidth;
+  const rearPairSpacing=params.tractorRearTireCenterSpacing??0;
+  const rearGroupWidth=rearPairSpacing>0?rearPairSpacing+tireWidth:(rearGroupInput>0?rearGroupInput:tireWidth);
   const axleGroupInputs=[1,2,3].map(index=>params['trailerAxle'+index+'TireGroupWidth']??0);
+  const axlePairSpacings=trailerAxleTireCenterSpacings(params);
+  const pairSpacingSpecs=[
+   ['tractorRearTireCenterSpacing',rearPairSpacing],
+   ...axlePairSpacings.map((value,index)=>['trailerAxle'+(index+1)+'TireCenterSpacing',value])
+  ];
+  pairSpacingSpecs.forEach(([key,value])=>{
+   if(value>0&&value<tireWidth-1e-9){
+    errors.push(key+': расстояние между центрами покрышек не может быть меньше ширины одной шины.');
+   }
+   if(value>0&&value+tireWidth>1.5+1e-9){
+    errors.push(key+': наружная ширина пары покрышек превышает 1,50 м.');
+   }
+  });
   const axleGroupWidths=trailerAxleTireGroupWidths(params);
   const axleTracks=trailerAxleTracks(params);
   const hasIndividualTrailerTrack=[1,2,3].some(index=>(params['trailerAxle'+index+'Track']??0)>0);
-  const hasIndividualTrailerGroupWidth=axleGroupInputs.some(value=>value>0);
+  const hasIndividualTrailerGroupWidth=axleGroupInputs.some(value=>value>0)||axlePairSpacings.some(value=>value>0);
   let commonTrailerEnvelopeErrorAdded=false;
   const commonTrailerTrack=params.trailerTrack??(Number.isFinite(params.trailerWidth)?params.trailerWidth+0.24:NaN);
   [1,2,3].forEach(index=>{
@@ -201,26 +254,27 @@
     errors.push(key+': колея оси должна быть не меньше 1,00 м.');
    }
   });
-  if(rearGroupInput>0&&rearGroupInput<tireWidth-1e-9){
+  if(rearPairSpacing<=0&&rearGroupInput>0&&rearGroupInput<tireWidth-1e-9){
    errors.push('tractorRearTireGroupWidth: ширина группы не может быть меньше ширины одной шины.');
   }
   if((params.trailerTireGroupWidth??0)>0&&params.trailerTireGroupWidth<tireWidth-1e-9){
    errors.push('trailerTireGroupWidth: ширина группы не может быть меньше ширины одной шины.');
   }
   axleGroupInputs.forEach((value,index)=>{
-   if(value>0&&value<tireWidth-1e-9){
+   if(axlePairSpacings[index]<=0&&value>0&&value<tireWidth-1e-9){
     errors.push('trailerAxle'+(index+1)+'TireGroupWidth: ширина группы не может быть меньше ширины одной шины.');
    }
   });
   if([frontTrack,rearTrack,commonTrailerTrack,tireWidth,rearGroupWidth,...axleGroupWidths,...axleTracks].every(Number.isFinite)){
    if(rearGroupWidth>=rearTrack){
-    errors.push('tractorRearTireGroupWidth: левая и правая группы шин перекрываются при заданной колее.');
+    errors.push((rearPairSpacing>0?'tractorRearTireCenterSpacing':'tractorRearTireGroupWidth')+': левая и правая группы шин перекрываются при заданной колее.');
    }
    axleTracks.forEach((track,index)=>{
     const groupWidth=axleGroupWidths[index];
     const widthInput=axleGroupInputs[index];
-    const widthKey=widthInput>0?'trailerAxle'+(index+1)+'TireGroupWidth':
-     ((params.trailerTireGroupWidth??0)>0?'trailerTireGroupWidth':'tireWidth');
+    const widthKey=axlePairSpacings[index]>0?'trailerAxle'+(index+1)+'TireCenterSpacing':
+     (widthInput>0?'trailerAxle'+(index+1)+'TireGroupWidth':
+      ((params.trailerTireGroupWidth??0)>0?'trailerTireGroupWidth':'tireWidth'));
     if(groupWidth>=track){
      errors.push(widthKey+': левая и правая группы шин '+(index+1)+'-й оси перекрываются при заданной колее.');
     }
@@ -439,30 +493,43 @@
   return steer>0?{left:inner,right:outer}:{left:-outer,right:-inner};
  }
 
- // Build ten axle-side tire envelopes. A configured group width represents the
- // outer width of a dual-tire pair on one side, including the gap between tires.
- // Without that input, the legacy single-tire-width fallback remains explicit.
+ // The baseline has ten axle-side footprints. A measured tire-center spacing
+ // expands one dual group into two individual tire rectangles; without it, the
+ // configured group envelope (or explicit single-tire fallback) is retained.
  function buildWheelFootprints(q,params,steer=0){
   const frontTrack=params.tractorFrontTrack??2.05;
   const rearTrack=params.tractorRearTrack??2.05;
   const trailerTracks=trailerAxleTracks(params);
   const tireLength=params.tireLength??0.72;
   const tireWidth=params.tireWidth??0.44;
+  const rearPairSpacing=Number.isFinite(params.tractorRearTireCenterSpacing)?params.tractorRearTireCenterSpacing:0;
   const rearGroupConfigured=Number.isFinite(params.tractorRearTireGroupWidth)&&params.tractorRearTireGroupWidth>0;
   const trailerGroupConfigured=Number.isFinite(params.trailerTireGroupWidth)&&params.trailerTireGroupWidth>0;
-  const rearGroupWidth=rearGroupConfigured?params.tractorRearTireGroupWidth:tireWidth;
+  const rearGroupWidth=rearPairSpacing>0?rearPairSpacing+tireWidth:(rearGroupConfigured?params.tractorRearTireGroupWidth:tireWidth);
   const trailerGroupWidths=trailerAxleTireGroupWidths(params);
+  const trailerPairSpacings=trailerAxleTireCenterSpacings(params);
   const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
   const steeringAngles=frontWheelSteerAngles(steer,params);
   const wheels=[];
-  const add=(vehiclePart,axleIndex,side,center,heading,name,footprintWidth=tireWidth,footprintModel='single-tire-assumption')=>{
+  const add=(vehiclePart,axleIndex,side,center,heading,name,footprintWidth=tireWidth,footprintModel='single-tire-assumption',metadata={})=>{
    wheels.push({
     vehiclePart,axleIndex,side,center,heading,name,
-    footprintWidth,footprintModel,
-    groupWidthConfigured:footprintModel==='configured-axle-side-group-envelope',
+    footprintWidth,footprintModel,...metadata,
+    groupWidthConfigured:footprintModel==='configured-axle-side-group-envelope'||footprintModel==='explicit-dual-tire-pair',
     polygon:bodyCorners(center,heading,
      tireLength/2+uncertainty,-tireLength/2-uncertainty,footprintWidth+2*uncertainty)
    });
+  };
+  const addDualPair=(vehiclePart,axleIndex,side,groupCenter,heading,baseName,centerSpacing)=>{
+   const sideSign=side==='left'?1:-1;
+   const outerOffset=sideSign*centerSpacing/2;
+   const innerOffset=-outerOffset;
+   add(vehiclePart,axleIndex,side,localPoint(groupCenter,heading,0,outerOffset),heading,
+    baseName+' — наружная покрышка',tireWidth,'explicit-dual-tire-pair',
+    {pairPosition:'outer',pairLateralOffset:outerOffset,groupCenter,pairCenterSpacing:centerSpacing});
+   add(vehiclePart,axleIndex,side,localPoint(groupCenter,heading,0,innerOffset),heading,
+    baseName+' — внутренняя покрышка',tireWidth,'explicit-dual-tire-pair',
+    {pairPosition:'inner',pairLateralOffset:innerOffset,groupCenter,pairCenterSpacing:centerSpacing});
   };
   const [frontAxle,rearAxle]=tractorAxlePoints(q,params);
   for(const side of [1,-1]){
@@ -471,10 +538,15 @@
     localPoint(frontAxle,q.psi,0,side*frontTrack/2),
     q.psi+(side>0?steeringAngles.left:steeringAngles.right),
     sideName+' переднее колесо тягача');
-   add('тягач',2,side>0?'left':'right',
-    localPoint(rearAxle,q.psi,0,side*rearTrack/2),q.psi,
-    sideName+' заднее колесо тягача',rearGroupWidth,
-    rearGroupConfigured?'configured-axle-side-group-envelope':'single-tire-fallback');
+   const rearGroupCenter=localPoint(rearAxle,q.psi,0,side*rearTrack/2);
+   if(rearPairSpacing>0){
+    addDualPair('тягач',2,side>0?'left':'right',rearGroupCenter,q.psi,
+     sideName+' заднее колесо тягача',rearPairSpacing);
+   }else{
+    add('тягач',2,side>0?'left':'right',rearGroupCenter,q.psi,
+     sideName+' заднее колесо тягача',rearGroupWidth,
+     rearGroupConfigured?'configured-axle-side-group-envelope':'single-tire-fallback');
+   }
   }
   trailerAxlePoints(q,params).forEach((axle,index)=>{
    const trailerTrack=trailerTracks[index];
@@ -484,10 +556,16 @@
    const groupWidth=trailerGroupWidths[index];
    for(const side of [1,-1]){
     const sideName=side>0?'левое':'правое';
-    add('полуприцеп',index+1,side>0?'left':'right',
-     localPoint(axle,q.psiT,0,side*trailerTrack/2),q.psiT,
-     sideName+' колесо '+(index+1)+'-й оси полуприцепа',groupWidth,
-     groupConfigured?'configured-axle-side-group-envelope':'single-tire-fallback');
+    const groupCenter=localPoint(axle,q.psiT,0,side*trailerTrack/2);
+    const pairSpacing=trailerPairSpacings[index];
+    if(pairSpacing>0){
+     addDualPair('полуприцеп',index+1,side>0?'left':'right',groupCenter,q.psiT,
+      sideName+' колесо '+(index+1)+'-й оси полуприцепа',pairSpacing);
+    }else{
+     add('полуприцеп',index+1,side>0?'left':'right',groupCenter,q.psiT,
+      sideName+' колесо '+(index+1)+'-й оси полуприцепа',groupWidth,
+      groupConfigured?'configured-axle-side-group-envelope':'single-tire-fallback');
+    }
    }
   });
   return wheels;
@@ -869,5 +947,5 @@
   };
  }
 
- return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,validateVehicleParams,validateTireGroupWidthUncertainty,trailerAxleTireGroupWidths,trailerAxleSpacings,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
+ return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,validateVehicleParams,validateTireGroupWidthUncertainty,trailerAxleTireGroupWidths,trailerAxleTireCenterSpacings,trailerAxleSpacings,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
 });

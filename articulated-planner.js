@@ -347,8 +347,10 @@
   const tractorRearTrack=p.tractorRearTrack??2.05;
   const tireLength=p.tireLength??0.72;
   const tireWidth=p.tireWidth??0.44;
-  const tractorRearGroupWidth=Number.isFinite(p.tractorRearTireGroupWidth)&&p.tractorRearTireGroupWidth>0?
-   p.tractorRearTireGroupWidth:tireWidth;
+  const rearPairSpacing=Number.isFinite(p.tractorRearTireCenterSpacing)?p.tractorRearTireCenterSpacing:0;
+  const tractorRearGroupWidth=rearPairSpacing>0?rearPairSpacing+tireWidth:
+   (Number.isFinite(p.tractorRearTireGroupWidth)&&p.tractorRearTireGroupWidth>0?
+    p.tractorRearTireGroupWidth:tireWidth);
   const trailerGroupWidth=Number.isFinite(p.trailerTireGroupWidth)&&p.trailerTireGroupWidth>0?
    p.trailerTireGroupWidth:tireWidth;
   const tractorWheelCornerRadius=Math.hypot(
@@ -535,10 +537,12 @@
   const currentSteer=currentState.steer===undefined?0:currentState.steer;
   const maxAbsSteer=Math.max(Math.abs(previousSteer),Math.abs(currentSteer));
   const curvature=Math.abs(Math.tan(maxAbsSteer)/p.wheelbase);
+  const sideSign=wheel.side==='left'?1:-1;
+  const pairLateralOffset=Number.isFinite(wheel.pairLateralOffset)?wheel.pairLateralOffset:0;
   if(wheel.vehiclePart==='тягач'){
    const longitudinal=wheel.axleIndex===1?p.wheelbase:0;
    const track=wheel.axleIndex===1?(p.tractorFrontTrack??2.05):(p.tractorRearTrack??2.05);
-   const lateral=Math.abs(track/2);
+   const lateral=Math.abs(sideSign*track/2+pairLateralOffset);
    return Math.hypot(1+lateral*curvature,longitudinal*curvature);
   }
   if(wheel.vehiclePart==='полуприцеп'){
@@ -550,7 +554,7 @@
     rootPhysics.trailerAxleTracks(p):[p.trailerTrack??(p.trailerWidth+0.24),p.trailerTrack??(p.trailerWidth+0.24),p.trailerTrack??(p.trailerWidth+0.24)];
    const track=tracks[wheel.axleIndex-1];
    if(!Number.isFinite(track)||track<=0)throw new Error('Trailer wheel track is invalid for swept-clearance analysis.');
-   const lateral=(wheel.side==='left'?1:-1)*track/2;
+   const lateral=sideSign*track/2+pairLateralOffset;
    const couplingMagnitude=p.hitchOffset*curvature;
    let maximum=0;
    for(const sign of [-1,1]){
@@ -582,6 +586,7 @@
   const tireLength=p.tireLength??0.72,tireWidth=p.tireWidth??0.44;
   const records=new Map();
   let previousState=null,previousChecks=null,distanceAlongRoute=0;
+  let expectedFootprintCount=null;
   let segmentsWithIntermediateKinematicSamples=0,segmentsWithoutIntermediateKinematicSamples=0;
   let segmentsSkippedForNoObstacles=0,intermediateSamplesAnalyzed=0;
   let segmentsAtAdaptiveSamplingCap=0,maxAdaptiveIntervalsUsed=0;
@@ -624,7 +629,11 @@
     distanceAlongRoute+=stepDistance;
    }
    const footprints=rootPhysics.wheelFootprints(state,p,steer);
-   if(footprints.length!==10)throw new Error('Per-wheel geometry must contain exactly ten axle-side footprint groups.');
+   if(footprints.length<10)throw new Error('Per-wheel geometry must contain at least ten baseline axle-side footprints.');
+   if(expectedFootprintCount===null)expectedFootprintCount=footprints.length;
+   else if(footprints.length!==expectedFootprintCount){
+    throw new Error('Per-wheel geometry count changed between route states.');
+   }
    const currentChecks=footprints.map(wheel=>{
     const footprintWidth=Number.isFinite(wheel.footprintWidth)?wheel.footprintWidth:tireWidth;
     const tireRadius=Math.hypot(tireLength/2+uncertainty,footprintWidth/2+uncertainty);
@@ -717,8 +726,8 @@
      // Steering is selected at the stationary start boundary of this spatial
      // segment. Check the new tire headings before integrating any distance.
      const controlStartFootprints=rootPhysics.wheelFootprints(previousState,p,segmentSteer);
-     if(controlStartFootprints.length!==10){
-      throw new Error('Control-start wheel geometry must contain exactly ten axle-side footprint groups.');
+     if(controlStartFootprints.length!==expectedFootprintCount){
+      throw new Error('Control-start wheel geometry count does not match the route footprint set.');
      }
      for(const wheel of controlStartFootprints){
       let polygonDistance=Infinity,polygonObstacle=null;
@@ -803,8 +812,8 @@
        const intermediateFootprints=rootPhysics.wheelFootprints(
         intermediateState,p,segmentSteer
        );
-       if(intermediateFootprints.length!==10){
-        throw new Error('Intermediate wheel geometry must contain exactly ten axle-side footprint groups.');
+       if(intermediateFootprints.length!==expectedFootprintCount){
+        throw new Error('Intermediate wheel geometry count does not match the route footprint set.');
        }
        for(const wheel of intermediateFootprints){
         const footprintWidth=Number.isFinite(wheel.footprintWidth)?wheel.footprintWidth:tireWidth;
@@ -2033,6 +2042,10 @@ function planAlternativesWithVehicleParameterBounds(options={}){
   trailerAxle1TireGroupWidth:[0,1.5],
   trailerAxle2TireGroupWidth:[0,1.5],
   trailerAxle3TireGroupWidth:[0,1.5],
+  tractorRearTireCenterSpacing:[0,1.5],
+  trailerAxle1TireCenterSpacing:[0,1.5],
+  trailerAxle2TireCenterSpacing:[0,1.5],
+  trailerAxle3TireCenterSpacing:[0,1.5],
   tireLength:[0.2,1.5],
   tireWidth:[0.1,0.8],
   cabOffset:[0,6],
