@@ -223,10 +223,15 @@ test('poorly conditioned camera calibration never overwrites the previous gate w
 test('camera measurement fails closed when simulator map registration rejects the result',async()=>{
  const camera=bootCamera({applyGateRegistration:()=>false});
  await camera.fire('cameraStart','click');
- await camera.fire('cameraCalibrate','click');
- await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
- await camera.fire('cameraMeasureGate','click');
- await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
+ const referencePoints=[{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}];
+ const gatePoints=[{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}];
+ for(let index=0;index<3;index++){
+  if(index){camera.fire('cameraReset','click');camera.setVideoTime(0.1+index*0.1);}
+  await camera.fire('cameraCalibrate','click');
+  await camera.tap(referencePoints);
+  await camera.fire('cameraMeasureGate','click');
+  await camera.tap(gatePoints);
+ }
  assert.equal(camera.elements.gateWidth.value,'3.50');
  assert.match(camera.elements.cameraStatus.textContent,/Привязка ворот не прошла проверку/);
  assert.equal(camera.appliedRegistrations.length,0);
@@ -525,6 +530,71 @@ test('camera repeatability series cannot mix operator tolerances',async()=>{
  await camera.tap(gatePoints);
  assert.equal(camera.appliedRegistrations.length,0);
  assert.match(camera.elements.cameraStatus.textContent,/Допуски повторяемости изменились/);
+ camera.fire('cameraStop','click');
+});
+
+
+
+test('changing the reference dimensions after a reset clears the repeatability series',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ const referencePoints=[{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}];
+ const gatePoints=[{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}];
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap(referencePoints);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap(gatePoints);
+ assert.match(camera.elements.cameraRepeatabilityStatus.textContent,/1\/3 отдельных кадров/);
+ camera.fire('cameraReset','click');
+ camera.elements.cameraReferenceWidth.value='3.000';
+ camera.fire('cameraReferenceWidth','input');
+ assert.match(camera.elements.cameraRepeatabilityStatus.textContent,/Повторяемость не оценена/);
+ assert.match(camera.elements.cameraStatus.textContent,/Размер эталона изменён/);
+ camera.setVideoTime(0.2);
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap(referencePoints);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap(gatePoints);
+ assert.match(camera.elements.cameraRepeatabilityStatus.textContent,/1\/3 отдельных кадров/);
+ camera.fire('cameraStop','click');
+});
+
+test('repeat series rejects silently changed reference-size assumptions even without an input event',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ const referencePoints=[{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}];
+ const gatePoints=[{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}];
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap(referencePoints);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap(gatePoints);
+ camera.fire('cameraReset','click');
+ camera.setVideoTime(0.2);
+ camera.elements.cameraReferenceWidth.value='3.000';
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap(referencePoints);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap(gatePoints);
+ assert.match(camera.elements.cameraStatus.textContent,/Размер эталона или допущения неопределённости изменились/);
+ assert.match(camera.elements.cameraRepeatabilityStatus.textContent,/1\/3 отдельных кадров/);
+ assert.equal(camera.appliedRegistrations.length,0);
+ camera.fire('cameraStop','click');
+});
+
+test('changing camera uncertainty assumptions clears the repeatability series',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ const referencePoints=[{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}];
+ const gatePoints=[{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}];
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap(referencePoints);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap(gatePoints);
+ camera.fire('cameraReset','click');
+ camera.elements.cameraPointSigma.value='3';
+ camera.fire('cameraPointSigma','input');
+ assert.match(camera.elements.cameraRepeatabilityStatus.textContent,/Повторяемость не оценена/);
+ assert.match(camera.elements.cameraStatus.textContent,/Допущения неопределённости изменены/);
  camera.fire('cameraStop','click');
 });
 
