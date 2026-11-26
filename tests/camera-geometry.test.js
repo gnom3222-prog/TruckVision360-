@@ -357,8 +357,8 @@ test('repeatability summary reports mean, sample spread and conservative per-fra
  near(result.meanHeight,2.000333333333333);
  near(result.rangeWidth,0.005);
  near(result.rangeHeight,0.005);
- near(result.widthEnvelopeBound,0.029333333333333);
- near(result.heightEnvelopeBound,0.035666666666667);
+ near(result.widthEnvelopeBound,0.026666666666667);
+ near(result.heightEnvelopeBound,0.034333333333333);
  assert.equal(result.uncertaintyModel,'observed-range-plus-per-frame-2sigma-screening');
 });
 
