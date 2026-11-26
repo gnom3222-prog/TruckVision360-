@@ -2361,5 +2361,7 @@ test('vertical clearance includes bounded suspension heave pitch and roll envelo
  });
  assert.ok(staticResult.distance>0,'static reference profile should remain vertically separated');
  assert.equal(boundedResult.verticalStatus,'vertical-overlap');
+ assert.equal(boundedResult.suspensionStatus,'bounded-rigid-plane-support-envelope');
+ assert.ok(boundedResult.suspensionDisplacement&&boundedResult.suspensionDisplacement.max>0);
  assert.equal(boundedResult.distance,0,'the support-travel envelope must prevent a false vertical-separation result');
 });
