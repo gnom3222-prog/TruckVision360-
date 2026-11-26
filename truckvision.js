@@ -2552,8 +2552,8 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,
     repeatability.rangeHeight<0||repeatability.rangeHeight>repeatability.heightTolerance||
     repeatability.widthEnvelopeBound<=0||repeatability.widthEnvelopeBound>2||
     repeatability.heightEnvelopeBound<=0||repeatability.heightEnvelopeBound>2||
-    repeatability.widthEnvelopeBound+1e-9<repeatability.maxDeviationWidth+2*sigmaWidth||
-    repeatability.heightEnvelopeBound+1e-9<repeatability.maxDeviationHeight+2*sigmaDepth||
+    Math.abs(repeatability.meanWidth-measurement.width)+2*sigmaWidth>repeatability.widthEnvelopeBound+1e-9||
+    Math.abs(repeatability.meanHeight-measurement.height)+2*sigmaDepth>repeatability.heightEnvelopeBound+1e-9||
     Math.abs(repeatability.meanWidth-measurement.width)>repeatability.maxDeviationWidth+1e-8||
     Math.abs(repeatability.meanHeight-measurement.height)>repeatability.maxDeviationHeight+1e-8||
     repeatability.widthEnvelopeBound>=repeatability.meanWidth-0.05||
