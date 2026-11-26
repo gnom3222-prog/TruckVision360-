@@ -1164,6 +1164,8 @@ test('auxiliary envelopes move with suspension only when body attachment is expl
  assert.deepEqual(axleMounted.verticalRange,{min:1,max:1.5});
  assert.equal(bodyMounted.verticalRange.suspensionStatus,'bounded-rigid-plane-support-envelope');
  assert.ok(bodyMounted.verticalRange.max>axleMounted.verticalRange.max);
+ const mismatched=[{...base.auxiliaryEnvelopes[0],suspensionAttachment:'tractor-body',anchor:'trailer-axle-1'}];
+ assert.ok(physics.validateAuxiliaryEnvelopes(mismatched).some(error=>error.includes('tractor-body')));
 });
 
 test('suspension travel rejects derived pitch or roll slopes outside the linearized model bound',()=>{
