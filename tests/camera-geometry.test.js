@@ -285,6 +285,7 @@ test('camera uncertainty cross-check agrees with finite one-sigma perturbations 
  assert.equal(result.nonlinearSensitivityAvailable,true);
  assert.equal(result.nonlinearSensitivityChecks,18);
  assert.equal(result.nonlinearSensitivityModel,'axiswise-one-sigma-finite-perturbations');
+ assert.equal(camera.NONLINEAR_UNCERTAINTY_WARNING_RATIO,0.25);
  assert.ok(result.nonlinearSigmaWidth>0&&result.nonlinearSigmaHeight>0);
  assert.ok(result.nonlinearMismatchWidth<0.05);
  assert.ok(result.nonlinearMismatchHeight<0.05);
