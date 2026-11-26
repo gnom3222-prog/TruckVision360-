@@ -129,7 +129,7 @@
     errors.push('trailerTireGroupWidth: левая и правая группы шин перекрываются при заданной колее.');
    }
    if(frontTrack+tireWidth>3.2+1e-9||rearTrack+rearGroupWidth>3.2+1e-9){
-    errors.push('tractorTrack/tireGroupWidth: наружная ширина колёсных групп тягача выходит за калибровочную оболочку 3,20 м.');
+    errors.push('tractorTrack/tireWidth/groupWidth: наружная ширина колёсных групп тягача выходит за калибровочную оболочку 3,20 м.');
    }
    if(Number.isFinite(params.trailerWidth)&&trailerTrack+trailerGroupWidth>params.trailerWidth+1.0+1e-9){
     errors.push('trailerTrack/trailerTireGroupWidth: колёсные группы выходят за допустимую калибровочную оболочку относительно ширины полуприцепа.');
