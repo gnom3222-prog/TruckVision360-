@@ -366,6 +366,10 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <label for="auxiliaryEnvelopes">JSON-массив измеренных дополнительных оболочек</label>
 <textarea id="auxiliaryEnvelopes" rows="5" spellcheck="false">[]</textarea>
 <p class="small">Добавляйте только фактически измеренные детали, которые выступают за кузов или шинные оболочки. Каждая запись задаёт name, anchor (tractor-front-axle, tractor-rear-axle, trailer-axle-1, trailer-axle-2 или trailer-axle-3), longitudinalOffset, lateralOffset, length, width, headingOffsetDeg и uncertaintyMargin (все линейные размеры в метрах, угол в градусах). Для вертикальной проверки можно дополнительно задать zMin, zMax и verticalUncertaintyMargin относительно местной поверхности дороги; без обоих z-полей высота детали считается неизвестной. Смещения задаются в локальной системе выбранной оси; положительное longitudinalOffset направлено вперёд, положительное lateralOffset — влево. uncertaintyMargin расширяет каждую сторону прямоугольника и должен быть обоснован измерением. Пример: [{"name":"Корпус ступицы 1-й оси","anchor":"trailer-axle-1","longitudinalOffset":0,"lateralOffset":1.45,"length":0.55,"width":0.35,"headingOffsetDeg":0,"uncertaintyMargin":0.03}]. Не вводите примерные размеры. Если точные габариты узла неизвестны, оставьте массив пустым и учитывайте, что ступицы/подвеска не проверяются отдельно; маршрутная оценка покажет это ограничение. Оболочки включаются в столкновения и swept-границы только в измеренной конфигурации. Это прямоугольные статические приближения, не модель деформации, движения подвески или деталей под нагрузкой.</p>
+<div class="section">Плоскость поверхности дороги · измеренный уклон и границы неопределённости</div>
+<label for="roadSurface">JSON-объект локальной плоскости дороги (null — плоская поверхность предполагается, но не подтверждена)</label>
+<textarea id="roadSurface" rows="4" spellcheck="false">null</textarea>
+<p class="small">Вводите только измеренную локальную аппроксимацию плоскости: originX/originY/originZ задают опорную точку в координатах карты (метры), gradeX/gradeY — уклон rise/run вдоль осей карты. Обязательно укажите originZUncertainty, gradeXUncertainty, gradeYUncertainty и surfaceResidualUncertainty; они расширяют вертикальный диапазон с учётом удалённости от опорной точки. Все zMin/zMax компонентов и препятствий остаются высотами над местной поверхностью дороги. Не используйте эту модель для неровного рельефа, переломов уклона или отдельных колей: это одна плоскость с ограниченным диапазоном, а не 3D-карта поверхности. Пример структуры, не реальные измерения: {"originX":0,"originY":0,"originZ":0,"gradeX":0.02,"gradeY":-0.01,"originZUncertainty":0.01,"gradeXUncertainty":0.001,"gradeYUncertainty":0.001,"surfaceResidualUncertainty":0.02}.</p>
 <div class="section">Вертикальные профили и препятствия · измерения относительно местной поверхности дороги</div>
 <label for="vehicleVerticalProfiles">JSON-объект высотных профилей компонентов автопоезда</label>
 <textarea id="vehicleVerticalProfiles" rows="6" spellcheck="false">{}</textarea>
@@ -484,10 +488,10 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 </section>
 </main>
 
-<script src="vehicle-physics.js?v=20261126-11"></script>
-<script src="articulated-planner.js?v=20261126-6"></script>
+<script src="vehicle-physics.js?v=20261126-12"></script>
+<script src="articulated-planner.js?v=20261126-7"></script>
 <script src="sensor-perception.js?v=20261126-2"></script>
-<script src="truckvision.js?v=20261126-12"></script>
+<script src="truckvision.js?v=20261126-13"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261126-2"></script>
 <script src="camera-measure.js?v=20261126-2"></script>
