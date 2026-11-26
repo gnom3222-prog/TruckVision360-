@@ -2490,9 +2490,14 @@ $('routeStart').onclick=()=>{
   return;
  }
  const clearance=routeAssessment.effectiveClearance;
- if(routeAssessment.collision||!routeAssessment.reached||routeAssessment.maxBeta>=ARTICULATION_STOP_DEMO_DEG||
+ const wheelCheckUnverified=!routeAssessment.wheelClearance||
+  !!routeAssessment.wheelClearanceError||!!routeAssessment.wheelClearanceIncomplete;
+ if(routeAssessment.collision||!routeAssessment.reached||routeAssessment.clearanceInsufficient||
+    wheelCheckUnverified||routeAssessment.maxBeta>=ARTICULATION_STOP_DEMO_DEG||
     (Number.isFinite(clearance)&&clearance<0.35)){
-  $('routeAdvice').textContent='Автопроезд не запущен: предварительная проверка маршрута выявила риск или не смогла подтвердить прохождение. Перестройте маршрут и проверьте препятствия, угол сочленения и зазоры.';
+  $('routeAdvice').textContent=wheelCheckUnverified?
+   'Автопроезд не запущен: проверка отдельных колёс не завершена или не подтверждена. Исправьте входные данные и постройте маршрут заново.':
+   'Автопроезд не запущен: предварительная проверка маршрута выявила риск или не смогла подтвердить прохождение. Перестройте маршрут и проверьте препятствия, угол сочленения и зазоры.';
   return;
  }
  if(routePlayback.active&&routePlayback.awaitingGearConfirmation){
