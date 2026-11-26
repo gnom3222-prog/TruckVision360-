@@ -16,7 +16,7 @@ function frame(verticalRange){
 }
 
 test('perception frame preserves a measured vertical interval and uncertainty',()=>{
- const result=perception.toObstacles(frame({zMin:3.4,zMax:3.8,uncertainty:0.08}));
+ const result=perception.toObstacles(frame({zMin:3.4,zMax:3.8,uncertainty:0.08,reference:'map-ground'}));
  assert.equal(result.length,1);
  assert.equal(result[0].zMin,3.4);
  assert.equal(result[0].zMax,3.8);
@@ -30,8 +30,13 @@ test('perception frame remains backward compatible without vertical data',()=>{
 });
 
 test('perception rejects malformed or inverted vertical intervals',()=>{
- const invalid=perception.validateFrame(frame({zMin:4,zMax:3}),Date.now());
+ const invalid=perception.validateFrame(frame({zMin:4,zMax:3,reference:'map-ground'}),Date.now());
  assert.ok(invalid.some(message=>message.includes('verticalRange')));
- const invalidUncertainty=perception.validateFrame(frame({zMin:2,zMax:3,uncertainty:4}),Date.now());
+ const invalidUncertainty=perception.validateFrame(frame({zMin:2,zMax:3,uncertainty:4,reference:'map-ground'}),Date.now());
  assert.ok(invalidUncertainty.some(message=>message.includes('uncertainty')));
+});
+
+test('perception requires an explicit map-ground reference for vertical coordinates',()=>{
+ const invalid=perception.validateFrame(frame({zMin:2,zMax:3}),Date.now());
+ assert.ok(invalid.some(message=>message.includes('reference')));
 });
