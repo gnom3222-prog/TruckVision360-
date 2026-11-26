@@ -304,6 +304,24 @@ test('vertical gate lintel clearance separates a measured low cab and reports ov
  assert.equal(cabOverlap.distance,0);
 });
 
+test('gate lintel never claims vertical separation when vehicle height profiles are missing',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const gate=planner.createGateObstacles({
+  centerX:0,centerY:0,clearWidth:8,postWidth:0.2,depth:8,heading:0,
+  lintel:{
+   clearHeight:3.8,clearHeightUncertainty:0.03,floorDatumUncertainty:0.02,
+   thickness:0.25,thicknessUncertainty:0.01,
+   depth:8,depthUncertainty:0
+  }
+ });
+ const result=planner.createClearanceChecker([gate[2]],params)(q);
+ const cab=result.perPart.find(item=>item.vehiclePart==='кабина');
+ assert.ok(cab);
+ assert.ok(cab.verticalUnverifiedObstacleCount>0);
+ assert.equal(cab.verticalStatus,'vehicle-height-unverified');
+ assert.equal(cab.distance,0);
+});
+
 test('oriented gate jamb polygons participate in whole-vehicle clearance',()=>{
  const q={x:0,y:0,psi:0,psiT:0};
  const narrow=planner.createGateObstacles({
