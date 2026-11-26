@@ -65,6 +65,14 @@ const cfg={
  gateHeadingUncertaintyDeg:0,
  gatePostWidth:0.25,
  gateDepth:0.6,
+ gateLintelEnabled:false,
+ gateLintelClearHeight:0,
+ gateLintelCameraHeightUncertainty:0,
+ gateLintelFloorUncertainty:0,
+ gateLintelThickness:0,
+ gateLintelThicknessUncertainty:0,
+ gateLintelDepth:0,
+ gateLintelDepthUncertainty:0,
  margin:0.2,
  measurementUncertainty:0.15,
  obstaclePositionUncertainty:0.05,
@@ -129,7 +137,7 @@ const obstacles=[
 
 function gateGeometryForPlanner(){
  if(!$('gateEnabled')||!$('gateEnabled').checked)return null;
- return {
+ const geometry={
   centerX:cfg.gateCenterX,
   centerY:cfg.gateCenterY,
   clearWidth:cfg.gateWidth,
@@ -140,6 +148,18 @@ function gateGeometryForPlanner(){
   positionUncertainty:cfg.gatePositionUncertainty,
   headingUncertaintyDeg:cfg.gateHeadingUncertaintyDeg
  };
+ if(cfg.gateLintelEnabled){
+  geometry.lintel={
+   clearHeight:cfg.gateLintelClearHeight,
+   clearHeightUncertainty:cfg.gateLintelCameraHeightUncertainty,
+   floorDatumUncertainty:cfg.gateLintelFloorUncertainty,
+   thickness:cfg.gateLintelThickness,
+   thicknessUncertainty:cfg.gateLintelThicknessUncertainty,
+   depth:cfg.gateLintelDepth,
+   depthUncertainty:cfg.gateLintelDepthUncertainty
+  };
+ }
+ return geometry;
 }
 function sceneObstacles(){
  if(perceptionFrameTimestamp&&Date.now()-perceptionFrameTimestamp>1500){
@@ -196,6 +216,11 @@ window.TruckVisionClearPerceptionFrame=()=>{
 function readSettings(){
  const candidate={...cfg};
  for(const key of Object.keys(candidate)){
+  if(key==='gateLintelEnabled'){
+   const input=$('gateLintelEnabled');
+   candidate[key]=!!(input&&input.checked);
+   continue;
+  }
   if(['auxiliaryEnvelopes','vehicleVerticalProfiles','roadSurface','suspensionTravel','verticalObstacles'].includes(key)){
    const input=$(key);
    if(input){
@@ -259,6 +284,13 @@ function readSettings(){
   gateHeadingUncertaintyDeg:[0,45],
   gatePostWidth:[0.05,2],
   gateDepth:[0.05,10],
+  gateLintelClearHeight:[0,15],
+  gateLintelCameraHeightUncertainty:[0,2],
+  gateLintelFloorUncertainty:[0,1],
+  gateLintelThickness:[0,2],
+  gateLintelThicknessUncertainty:[0,1],
+  gateLintelDepth:[0,10],
+  gateLintelDepthUncertainty:[0,2],
   margin:[0,5],
   measurementUncertainty:[0,5],
   obstaclePositionUncertainty:[0,1],
@@ -307,6 +339,33 @@ function readSettings(){
  if(Number.isFinite(candidate.gateWidthUncertainty)&&
     candidate.gateWidthUncertainty>=candidate.gateWidth-0.05){
   errors.push('gateWidthUncertainty: консервативная ширина проёма должна оставаться больше 0,05 м.');
+ }
+ if(candidate.gateLintelEnabled){
+  if(!$('gateEnabled')||!$('gateEnabled').checked){
+   errors.push('gateLintelEnabled: сначала включите учёт косяков ворот на карте.');
+  }else{
+   try{
+    planner.createGateObstacles({
+     centerX:candidate.gateCenterX,centerY:candidate.gateCenterY,
+     clearWidth:candidate.gateWidth,postWidth:candidate.gatePostWidth,
+     depth:candidate.gateDepth,heading:candidate.gateHeadingDeg*Math.PI/180,
+     widthUncertainty:candidate.gateWidthUncertainty,
+     positionUncertainty:candidate.gatePositionUncertainty,
+     headingUncertaintyDeg:candidate.gateHeadingUncertaintyDeg,
+     lintel:{
+      clearHeight:candidate.gateLintelClearHeight,
+      clearHeightUncertainty:candidate.gateLintelCameraHeightUncertainty,
+      floorDatumUncertainty:candidate.gateLintelFloorUncertainty,
+      thickness:candidate.gateLintelThickness,
+      thicknessUncertainty:candidate.gateLintelThicknessUncertainty,
+      depth:candidate.gateLintelDepth,
+      depthUncertainty:candidate.gateLintelDepthUncertainty
+     }
+    });
+   }catch(error){
+    errors.push('Верхняя перемычка: '+(error&&error.message?error.message:'некорректные измерения.'));
+   }
+  }
  }
  const parameterUncertaintyMap={
   wheelbaseUncertainty:'wheelbase',
@@ -2359,6 +2418,8 @@ function applyCameraGateRegistration(registration){
  const headingDeg=registration&&registration.headingDeg;
  const widthUncertaintyBound=registration&&registration.widthUncertaintyBound!==undefined?
   registration.widthUncertaintyBound:0;
+ const clearHeight=registration&&registration.clearHeight;
+ const heightUncertaintyBound=registration&&registration.heightUncertaintyBound;
  const readGateSetting=(id,key)=>{
   const input=$(id);
   if(!input)return cfg[key];
@@ -2369,6 +2430,16 @@ function applyCameraGateRegistration(registration){
  const depth=readGateSetting('gateDepth','gateDepth');
  const positionUncertainty=readGateSetting('gatePositionUncertainty','gatePositionUncertainty');
  const headingUncertaintyDeg=readGateSetting('gateHeadingUncertaintyDeg','gateHeadingUncertaintyDeg');
+ const lintelEnabled=!!($('gateLintelEnabled')&&$('gateLintelEnabled').checked);
+ const lintel=lintelEnabled?{
+  clearHeight,
+  clearHeightUncertainty:heightUncertaintyBound,
+  floorDatumUncertainty:readGateSetting('gateLintelFloorUncertainty','gateLintelFloorUncertainty'),
+  thickness:readGateSetting('gateLintelThickness','gateLintelThickness'),
+  thicknessUncertainty:readGateSetting('gateLintelThicknessUncertainty','gateLintelThicknessUncertainty'),
+  depth:readGateSetting('gateLintelDepth','gateLintelDepth'),
+  depthUncertainty:readGateSetting('gateLintelDepthUncertainty','gateLintelDepthUncertainty')
+ }:null;
  if(![centerX,centerY,clearWidth,headingDeg,widthUncertaintyBound,
       postWidth,depth,positionUncertainty,headingUncertaintyDeg].every(Number.isFinite)||
     Math.abs(centerX)>100||Math.abs(centerY)>100||
@@ -2377,18 +2448,22 @@ function applyCameraGateRegistration(registration){
     widthUncertaintyBound>=clearWidth-0.05||
     postWidth<0.05||postWidth>2||depth<0.05||depth>10||
     positionUncertainty<0||positionUncertainty>2||
-    headingUncertaintyDeg<0||headingUncertaintyDeg>45){
+    headingUncertaintyDeg<0||headingUncertaintyDeg>45||
+    !Number.isFinite(clearHeight)||clearHeight<=0.5||clearHeight>15||
+    !Number.isFinite(heightUncertaintyBound)||heightUncertaintyBound<=0||heightUncertaintyBound>2){
   return false;
  }
  try{
-  planner.createGateObstacles({
+  const gate={
    centerX,centerY,clearWidth,
    postWidth,depth,
    heading:headingDeg*Math.PI/180,
    widthUncertainty:widthUncertaintyBound,
    positionUncertainty,
    headingUncertaintyDeg
-  });
+  };
+  if(lintelEnabled)gate.lintel=lintel;
+  planner.createGateObstacles(gate);
  }catch(error){
   return false;
  }
@@ -2401,17 +2476,21 @@ function applyCameraGateRegistration(registration){
  cfg.gateDepth=depth;
  cfg.gatePositionUncertainty=positionUncertainty;
  cfg.gateHeadingUncertaintyDeg=headingUncertaintyDeg;
+ cfg.gateLintelEnabled=lintelEnabled;
+ cfg.gateLintelClearHeight=clearHeight;
+ cfg.gateLintelCameraHeightUncertainty=heightUncertaintyBound;
  $('gateWidth').value=clearWidth.toFixed(2);
  $('gateWidthUncertainty').value=widthUncertaintyBound.toFixed(3);
  $('gateCenterX').value=centerX.toFixed(2);
  $('gateCenterY').value=centerY.toFixed(2);
  $('gateHeadingDeg').value=headingDeg.toFixed(2);
+ $('gateLintelClearHeight').value=clearHeight.toFixed(3);
+ $('gateLintelCameraHeightUncertainty').value=heightUncertaintyBound.toFixed(3);
  $('gateEnabled').checked=true;
  invalidateRouteForSettingsChange();
  draw();
  return true;
 }
-
 window.TruckVisionApplyGateRegistration=applyCameraGateRegistration;
 
 function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,poseUncertainty){
