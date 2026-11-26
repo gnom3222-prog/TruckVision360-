@@ -366,6 +366,13 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <label for="auxiliaryEnvelopes">JSON-массив измеренных дополнительных оболочек</label>
 <textarea id="auxiliaryEnvelopes" rows="5" spellcheck="false">[]</textarea>
 <p class="small">Добавляйте только фактически измеренные детали, которые выступают за кузов или шинные оболочки. Каждая запись задаёт name, anchor (tractor-front-axle, tractor-rear-axle, trailer-axle-1, trailer-axle-2 или trailer-axle-3), longitudinalOffset, lateralOffset, length, width, headingOffsetDeg и uncertaintyMargin (все линейные размеры в метрах, угол в градусах). Смещения задаются в локальной системе выбранной оси; положительное longitudinalOffset направлено вперёд, положительное lateralOffset — влево. uncertaintyMargin расширяет каждую сторону прямоугольника и должен быть обоснован измерением. Пример: [{"name":"Корпус ступицы 1-й оси","anchor":"trailer-axle-1","longitudinalOffset":0,"lateralOffset":1.45,"length":0.55,"width":0.35,"headingOffsetDeg":0,"uncertaintyMargin":0.03}]. Не вводите примерные размеры. Если точные габариты узла неизвестны, оставьте массив пустым и учитывайте, что ступицы/подвеска не проверяются отдельно; маршрутная оценка покажет это ограничение. Оболочки включаются в столкновения и swept-границы только в измеренной конфигурации. Это прямоугольные статические приближения, не модель деформации, движения подвески или деталей под нагрузкой.</p>
+<div class="section">Вертикальные профили и препятствия · измерения относительно местной поверхности дороги</div>
+<label for="vehicleVerticalProfiles">JSON-объект высотных профилей компонентов автопоезда</label>
+<textarea id="vehicleVerticalProfiles" rows="6" spellcheck="false">{}</textarea>
+<p class="small">Допустимые ключи: tractor-body, tractor-cab, trailer-body, mirror, tractor-wheel, trailer-wheel. Для каждого профиля задайте zMin, zMax и при необходимости uncertaintyMargin в метрах относительно местной поверхности дороги. Высоты не имеют заводских значений по умолчанию: вводите только измеренные диапазоны. Отсутствующий профиль не считается нулевой высотой: при вертикальном препятствии используется только нижняя оценка расстояния по горизонтальной проекции; если она меньше требуемого зазора, маршрут блокируется.</p>
+<label for="verticalObstacles">JSON-массив вертикальных препятствий</label>
+<textarea id="verticalObstacles" rows="5" spellcheck="false">[]</textarea>
+<p class="small">Каждое препятствие должно иметь name, zMin, zMax и горизонтальный контур x/y/w/h либо выпуклый polygon в координатах карты. zMin/zMax и zUncertainty задаются в метрах относительно той же местной поверхности дороги. Пример структуры, не реальные размеры: [{"name":"Балка над проёмом","x":12,"y":0,"w":4,"h":0.2,"zMin":3.8,"zMax":4.1,"zUncertainty":0.05}]. При известном высотном профиле компонента рассчитывается расстояние между горизонтальными проекциями и вертикальными интервалами. Если профиль компонента неизвестен, вертикальное разделение не предполагается. Карта остаётся двумерной и показывает горизонтальную проекцию; вертикальная проверка отражается в диагностике маршрута. Неровный пол, наклон площадки, подъём/опускание подвески, крен, динамика груза и деформация не моделируются.</p>
 <div class="section">Неопределённость размеров автопоезда</div>
 <div class="grid">
 <div><label for="wheelbaseUncertainty">Колёсная база ±, м</label><input id="wheelbaseUncertainty" type="number" min="0" max="2" value="0" step="0.01"></div>
@@ -477,10 +484,10 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 </section>
 </main>
 
-<script src="vehicle-physics.js?v=20261126-9"></script>
-<script src="articulated-planner.js?v=20261126-5"></script>
-<script src="sensor-perception.js?v=20261124-1"></script>
-<script src="truckvision.js?v=20261126-10"></script>
+<script src="vehicle-physics.js?v=20261126-10"></script>
+<script src="articulated-planner.js?v=20261126-6"></script>
+<script src="sensor-perception.js?v=20261126-2"></script>
+<script src="truckvision.js?v=20261126-11"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261126-2"></script>
 <script src="camera-measure.js?v=20261126-2"></script>
