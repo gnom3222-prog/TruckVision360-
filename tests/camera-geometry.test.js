@@ -213,11 +213,11 @@ test('camera registration carries a two-sigma width envelope into gate geometry'
  assert.equal(registration.widthUncertaintyMultiplier,2);
  assert.equal(registration.widthUncertaintyModel,'2-sigma-normal-approximation');
  assert.throws(
-  ()=>camera.registerGateOnMap({width:4,sigmaWidth:-0.01,points,...stableUncertainty},{x:0,y:0},0),
+  ()=>camera.registerGateOnMap({width:4,points,...stableUncertainty,sigmaWidth:-0.01},{x:0,y:0},0),
   /1σ ширины/
  );
  assert.throws(
-  ()=>camera.registerGateOnMap({width:4,sigmaWidth:2.1,points,...stableUncertainty},{x:0,y:0},0),
+  ()=>camera.registerGateOnMap({width:4,points,...stableUncertainty,sigmaWidth:2.1},{x:0,y:0},0),
   /превышает поддерживаемый предел/
  );
 });
