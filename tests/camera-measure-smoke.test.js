@@ -310,6 +310,8 @@ test('measured gate height is exposed only as an optional overhead lintel input'
  assert.match(app,/registration\.heightUncertaintyBound/);
  assert.match(app,/gateLintelEnabled/);
  assert.match(app,/lintelEnabled\)gate\.lintel=lintel/);
+ assert.match(app,/geometry\.lintel=\{/);
+ assert.match(app,/planner\.createGateObstacles\(gateGeometry\)/);
  assert.match(html,/вертикальный datum пола/);
 });
 
