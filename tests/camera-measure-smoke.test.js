@@ -316,6 +316,24 @@ test('stopping the camera clears a partial obstacle repeatability series',async(
  camera.fire('cameraStop','click');
 });
 
+test('an ended camera track clears a partial obstacle repeatability series before restart',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ await measureObstacleFrame(camera,null);
+ assert.match(camera.elements.cameraObstacleRepeatabilityStatus.textContent,/1\\/3 отдельных кадров/);
+ camera.endTrack();
+ assert.match(camera.elements.cameraObstacleRepeatabilityStatus.textContent,/Повторяемость препятствия не оценена/);
+ assert.equal(camera.obstacleRegistrations.length,0);
+ await camera.fire('cameraStart','click');
+ assert.equal(camera.permissionRequests,2,'a restarted camera must request a new stream');
+ camera.setVideoTime(0.2);
+ await measureObstacleFrame(camera,null);
+ assert.match(camera.elements.cameraObstacleRepeatabilityStatus.textContent,/1\\/3 отдельных кадров/);
+ assert.doesNotMatch(camera.elements.cameraObstacleRepeatabilityStatus.textContent,/2\\/3 отдельных кадров/);
+ assert.equal(camera.obstacleRegistrations.length,0);
+ camera.fire('cameraStop','click');
+});
+
 test('camera obstacle measurement cannot reuse one frozen frame',async()=>{
  const camera=bootCamera();
  await camera.fire('cameraStart','click');
