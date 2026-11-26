@@ -407,7 +407,10 @@
      !Number.isFinite(measurement.width)||measurement.width<=0||measurement.width>50){
    throw new Error('Измерение ворот должно содержать четыре угла и положительную конечную ширину.');
   }
-  const sigmaWidth=measurement.sigmaWidth??0;
+  if(measurement.nonlinearSensitivityAvailable!==true||measurement.nonlinearWarning===true){
+   throw new Error('Нелинейная проверка неопределённости не пройдена. Повторите калибровку с более крупным эталоном и устойчивым ракурсом; измерение нельзя переносить на карту.');
+  }
+  const sigmaWidth=measurement.sigmaWidth;
   if(!Number.isFinite(sigmaWidth)||sigmaWidth<0||sigmaWidth>25){
    throw new Error('Оценка 1σ ширины должна быть конечной и неотрицательной.');
   }
@@ -459,7 +462,10 @@
    widthSigma:sigmaWidth,
    widthUncertaintyBound,
    widthUncertaintyMultiplier:2,
-   widthUncertaintyModel:sigmaWidth>0?'2-sigma-normal-approximation':'not-provided',
+   widthUncertaintyModel:'2-sigma-normal-approximation',
+   nonlinearSensitivityModel:measurement.nonlinearSensitivityModel,
+   nonlinearMismatchWidth:measurement.nonlinearMismatchWidth,
+   maxAxisAsymmetryRatio:measurement.maxAxisAsymmetryRatio,
    openingStart:{x:anchor.x-half*ux,y:anchor.y-half*uy},
    openingEnd:{x:anchor.x+half*ux,y:anchor.y+half*uy},
    sourceAxisLength,
