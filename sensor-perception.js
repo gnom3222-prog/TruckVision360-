@@ -66,6 +66,8 @@
     {x:x+hl*ux+hw*nx,y:y+hl*uy+hw*ny},
     {x:x-hl*ux+hw*nx,y:y-hl*uy+hw*ny}
    ];
+   // verticalRange is already expressed relative to the map's local ground plane;
+   // this adapter preserves it but does not infer or transform height from the 2D pose.
    const vertical=o.verticalRange;
    return {kind:'perception-obstacle',id:o.id,name:o.type+' · '+o.id,source:o.source,confidence:o.confidence,
     detectedAt:frame.timestamp,polygon,
