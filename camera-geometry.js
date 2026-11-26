@@ -479,12 +479,14 @@
    throw new Error('Форма измеренного проёма заметно отличается от прямоугольника. Проверьте четыре угла и положение эталона в той же плоскости.');
   }
   if(repeatability!==undefined&&repeatability!==null){
-   if(repeatability.withinTolerance!==true||repeatability.count<3||
+   if(repeatability.withinTolerance!==true||repeatability.count<3||repeatability.count>10||
       repeatability.status!=='repeatable-within-operator-tolerance'||
       ![repeatability.meanWidth,repeatability.meanHeight,repeatability.widthTolerance,repeatability.heightTolerance,
         repeatability.widthEnvelopeBound,repeatability.heightEnvelopeBound].every(Number.isFinite)||
       repeatability.widthTolerance<=0||repeatability.heightTolerance<=0||
-      repeatability.widthEnvelopeBound<=0||repeatability.heightEnvelopeBound<=0){
+      repeatability.widthEnvelopeBound<=0||repeatability.heightEnvelopeBound<=0||
+      repeatability.widthEnvelopeBound+1e-9<2*measurement.sigmaWidth||
+      repeatability.heightEnvelopeBound+1e-9<2*measurement.sigmaHeight){
     throw new Error('Повторяемость ворот не подтверждена. Измерение нельзя переносить на карту.');
    }
   }
@@ -536,6 +538,7 @@
    widthUncertaintyBound,
    widthUncertaintyMultiplier:2,
    widthUncertaintyModel:repeatability?repeatability.uncertaintyModel:'2-sigma-normal-approximation',
+   heightUncertaintyBound:repeatability?repeatability.heightEnvelopeBound:2*measurement.sigmaHeight,
    repeatability:repeatability?{count:repeatability.count,meanWidth:repeatability.meanWidth,meanHeight:repeatability.meanHeight,sampleStdDevWidth:repeatability.sampleStdDevWidth,sampleStdDevHeight:repeatability.sampleStdDevHeight,rangeWidth:repeatability.rangeWidth,rangeHeight:repeatability.rangeHeight,widthTolerance:repeatability.widthTolerance,heightTolerance:repeatability.heightTolerance,heightEnvelopeBound:repeatability.heightEnvelopeBound}:null,
    nonlinearSensitivityModel:measurement.nonlinearSensitivityModel,
    nonlinearMismatchWidth:measurement.nonlinearMismatchWidth,
