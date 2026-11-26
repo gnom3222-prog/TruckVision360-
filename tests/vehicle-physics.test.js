@@ -789,7 +789,7 @@ test('trailer axle-specific tire group widths are range-checked against single t
  };
  const tooNarrow=physics.validateVehicleParams({...base,trailerAxle2TireGroupWidth:0.4});
  assert.ok(tooNarrow.some(message=>message.includes('trailerAxle2TireGroupWidth')));
- const overlapping=physics.validateVehicleParams({...base,trailerAxle3TireGroupWidth:2.79});
+ const overlapping=physics.validateVehicleParams({...base,trailerTrack:1.2,trailerAxle3TireGroupWidth:1.2});
  assert.ok(overlapping.some(message=>message.includes('trailerAxle3TireGroupWidth')));
  const valid=physics.validateVehicleParams({...base,trailerTireGroupWidth:0.7,trailerAxle1TireGroupWidth:0.74});
  assert.deepEqual(valid,[]);
