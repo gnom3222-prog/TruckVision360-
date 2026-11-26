@@ -91,7 +91,7 @@ test('per-wheel clearance reports the individual outer tire as the limiting obst
  const obstacle={x:firstAxle.x,y:outerEdgeY+0.05,w:0.1,h:0.1,name:'outer dual tire post'};
  const result=planner.analyzeWheelTrajectoryClearance([q],[obstacle],pairParams);
  assert.equal(result.wheels.length,18);
- assert.equal(result.limitingWheel.name,'левое наружная шина 1-й оси полуприцепа');
+ assert.equal(result.limitingWheel.name,'левое колесо 1-й оси полуприцепа — наружная покрышка');
  assert.equal(result.limitingWheel.limitingDetail.obstacle,'outer dual tire post');
 });
 
@@ -109,8 +109,8 @@ test('planner reconstructs and checks the same variable tire set at control and 
  assert.equal(result.wheels.length,18);
  assert.equal(result.controlStartWheelChecks,18);
  assert.equal(result.segmentsWithIntermediateKinematicSamples,1);
- const outer=result.wheels.find(wheel=>wheel.name==='левое наружная шина 1-й оси полуприцепа');
- const inner=result.wheels.find(wheel=>wheel.name==='левое внутренняя шина 1-й оси полуприцепа');
+ const outer=result.wheels.find(wheel=>wheel.name==='левое колесо 1-й оси полуприцепа — наружная покрышка');
+ const inner=result.wheels.find(wheel=>wheel.name==='левое колесо 1-й оси полуприцепа — внутренняя покрышка');
  assert.ok(outer&&inner);
  assert.ok(outer.limitingDetail.displacementRate>inner.limitingDetail.displacementRate,
   'outer tire center must include its additional lateral offset in the swept-rate bound');
