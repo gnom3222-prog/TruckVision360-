@@ -68,7 +68,7 @@ function bootCamera(options={}){
  };
  return {
   elements,windowListeners,fire,tap,appliedRegistrations,obstacleRegistrations,
-  setVisibility(state){document.visibilityState=state;for(const fn of documentListeners.visibilitychange||[])fn();},
+  setVisibility(state){sandbox.document.visibilityState=state;for(const fn of documentListeners.visibilitychange||[])fn();},
   endTrack(index=mediaTracks.length-1){mediaTracks[index]?.emit('ended');},
   get clearCalls(){return clearCalls;},
   get permissionRequests(){return permissionRequests;},
