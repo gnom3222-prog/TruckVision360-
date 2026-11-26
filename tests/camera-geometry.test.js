@@ -15,10 +15,10 @@ const stableUncertainty={
  nonlinearSensitivityModel:'axiswise-one-sigma-finite-perturbations',
  nonlinearMismatchWidth:0,maxAxisAsymmetryRatio:0
 };
-const repeatabilityFor=(sigmaWidth=0.01,sigmaHeight=0.02)=>camera.summarizeRepeatability([
- {width:4,height:2,sigmaWidth,sigmaHeight},
- {width:4,height:2,sigmaWidth,sigmaHeight},
- {width:4,height:2,sigmaWidth,sigmaHeight}
+const repeatabilityFor=(sigmaWidth=0.01,sigmaHeight=0.02,width=4,height=2)=>camera.summarizeRepeatability([
+ {width,height,sigmaWidth,sigmaHeight},
+ {width,height,sigmaWidth,sigmaHeight},
+ {width,height,sigmaWidth,sigmaHeight}
 ],{widthTolerance:0.02,heightTolerance:0.02});
 
 test('camera calibration accepts a convex four-corner reference in clockwise order',()=>{
@@ -232,7 +232,7 @@ test('camera registration carries a two-sigma width envelope into gate geometry'
  near(registration.widthSigma,0.03);
  near(registration.widthUncertaintyBound,0.06);
  assert.equal(registration.widthUncertaintyMultiplier,2);
- assert.equal(registration.widthUncertaintyModel,'2-sigma-normal-approximation');
+ assert.equal(registration.widthUncertaintyModel,'observed-range-plus-per-frame-2sigma-screening');
  assert.throws(
   ()=>camera.registerGateOnMap({width:4,height:2,points,...stableUncertainty,sigmaWidth:-0.01},{x:0,y:0},0,repeatabilityFor()),
   /Оценки 1σ ширины и высоты/
@@ -341,11 +341,11 @@ test('gate map registration refuses measurements without a successful nonlinear 
   sigmaReferenceHeight:0.002
  });
  assert.throws(
-  ()=>camera.registerGateOnMap({...measurement,nonlinearWarning:true},{x:12,y:0},Math.PI/2,repeatabilityFor(measurement.sigmaWidth,measurement.sigmaHeight)),
+  ()=>camera.registerGateOnMap({...measurement,nonlinearWarning:true},{x:12,y:0},Math.PI/2,repeatabilityFor(measurement.sigmaWidth,measurement.sigmaHeight,measurement.width,measurement.height)),
   /Нелинейная проверка неопределённости/
  );
  assert.throws(
-  ()=>camera.registerGateOnMap({...measurement,nonlinearSensitivityAvailable:undefined},{x:12,y:0},Math.PI/2,repeatabilityFor(measurement.sigmaWidth,measurement.sigmaHeight)),
+  ()=>camera.registerGateOnMap({...measurement,nonlinearSensitivityAvailable:undefined},{x:12,y:0},Math.PI/2,repeatabilityFor(measurement.sigmaWidth,measurement.sigmaHeight,measurement.width,measurement.height)),
   /Нелинейная проверка неопределённости/
  );
 });
