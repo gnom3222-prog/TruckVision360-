@@ -2641,11 +2641,10 @@ $('gateEnabled').onchange=()=>{
 };
 $('gateLintelEnabled').onchange=()=>{
  const result=readSettings();
+ invalidateRouteForSettingsChange();
  if(!result.ok){
   $('routeAdvice').textContent='Параметры верхней перемычки не применены: '+result.errors.join(' ');
   $('difficultyAdvice').textContent='Построение маршрута заблокировано до проверки измерений перемычки.';
- }else if(result.changed){
-  invalidateRouteForSettingsChange();
  }
  draw();
 };
