@@ -151,32 +151,35 @@
    }
    const {
     clearHeight,clearHeightUncertainty,floorDatumUncertainty,
-    thickness,thicknessUncertainty,depth:lintelDepth,depthUncertainty
+    thickness,thicknessUncertainty,span,spanUncertainty,
+    depth:lintelDepth,depthUncertainty
    }=lintel;
    if(![
     clearHeight,clearHeightUncertainty,floorDatumUncertainty,
-    thickness,thicknessUncertainty,lintelDepth,depthUncertainty
+    thickness,thicknessUncertainty,span,spanUncertainty,lintelDepth,depthUncertainty
    ].every(Number.isFinite)||
       clearHeight<=0.5||clearHeight>15||
       clearHeightUncertainty<=0||clearHeightUncertainty>2||
       floorDatumUncertainty<0||floorDatumUncertainty>1||
       thickness<=0.02||thickness>2||
       thicknessUncertainty<0||thicknessUncertainty>1||
-      lintelDepth<=0.05||lintelDepth>10||
-      depthUncertainty<0||depthUncertainty>2){
+      span<=0||span>30||spanUncertainty<0||spanUncertainty>2||
+      lintelDepth<=0.05||lintelDepth>10||depthUncertainty<0||depthUncertainty>2){
     throw new Error('Для верхней перемычки нужны измеренные высота проёма, толщина, глубина и конечные неотрицательные допуски.');
    }
    const verticalUncertainty=clearHeightUncertainty+floorDatumUncertainty+thicknessUncertainty;
    const beamBottom=clearHeight;
    const beamTop=clearHeight+thickness;
-   const beamDepth=lintelDepth+2*depthUncertainty;
+   const beamWidth=span+spanUncertainty;
+   const beamDepth=lintelDepth+depthUncertainty;
    if(verticalUncertainty>2||beamBottom-verticalUncertainty<=0.05||
-      beamTop+verticalUncertainty>30||beamDepth>10){
+      beamTop+verticalUncertainty>30||beamDepth>10||
+      lintelDepth-depthUncertainty<=0.05||
+      span-spanUncertainty<clearWidth-widthUncertainty){
     throw new Error('Интервальная оболочка верхней перемычки выходит за допустимые вертикальные или горизонтальные границы.');
    }
    const ux=Math.cos(heading),uy=Math.sin(heading);
    const nx=-uy,ny=ux;
-   const beamWidth=clearWidth+2*postWidth+widthUncertainty;
    const point=(along,across)=>({
     x:centerX+along*ux+across*nx,
     y:centerY+along*uy+across*ny
@@ -205,6 +208,8 @@
      floorDatumUncertainty,
      thickness,
      thicknessUncertainty,
+     span,
+     spanUncertainty,
      depth:lintelDepth,
      depthUncertainty,
      widthUncertainty,
