@@ -166,7 +166,6 @@ say('Препятствие добавлено на карту: размеры '
      Math.abs(tolerances.heightTolerance-gateRepeatabilityTolerances.heightTolerance)>1e-12)){
   throw Error('Допуски повторяемости изменились внутри серии. Очистите серию и начните заново.');
  }
- if(!gateRepeatabilityTolerances)gateRepeatabilityTolerances=tolerances;
  const mapPose=readGateMapPose();
  if(gateRepeatabilityPose&&(
     Math.abs(mapPose.anchor.x-gateRepeatabilityPose.anchor.x)>1e-9||
@@ -174,6 +173,7 @@ say('Препятствие добавлено на карту: размеры '
     Math.abs(mapPose.headingDeg-gateRepeatabilityPose.headingDeg)>1e-9)){
   throw Error('Координаты центра или направление ворот изменились внутри серии. Очистите серию и начните заново.');
  }
+ if(!gateRepeatabilityTolerances)gateRepeatabilityTolerances=tolerances;
  if(!gateRepeatabilityPose)gateRepeatabilityPose=mapPose;
  gateReadings.push({width:w,height:h,sigmaWidth:measurement.sigmaWidth,sigmaHeight:measurement.sigmaHeight});
  lastGateMeasurementFrameId=frameCaptureId;
