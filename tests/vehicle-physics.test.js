@@ -1054,3 +1054,124 @@ test('road-surface calibration rejects missing uncertainty bounds and excessive 
  assert.ok(physics.validateRoadSurface(steep).some(error=>error.includes('gradeX')));
  assert.deepEqual(physics.validateRoadSurface(null),[]);
 });
+
+
+function makeSuspensionTravelPoint(compression=0.03,rebound=0.03,uncertainty=0.005){
+ return {compression,rebound,uncertainty};
+}
+function makeSuspensionTravelConfig(point=makeSuspensionTravelPoint()){
+ const axle=()=>({left:{...point},right:{...point}});
+ return {
+  tractor:{front:axle(),rear:axle()},
+  trailer:{axle1:axle(),axle2:axle(),axle3:axle()}
+ };
+}
+const suspensionGeometryParams={
+ wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+ trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+ tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.11
+};
+
+test('suspension travel requires every axle side and explicit compression, rebound, and uncertainty',()=>{
+ const incomplete=makeSuspensionTravelConfig();
+ delete incomplete.trailer.axle3.right;
+ assert.ok(physics.validateSuspensionTravel(incomplete,suspensionGeometryParams).some(
+  error=>error.includes('trailer.axle3.right')
+ ));
+ const missingBound=makeSuspensionTravelConfig();
+ delete missingBound.tractor.front.left.uncertainty;
+ assert.ok(physics.validateVehicleParams({
+  ...suspensionGeometryParams,suspensionTravel:missingBound
+ }).some(error=>error.includes('uncertainty')));
+ assert.deepEqual(physics.validateSuspensionTravel(null,suspensionGeometryParams),[]);
+});
+
+test('bounded rigid-plane suspension envelope includes heave pitch and roll over tractor body corners',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const polygon=physics.vehiclePolygons(q,suspensionGeometryParams)[0];
+ const config=makeSuspensionTravelConfig();
+ config.tractor.front.left.compression=0.06;
+ config.tractor.front.right.rebound=0.07;
+ const range=physics.suspensionTravelDisplacementRange(
+  polygon,q,{...suspensionGeometryParams,suspensionTravel:config},'tractor'
+ );
+ assert.equal(range.status,'bounded-rigid-plane-support-envelope');
+ assert.equal(range.model,'independent-support-intervals-linearized-rigid-plane');
+ assert.ok(range.min<0);
+ assert.ok(range.max>0);
+ assert.ok(range.max-range.min>0.1,'independent support travel should widen the body envelope');
+});
+
+test('independent trailer axle support intervals produce different vertical envelopes',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const polygon=physics.vehiclePolygons(q,suspensionGeometryParams)[2];
+ const first=makeSuspensionTravelConfig(makeSuspensionTravelPoint(0,0,0));
+ first.trailer.axle1.left.compression=0.06;
+ const third=makeSuspensionTravelConfig(makeSuspensionTravelPoint(0,0,0));
+ third.trailer.axle3.left.compression=0.06;
+ const firstRange=physics.suspensionTravelDisplacementRange(
+  polygon,q,{...suspensionGeometryParams,suspensionTravel:first},'trailer'
+ );
+ const thirdRange=physics.suspensionTravelDisplacementRange(
+  polygon,q,{...suspensionGeometryParams,suspensionTravel:third},'trailer'
+ );
+ assert.ok(Math.abs(firstRange.min-thirdRange.min)>1e-5||
+  Math.abs(firstRange.max-thirdRange.max)>1e-5,
+ 'moving a different axle support must change the trailer-body interval');
+});
+
+test('suspension travel expands measured body and cab profiles but leaves road-contact tire profiles unchanged',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const config=makeSuspensionTravelConfig(makeSuspensionTravelPoint(0.03,0.04,0.005));
+ const p={
+  ...suspensionGeometryParams,suspensionTravel:config,
+  vehicleVerticalProfiles:{
+   'tractor-body':{zMin:0.8,zMax:1.2},
+   'tractor-cab':{zMin:1.8,zMax:2.2},
+   'trailer-body':{zMin:1,zMax:4},
+   'tractor-front-wheel':{zMin:0,zMax:0.9}
+  }
+ };
+ const parts=physics.vehicleCollisionParts(q,p,0,true);
+ const tractorBody=parts[0].components.find(component=>component.name==='основной контур тягача');
+ const cab=parts[1].components.find(component=>component.name==='кабина');
+ const trailer=parts[2].components.find(component=>component.name==='кузов полуприцепа');
+ assert.equal(tractorBody.verticalRange.suspensionStatus,'bounded-rigid-plane-support-envelope');
+ assert.ok(tractorBody.verticalRange.min<0.8&&tractorBody.verticalRange.max>1.2);
+ assert.ok(cab.verticalRange.min<1.8&&cab.verticalRange.max>2.2);
+ assert.ok(trailer.verticalRange.min<1&&trailer.verticalRange.max>4);
+ const frontWheel=physics.wheelFootprints(q,p,0).find(wheel=>
+  wheel.vehiclePart==='тягач'&&wheel.axleIndex===1
+ );
+ assert.deepEqual(frontWheel.verticalRange,{min:0,max:0.9});
+});
+
+test('auxiliary envelopes move with suspension only when body attachment is explicit',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const config=makeSuspensionTravelConfig(makeSuspensionTravelPoint(0.02,0.05,0.005));
+ const base={
+  ...suspensionGeometryParams,suspensionTravel:config,
+  auxiliaryEnvelopes:[{
+   name:'Frame bracket',anchor:'tractor-front-axle',
+   longitudinalOffset:0,lateralOffset:0,length:0.4,width:0.2,
+   headingOffsetDeg:0,uncertaintyMargin:0,zMin:1,zMax:1.5
+  }]
+ };
+ const axleMounted=physics.auxiliaryEnvelopePolygons(q,base)[0];
+ const bodyMounted=physics.auxiliaryEnvelopePolygons(q,{
+  ...base,auxiliaryEnvelopes:[{...base.auxiliaryEnvelopes[0],suspensionAttachment:'tractor-body'}]
+ })[0];
+ assert.deepEqual(axleMounted.verticalRange,{min:1,max:1.5});
+ assert.equal(bodyMounted.verticalRange.suspensionStatus,'bounded-rigid-plane-support-envelope');
+ assert.ok(bodyMounted.verticalRange.max>axleMounted.verticalRange.max);
+});
+
+test('suspension travel rejects derived pitch or roll slopes outside the linearized model bound',()=>{
+ const config=makeSuspensionTravelConfig(makeSuspensionTravelPoint(0,0,0));
+ config.trailer.axle1.left.compression=0.25;
+ config.trailer.axle1.right.rebound=0.25;
+ config.trailer.axle1.left.uncertainty=0.05;
+ config.trailer.axle1.right.uncertainty=0.05;
+ const errors=physics.validateSuspensionTravel(config,suspensionGeometryParams);
+ assert.ok(errors.some(error=>error.includes('превышает 0,25')));
+});
