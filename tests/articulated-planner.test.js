@@ -239,6 +239,7 @@ test('gate helper adds an oriented vertical lintel prism with measured dimension
  const beam=gate[2];
  assert.equal(beam.name,'Верхняя перемычка ворот');
  assert.equal(beam.kind,'gate-lintel');
+ assert.equal(beam.nominalPolygon,undefined,'the inflated polygon must remain the active map/collision contour');
  assert.equal(beam.zMin,3.8);
  assert.equal(beam.zMax,4.05);
  assert.equal(beam.zUncertainty,0.06);
