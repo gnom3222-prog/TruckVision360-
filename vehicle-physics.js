@@ -53,8 +53,8 @@
   const tireWidthUncertainty=Number.isFinite(params.tireWidthUncertainty)?Math.max(0,params.tireWidthUncertainty):0;
   const minimumGroupWidth=tireWidth+tireWidthUncertainty;
   const groups=[
-   ['tractorRearTireGroupWidth','tractorRearTireGroupWidthUncertainty','задней группы шин тягача'],
-   ['trailerTireGroupWidth','trailerTireGroupWidthUncertainty','общей группы шин полуприцепа'],
+   ['tractorRearTireGroupWidth','tractorRearTireGroupWidthUncertainty','группы задних шин тягача'],
+   ['trailerTireGroupWidth','trailerTireGroupWidthUncertainty','группы шин полуприцепа'],
    ['trailerAxle1TireGroupWidth','trailerAxle1TireGroupWidthUncertainty','группы шин 1-й оси полуприцепа'],
    ['trailerAxle2TireGroupWidth','trailerAxle2TireGroupWidthUncertainty','группы шин 2-й оси полуприцепа'],
    ['trailerAxle3TireGroupWidth','trailerAxle3TireGroupWidthUncertainty','группы шин 3-й оси полуприцепа']
