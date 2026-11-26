@@ -1468,7 +1468,7 @@ test('per-wheel clearance expands sampled and circumscribed envelopes for config
  };
  const q={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
  const firstAxle=physics.trailerAxlePoints(q,base)[0];
- const obstacle={x:firstAxle.x,y:1.72,w:0.1,h:0.1,name:'dual tire outer edge'};
+ const obstacle={x:firstAxle.x,y:1.92,w:0.1,h:0.1,name:'dual tire outer edge'};
  const single=planner.analyzeWheelTrajectoryClearance([q],[obstacle],base);
  const dual=planner.analyzeWheelTrajectoryClearance([q],[obstacle],{
   ...base,tractorRearTireGroupWidth:0.72,trailerTireGroupWidth:0.72
