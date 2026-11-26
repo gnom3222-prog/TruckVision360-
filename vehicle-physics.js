@@ -147,7 +147,7 @@
 
  function validateAuxiliaryEnvelopes(envelopes){
   const errors=[];
-  if(envelopes===undefined||envelopes===null)return errors;
+  if(envelopes===undefined)return errors;
   if(!Array.isArray(envelopes)){
    return ['Дополнительные оболочки осевых узлов должны быть массивом JSON.'];
   }
