@@ -300,7 +300,7 @@ test('measured gate height is exposed only as an optional overhead lintel input'
  const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
  const app=fs.readFileSync(path.join(__dirname,'..','truckvision.js'),'utf8');
  for(const id of [
-  'gateLintelEnabled','gateLintelClearHeight','gateLintelCameraHeightUncertainty',
+  'gateLintelEnabled','gateLintelAlignmentConfirmed','gateLintelClearHeight','gateLintelCameraHeightUncertainty',
   'gateLintelFloorUncertainty','gateLintelThickness','gateLintelThicknessUncertainty',
   'gateLintelSpan','gateLintelSpanUncertainty','gateLintelDepth','gateLintelDepthUncertainty'
  ]){
