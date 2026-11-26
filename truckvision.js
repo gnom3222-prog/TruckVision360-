@@ -993,9 +993,8 @@ function planAStar(start,goal){
 function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDetail=null,trajectoryClearance=null){
  let length=0,gearChanges=0,steeringChanges=0,initialSteeringActions=0,reverseDistance=0,reverseSegments=0;
  let minClearance=Infinity,minClearanceDetail=null,maxBeta=0,collision=false;
- // Obstacle visibility is a drawing preference; it must never disable route clearance checks.
- const routeObstacles=sceneObstacles();
- const checkClearance=planner.createClearanceChecker(routeObstacles,cfg);
+ const routeObstacles=showObstacles?sceneObstacles():[];
+ const checkClearance=showObstacles?planner.createClearanceChecker(routeObstacles,cfg):null;
  let previousGear=path[0]?.gear||1,previousSteer=path[0]?.steer||0;
  let previousGearKnown=path[0]?.gearKnown!==false;
  let previousSteerKnown=path[0]?.steerKnown!==false,wasReverse=false;
@@ -1023,7 +1022,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   }else wasReverse=currentGear<0;
   previousGear=currentGear;
   previousSteer=currentSteer;
-  if(routeObstacles.length){
+  if(showObstacles){
    const c=checkClearance(q);
    if(c.distance<minClearance){
     minClearance=c.distance;
@@ -1065,7 +1064,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   };
  });
  let wheelClearance=null,wheelClearanceError=null;
- if(routeObstacles.length){
+ if(showObstacles){
   try{
    const wheelObstacles=routeObstacles.map(obstacle=>({
     name:obstacle.name||'препятствие',polygon:obstacleEnvelopePolygon(obstacle),
