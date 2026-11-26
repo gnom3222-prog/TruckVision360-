@@ -65,6 +65,16 @@ const cfg={
  gateHeadingUncertaintyDeg:0,
  gatePostWidth:0.25,
  gateDepth:0.6,
+ gateLintelEnabled:false,
+ gateLintelClearHeight:0,
+ gateLintelCameraHeightUncertainty:0,
+ gateLintelFloorUncertainty:0,
+ gateLintelThickness:0,
+ gateLintelThicknessUncertainty:0,
+ gateLintelSpan:0,
+ gateLintelSpanUncertainty:0,
+ gateLintelDepth:0,
+ gateLintelDepthUncertainty:0,
  margin:0.2,
  measurementUncertainty:0.15,
  obstaclePositionUncertainty:0.05,
@@ -129,7 +139,7 @@ const obstacles=[
 
 function gateGeometryForPlanner(){
  if(!$('gateEnabled')||!$('gateEnabled').checked)return null;
- return {
+ const geometry={
   centerX:cfg.gateCenterX,
   centerY:cfg.gateCenterY,
   clearWidth:cfg.gateWidth,
@@ -140,6 +150,20 @@ function gateGeometryForPlanner(){
   positionUncertainty:cfg.gatePositionUncertainty,
   headingUncertaintyDeg:cfg.gateHeadingUncertaintyDeg
  };
+ if(cfg.gateLintelEnabled&&$('gateLintelEnabled')&&$('gateLintelEnabled').checked&&$('gateLintelAlignmentConfirmed')&&$('gateLintelAlignmentConfirmed').checked){
+  geometry.lintel={
+   clearHeight:cfg.gateLintelClearHeight,
+   clearHeightUncertainty:cfg.gateLintelCameraHeightUncertainty,
+   floorDatumUncertainty:cfg.gateLintelFloorUncertainty,
+   thickness:cfg.gateLintelThickness,
+   thicknessUncertainty:cfg.gateLintelThicknessUncertainty,
+   span:cfg.gateLintelSpan,
+   spanUncertainty:cfg.gateLintelSpanUncertainty,
+   depth:cfg.gateLintelDepth,
+   depthUncertainty:cfg.gateLintelDepthUncertainty
+  };
+ }
+ return geometry;
 }
 function sceneObstacles(){
  if(perceptionFrameTimestamp&&Date.now()-perceptionFrameTimestamp>1500){
@@ -196,6 +220,11 @@ window.TruckVisionClearPerceptionFrame=()=>{
 function readSettings(){
  const candidate={...cfg};
  for(const key of Object.keys(candidate)){
+  if(key==='gateLintelEnabled'){
+   const input=$('gateLintelEnabled');
+   candidate[key]=!!(input&&input.checked);
+   continue;
+  }
   if(['auxiliaryEnvelopes','vehicleVerticalProfiles','roadSurface','suspensionTravel','verticalObstacles'].includes(key)){
    const input=$(key);
    if(input){
@@ -259,6 +288,15 @@ function readSettings(){
   gateHeadingUncertaintyDeg:[0,45],
   gatePostWidth:[0.05,2],
   gateDepth:[0.05,10],
+  gateLintelClearHeight:[0,15],
+  gateLintelCameraHeightUncertainty:[0,2],
+  gateLintelFloorUncertainty:[0,1],
+  gateLintelThickness:[0,2],
+  gateLintelThicknessUncertainty:[0,1],
+  gateLintelSpan:[0,30],
+  gateLintelSpanUncertainty:[0,2],
+  gateLintelDepth:[0,10],
+  gateLintelDepthUncertainty:[0,2],
   margin:[0,5],
   measurementUncertainty:[0,5],
   obstaclePositionUncertainty:[0,1],
@@ -307,6 +345,38 @@ function readSettings(){
  if(Number.isFinite(candidate.gateWidthUncertainty)&&
     candidate.gateWidthUncertainty>=candidate.gateWidth-0.05){
   errors.push('gateWidthUncertainty: консервативная ширина проёма должна оставаться больше 0,05 м.');
+ }
+ if(candidate.gateLintelEnabled){
+  if(!$('gateLintelAlignmentConfirmed')||!$('gateLintelAlignmentConfirmed').checked){
+   errors.push('gateLintelAlignmentConfirmed: подтвердите, что перемычка центрирована, параллельна линии ворот и горизонтальна; иначе эту упрощённую призму использовать нельзя.');
+  }
+  if(!$('gateEnabled')||!$('gateEnabled').checked){
+   errors.push('gateLintelEnabled: сначала включите учёт косяков ворот на карте.');
+  }else{
+   try{
+    planner.createGateObstacles({
+     centerX:candidate.gateCenterX,centerY:candidate.gateCenterY,
+     clearWidth:candidate.gateWidth,postWidth:candidate.gatePostWidth,
+     depth:candidate.gateDepth,heading:candidate.gateHeadingDeg*Math.PI/180,
+     widthUncertainty:candidate.gateWidthUncertainty,
+     positionUncertainty:candidate.gatePositionUncertainty,
+     headingUncertaintyDeg:candidate.gateHeadingUncertaintyDeg,
+     lintel:{
+      clearHeight:candidate.gateLintelClearHeight,
+      clearHeightUncertainty:candidate.gateLintelCameraHeightUncertainty,
+      floorDatumUncertainty:candidate.gateLintelFloorUncertainty,
+      thickness:candidate.gateLintelThickness,
+      thicknessUncertainty:candidate.gateLintelThicknessUncertainty,
+      span:candidate.gateLintelSpan,
+      spanUncertainty:candidate.gateLintelSpanUncertainty,
+      depth:candidate.gateLintelDepth,
+      depthUncertainty:candidate.gateLintelDepthUncertainty
+     }
+    });
+   }catch(error){
+    errors.push('Верхняя перемычка: '+(error&&error.message?error.message:'некорректные измерения.'));
+   }
+  }
  }
  const parameterUncertaintyMap={
   wheelbaseUncertainty:'wheelbase',
@@ -1330,7 +1400,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261126-10');
+   worker=new Worker('./planner-worker.js?v=20261126-11');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
@@ -2359,6 +2429,8 @@ function applyCameraGateRegistration(registration){
  const headingDeg=registration&&registration.headingDeg;
  const widthUncertaintyBound=registration&&registration.widthUncertaintyBound!==undefined?
   registration.widthUncertaintyBound:0;
+ const clearHeight=registration&&registration.clearHeight;
+ const heightUncertaintyBound=registration&&registration.heightUncertaintyBound;
  const readGateSetting=(id,key)=>{
   const input=$(id);
   if(!input)return cfg[key];
@@ -2369,6 +2441,20 @@ function applyCameraGateRegistration(registration){
  const depth=readGateSetting('gateDepth','gateDepth');
  const positionUncertainty=readGateSetting('gatePositionUncertainty','gatePositionUncertainty');
  const headingUncertaintyDeg=readGateSetting('gateHeadingUncertaintyDeg','gateHeadingUncertaintyDeg');
+ const lintelEnabled=!!($('gateLintelEnabled')&&$('gateLintelEnabled').checked);
+ const lintelAlignmentConfirmed=!!($('gateLintelAlignmentConfirmed')&&$('gateLintelAlignmentConfirmed').checked);
+ const lintel=lintelEnabled?{
+  clearHeight,
+  clearHeightUncertainty:heightUncertaintyBound,
+  floorDatumUncertainty:readGateSetting('gateLintelFloorUncertainty','gateLintelFloorUncertainty'),
+  thickness:readGateSetting('gateLintelThickness','gateLintelThickness'),
+  thicknessUncertainty:readGateSetting('gateLintelThicknessUncertainty','gateLintelThicknessUncertainty'),
+  span:readGateSetting('gateLintelSpan','gateLintelSpan'),
+  spanUncertainty:readGateSetting('gateLintelSpanUncertainty','gateLintelSpanUncertainty'),
+  depth:readGateSetting('gateLintelDepth','gateLintelDepth'),
+  depthUncertainty:readGateSetting('gateLintelDepthUncertainty','gateLintelDepthUncertainty')
+ }:null;
+ if(lintelEnabled&&!lintelAlignmentConfirmed)return false;
  if(![centerX,centerY,clearWidth,headingDeg,widthUncertaintyBound,
       postWidth,depth,positionUncertainty,headingUncertaintyDeg].every(Number.isFinite)||
     Math.abs(centerX)>100||Math.abs(centerY)>100||
@@ -2377,18 +2463,22 @@ function applyCameraGateRegistration(registration){
     widthUncertaintyBound>=clearWidth-0.05||
     postWidth<0.05||postWidth>2||depth<0.05||depth>10||
     positionUncertainty<0||positionUncertainty>2||
-    headingUncertaintyDeg<0||headingUncertaintyDeg>45){
+    headingUncertaintyDeg<0||headingUncertaintyDeg>45||
+    !Number.isFinite(clearHeight)||clearHeight<=0.5||clearHeight>15||
+    !Number.isFinite(heightUncertaintyBound)||heightUncertaintyBound<=0||heightUncertaintyBound>2){
   return false;
  }
  try{
-  planner.createGateObstacles({
+  const gate={
    centerX,centerY,clearWidth,
    postWidth,depth,
    heading:headingDeg*Math.PI/180,
    widthUncertainty:widthUncertaintyBound,
    positionUncertainty,
    headingUncertaintyDeg
-  });
+  };
+  if(lintelEnabled)gate.lintel=lintel;
+  planner.createGateObstacles(gate);
  }catch(error){
   return false;
  }
@@ -2401,17 +2491,30 @@ function applyCameraGateRegistration(registration){
  cfg.gateDepth=depth;
  cfg.gatePositionUncertainty=positionUncertainty;
  cfg.gateHeadingUncertaintyDeg=headingUncertaintyDeg;
+ cfg.gateLintelEnabled=lintelEnabled;
+ cfg.gateLintelClearHeight=clearHeight;
+ cfg.gateLintelCameraHeightUncertainty=heightUncertaintyBound;
+ if(lintelEnabled){
+  cfg.gateLintelFloorUncertainty=lintel.floorDatumUncertainty;
+  cfg.gateLintelThickness=lintel.thickness;
+  cfg.gateLintelThicknessUncertainty=lintel.thicknessUncertainty;
+  cfg.gateLintelSpan=lintel.span;
+  cfg.gateLintelSpanUncertainty=lintel.spanUncertainty;
+  cfg.gateLintelDepth=lintel.depth;
+  cfg.gateLintelDepthUncertainty=lintel.depthUncertainty;
+ }
  $('gateWidth').value=clearWidth.toFixed(2);
  $('gateWidthUncertainty').value=widthUncertaintyBound.toFixed(3);
  $('gateCenterX').value=centerX.toFixed(2);
  $('gateCenterY').value=centerY.toFixed(2);
  $('gateHeadingDeg').value=headingDeg.toFixed(2);
+ $('gateLintelClearHeight').value=clearHeight.toFixed(3);
+ $('gateLintelCameraHeightUncertainty').value=heightUncertaintyBound.toFixed(3);
  $('gateEnabled').checked=true;
  invalidateRouteForSettingsChange();
  draw();
  return true;
 }
-
 window.TruckVisionApplyGateRegistration=applyCameraGateRegistration;
 
 function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,poseUncertainty){
@@ -2553,6 +2656,24 @@ $('gateEnabled').onchange=()=>{
  invalidateRouteForSettingsChange();
  draw();
 };
+$('gateLintelEnabled').onchange=()=>{
+ const result=readSettings();
+ invalidateRouteForSettingsChange();
+ if(!result.ok){
+  $('routeAdvice').textContent='Параметры верхней перемычки не применены: '+result.errors.join(' ');
+  $('difficultyAdvice').textContent='Построение маршрута заблокировано до проверки измерений перемычки.';
+ }
+ draw();
+};
+$('gateLintelAlignmentConfirmed').onchange=()=>{
+ const result=readSettings();
+ invalidateRouteForSettingsChange();
+ if(!result.ok){
+  $('routeAdvice').textContent='Подтверждение геометрии перемычки отсутствует или настройки невалидны: '+result.errors.join(' ');
+  $('difficultyAdvice').textContent='Построение маршрута заблокировано до повторной проверки вертикальной геометрии.';
+ }
+ draw();
+};
 
 $('obstaclesToggle').onclick=()=>{
  showObstacles=!showObstacles;
@@ -2610,7 +2731,10 @@ $('assess').onclick=()=>{
   result+'. Полезная ширина: '+usable.toFixed(2)+
   ' м; ширина полуприцепа: '+cfg.trailerWidth.toFixed(2)+
   ' м; дополнительный резерв неопределённости: '+uncertainty.toFixed(2)+' м с каждой стороны; остаточный запас: '+difference.toFixed(2)+
-  ' м. '+($('gateEnabled').checked?'Косяки ворот также включены в карту как два ориентированных препятствия; построение маршрута проверяет их вместе со всем автопоездом.':'Косяки ворот пока не включены в карту: включите соответствующий переключатель и задайте положение/курс проёма. Камера измеряет ширину, но не регистрирует положение ворот на карте автоматически.')+' Это не гарантия проезда.';
+  ' м. '+($('gateEnabled').checked?
+   'Косяки ворот включены в карту как два ориентированных препятствия; они проверяются вместе со всем автопоездом.'+
+   (cfg.gateLintelEnabled?' Верхняя перемычка также добавлена как отдельная вертикальная призма; вертикальное разделение подтверждается только для компонентов с измеренными высотными профилями.':' Верхняя перемычка не включена в проверку.') :
+   'Косяки ворот не включены в карту: включите переключатель и задайте положение/курс проёма. Камера не определяет мировую позу ворот автоматически.')+' Это не гарантия проезда.';
 };
 
 $('alternativeRouteSelect').onchange=()=>{

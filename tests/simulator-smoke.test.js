@@ -335,7 +335,8 @@ test('simulator explains joint endpoint and one-factor midpoint parameter covera
 test('camera registration atomically applies measured gate pose and enables jamb obstacles',()=>{
  const {elements,windowObject}=bootSimulator();
  const applied=windowObject.TruckVisionApplyGateRegistration({
-  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08
+  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08,
+  clearHeight:4.1,heightUncertaintyBound:0.12
  });
  assert.equal(applied,true);
  assert.equal(elements.gateWidth.value,'3.80');
@@ -343,8 +344,64 @@ test('camera registration atomically applies measured gate pose and enables jamb
  assert.equal(elements.gateCenterX.value,'14.50');
  assert.equal(elements.gateCenterY.value,'-2.25');
  assert.equal(elements.gateHeadingDeg.value,'37.00');
+ assert.equal(elements.gateLintelClearHeight.value,'4.100');
+ assert.equal(elements.gateLintelCameraHeightUncertainty.value,'0.120');
  assert.equal(elements.gateEnabled.checked,true);
  assert.match(elements.routeAdvice.textContent,/Параметры модели изменены/);
+});
+
+test('camera gate registration activates a measured lintel only with explicit thickness and depth',()=>{
+ const {elements,windowObject}=bootSimulator();
+ elements.gateLintelEnabled.checked=true;
+ elements.gateLintelAlignmentConfirmed.checked=true;
+ elements.gateLintelFloorUncertainty.value='0.02';
+ elements.gateLintelThickness.value='0.25';
+ elements.gateLintelThicknessUncertainty.value='0.01';
+ elements.gateLintelSpan.value='4.6';
+ elements.gateLintelSpanUncertainty.value='0.1';
+ elements.gateLintelDepth.value='0.45';
+ elements.gateLintelDepthUncertainty.value='0.02';
+ const applied=windowObject.TruckVisionApplyGateRegistration({
+  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08,
+  clearHeight:4.1,heightUncertaintyBound:0.12
+ });
+ assert.equal(applied,true);
+ assert.equal(elements.gateLintelEnabled.checked,true);
+ assert.equal(elements.gateLintelClearHeight.value,'4.100');
+ assert.equal(elements.gateLintelCameraHeightUncertainty.value,'0.120');
+ assert.match(elements.routeAdvice.textContent,/Параметры модели изменены/);
+});
+
+test('camera gate registration rejects a lintel without explicit alignment confirmation',()=>{
+ const {elements,windowObject}=bootSimulator();
+ elements.gateLintelEnabled.checked=true;
+ elements.gateLintelFloorUncertainty.value='0.02';
+ elements.gateLintelThickness.value='0.25';
+ elements.gateLintelThicknessUncertainty.value='0.01';
+ elements.gateLintelSpan.value='4.6';
+ elements.gateLintelSpanUncertainty.value='0.1';
+ elements.gateLintelDepth.value='0.45';
+ elements.gateLintelDepthUncertainty.value='0.02';
+ const before=elements.gateWidth.value;
+ const applied=windowObject.TruckVisionApplyGateRegistration({
+  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08,
+  clearHeight:4.1,heightUncertaintyBound:0.12
+ });
+ assert.equal(applied,false);
+ assert.equal(elements.gateWidth.value,before);
+});
+
+test('camera gate registration rejects an enabled lintel without measured beam dimensions',()=>{
+ const {elements,windowObject}=bootSimulator();
+ elements.gateLintelEnabled.checked=true;
+ elements.gateLintelAlignmentConfirmed.checked=true;
+ const before=elements.gateWidth.value;
+ const applied=windowObject.TruckVisionApplyGateRegistration({
+  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08,
+  clearHeight:4.1,heightUncertaintyBound:0.12
+ });
+ assert.equal(applied,false);
+ assert.equal(elements.gateWidth.value,before);
 });
 
 test('camera registration rejects invalid gate width without changing current map settings',()=>{
