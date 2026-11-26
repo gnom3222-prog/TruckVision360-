@@ -718,7 +718,7 @@
       minimumSampledEnvelopeClearance:Infinity,minimumSampledEnvelopeDetail:null,
       minimumIntermediatePolygonClearance:Infinity,minimumIntermediatePolygonDetail:null,
       minimumIntermediateEnvelopeClearance:Infinity,minimumIntermediateEnvelopeDetail:null,
-      minimumClearanceLowerBound:Infinity,limitingDetail:null,verticalStatus:null,verticalGap:null
+      minimumClearanceLowerBound:Infinity,limitingDetail:null
      };
      records.set(wheel.name,record);
     }
@@ -741,7 +741,6 @@
       obstacle:envelopeObstacle,state:snapshot(state),distanceAlongRoute,verticalStatus:envelopeVerticalStatus
      }:null;
     }
-    record.verticalStatus=envelopeVerticalStatus;
     return {wheel,envelopeDistance,envelopeObstacle,envelopeVerticalStatus,polygonDistance,polygonObstacle,polygonVerticalStatus,tireRadius};
    });
    if(index>0){
