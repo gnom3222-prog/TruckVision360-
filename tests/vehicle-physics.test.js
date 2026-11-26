@@ -537,7 +537,7 @@ test('wheel calibration rejects an implausible track and tire-width combination'
  assert.throws(()=>physics.wheelFootprints({x:0,y:0,psi:0,psiT:0},p),/Некорректные параметры колёс/);
 });
 
-test('trailer wheel trajectory diagnostics returns sampled centers for all six tires and three axle centers',()=>{
+test('trailer wheel trajectory diagnostics returns sampled centers for six axle-side groups and three axle centers',()=>{
  const p={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
   trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
