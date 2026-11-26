@@ -346,13 +346,22 @@
  });
  function suspensionSupportDefinitions(params,vehiclePart){
   if(vehiclePart==='tractor'){
+   const frontTrack=params.tractorFrontTrack??2.05,rearTrack=params.tractorRearTrack??2.05;
+   const frontUncertainty=params.tractorFrontTrackUncertainty??0,rearUncertainty=params.tractorRearTrackUncertainty??0;
    return [
-    {key:'front',x:params.wheelbase,track:params.tractorFrontTrack??2.05},
-    {key:'rear',x:0,track:params.tractorRearTrack??2.05}
+    {key:'front',x:params.wheelbase,track:frontTrack,trackLowerBound:frontTrack-frontUncertainty},
+    {key:'rear',x:0,track:rearTrack,trackLowerBound:rearTrack-rearUncertainty}
    ];
   }
   const offsets=trailerAxleOffsets(params),tracks=trailerAxleTracks(params);
-  return offsets.map((x,index)=>({key:'axle'+(index+1),x,track:tracks[index]}));
+  return offsets.map((x,index)=>{
+   const axleIndex=index+1;
+   const individualTrack=(params['trailerAxle'+axleIndex+'Track']??0)>0;
+   const uncertainty=individualTrack?
+    (params['trailerAxle'+axleIndex+'TrackUncertainty']??0):
+    (params.trailerTrackUncertainty??0);
+   return {key:'axle'+axleIndex,x,track:tracks[index],trackLowerBound:tracks[index]-uncertainty};
+  });
  }
  function suspensionSupportIntervals(config,params,vehiclePart){
   const group=config[vehiclePart];
@@ -375,9 +384,23 @@
   const hMin=supports.reduce((sum,point)=>sum+point.min,0)/supports.length;
   const hMax=supports.reduce((sum,point)=>sum+point.max,0)/supports.length;
   const xCenter=definitions.reduce((sum,axle)=>sum+axle.x,0)/definitions.length;
+  let pitchDistanceLowerBound=0,xCenterUncertainty=0;
+  if(vehiclePart==='tractor'){
+   const wheelbaseUncertainty=params.wheelbaseUncertainty??0;
+   pitchDistanceLowerBound=params.wheelbase-wheelbaseUncertainty;
+   xCenterUncertainty=wheelbaseUncertainty/2;
+  }else{
+   const spacings=trailerAxleSpacings(params);
+   const spacing12Uncertainty=(params.trailerAxleSpacing12??0)>0?
+    (params.trailerAxleSpacing12Uncertainty??0):(params.trailerAxleSpacingUncertainty??0);
+   const spacing23Uncertainty=(params.trailerAxleSpacing23??0)>0?
+    (params.trailerAxleSpacing23Uncertainty??0):(params.trailerAxleSpacingUncertainty??0);
+   pitchDistanceLowerBound=spacings[0]+spacings[1]-spacing12Uncertainty-spacing23Uncertainty;
+   xCenterUncertainty=(spacing12Uncertainty+spacing23Uncertainty)/3;
+  }
   const pitchPair=vehiclePart==='tractor'?
-   {first:'front',last:'rear',distance:params.wheelbase}:
-   {first:'axle1',last:'axle3',distance:definitions[0].x-definitions[2].x};
+   {first:'front',last:'rear',distance:pitchDistanceLowerBound}:
+   {first:'axle1',last:'axle3',distance:pitchDistanceLowerBound};
   let pitchMin=Infinity,pitchMax=-Infinity;
   for(const side of ['left','right']){
    const first=supports.find(point=>point.axle===pitchPair.first&&point.side===side);
@@ -390,11 +413,12 @@
   for(const axle of definitions){
    const left=supports.find(point=>point.axle===axle.key&&point.side==='left');
    const right=supports.find(point=>point.axle===axle.key&&point.side==='right');
-   if(!left||!right||!Number.isFinite(axle.track)||axle.track<=0)return null;
-   rollMin=Math.min(rollMin,(left.min-right.max)/axle.track);
-   rollMax=Math.max(rollMax,(left.max-right.min)/axle.track);
+   if(!left||!right||!Number.isFinite(axle.trackLowerBound)||axle.trackLowerBound<=0)return null;
+   rollMin=Math.min(rollMin,(left.min-right.max)/axle.trackLowerBound);
+   rollMax=Math.max(rollMax,(left.max-right.min)/axle.trackLowerBound);
   }
-  return {hMin,hMax,pitchMin,pitchMax,rollMin,rollMax,xCenter,supports};
+  if(!Number.isFinite(pitchDistanceLowerBound)||pitchDistanceLowerBound<=0)return null;
+  return {hMin,hMax,pitchMin,pitchMax,rollMin,rollMax,xCenter,xCenterUncertainty,supports};
  }
  function validateSuspensionTravel(config,params){
   const errors=[];
@@ -424,7 +448,7 @@
        errors.push(prefix+key+' должен быть явно измеренным конечным числом.');
       }
      }
-     const limits={compression:[0,0.25],rebound:[0,0.25],uncertainty:[0,0.05]};
+     const limits={compression:[0,0.25],rebound:[0,0.25],uncertainty:[0.0001,0.05]};
      for(const [key,[min,max]] of Object.entries(limits)){
       const value=point[key];
       if(Number.isFinite(value)&&(value<min||value>max)){
@@ -435,7 +459,30 @@
    }
   }
   if(errors.length===0&&params&&Number.isFinite(params.wheelbase)&&Number.isFinite(params.trailerLength)){
-   for(const group of ['tractor','trailer']){
+   const geometryBounds=[
+    ['wheelbaseUncertainty',params.wheelbaseUncertainty],
+    ['tractorFrontTrackUncertainty',params.tractorFrontTrackUncertainty],
+    ['tractorRearTrackUncertainty',params.tractorRearTrackUncertainty]
+   ];
+   const axleSpacings=trailerAxleSpacings(params);
+   geometryBounds.push(
+    [(params.trailerAxleSpacing12??0)>0?'trailerAxleSpacing12Uncertainty':'trailerAxleSpacingUncertainty',
+     (params.trailerAxleSpacing12??0)>0?params.trailerAxleSpacing12Uncertainty:params.trailerAxleSpacingUncertainty],
+    [(params.trailerAxleSpacing23??0)>0?'trailerAxleSpacing23Uncertainty':'trailerAxleSpacingUncertainty',
+     (params.trailerAxleSpacing23??0)>0?params.trailerAxleSpacing23Uncertainty:params.trailerAxleSpacingUncertainty]
+   );
+   for(let index=1;index<=3;index++){
+    const individual=(params['trailerAxle'+index+'Track']??0)>0;
+    const key=individual?'trailerAxle'+index+'TrackUncertainty':'trailerTrackUncertainty';
+    geometryBounds.push([key,params[key]]);
+   }
+   for(const [key,value] of geometryBounds){
+    if(!Number.isFinite(value)||value<=0){
+     errors.push('suspensionTravel требует положительную измеренную границу '+key+'; ноль не считается подтверждённой точностью.');
+    }
+   }
+   if(geometryBounds.every(([,value])=>Number.isFinite(value)&&value>0)){
+    for(const group of ['tractor','trailer']){
     const bounds=suspensionPoseCoefficientBounds(config,params,group);
     if(!bounds){
      errors.push('suspensionTravel.'+group+': невозможно построить опорную плоскость по измеренной геометрии осей.');
@@ -448,6 +495,7 @@
     if(maxSlope>SUSPENSION_TRAVEL_MAX_SLOPE+1e-9){
      errors.push('suspensionTravel.'+group+': расчётный наклон опорной плоскости превышает 0,25; линейная модель малых перемещений неприменима.');
     }
+   }
    }
   }
   return errors;
@@ -472,10 +520,16 @@
   const c=Math.cos(heading),s=Math.sin(heading),lower=[],upper=[];
   for(const point of polygon){
    const dx=point.x-origin.x,dy=point.y-origin.y;
-   const localX=dx*c+dy*s-bounds.xCenter;
+   const localX=dx*c+dy*s;
    const localY=-dx*s+dy*c;
-   const pitchLow=Math.min(bounds.pitchMin*localX,bounds.pitchMax*localX);
-   const pitchHigh=Math.max(bounds.pitchMin*localX,bounds.pitchMax*localX);
+   const xRelMin=localX-(bounds.xCenter+bounds.xCenterUncertainty);
+   const xRelMax=localX-(bounds.xCenter-bounds.xCenterUncertainty);
+   const pitchProducts=[
+    bounds.pitchMin*xRelMin,bounds.pitchMin*xRelMax,
+    bounds.pitchMax*xRelMin,bounds.pitchMax*xRelMax
+   ];
+   const pitchLow=Math.min(...pitchProducts);
+   const pitchHigh=Math.max(...pitchProducts);
    const rollLow=Math.min(bounds.rollMin*localY,bounds.rollMax*localY);
    const rollHigh=Math.max(bounds.rollMin*localY,bounds.rollMax*localY);
    lower.push(bounds.hMin+pitchLow+rollLow);
