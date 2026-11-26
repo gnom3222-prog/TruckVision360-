@@ -232,6 +232,7 @@ test('gate helper adds an oriented vertical lintel prism with measured dimension
   lintel:{
    clearHeight:3.8,clearHeightUncertainty:0.03,floorDatumUncertainty:0.02,
    thickness:0.25,thicknessUncertainty:0.01,
+   span:4.6,spanUncertainty:0.1,
    depth:0.45,depthUncertainty:0.02
   }
  });
@@ -249,7 +250,8 @@ test('gate helper adds an oriented vertical lintel prism with measured dimension
  const alongValues=beam.polygon.map(point=>point.x*along.x+point.y*along.y);
  const acrossValues=beam.polygon.map(point=>point.x*across.x+point.y*across.y);
  assert.ok(Math.max(...alongValues)-Math.min(...alongValues)>=4.5);
- assert.ok(Math.max(...acrossValues)-Math.min(...acrossValues)>=0.49);
+ assert.ok(Math.max(...alongValues)-Math.min(...alongValues)>=4.7);
+ assert.ok(Math.max(...acrossValues)-Math.min(...acrossValues)>=0.47);
 });
 
 test('gate helper rejects incomplete or physically inconsistent lintel measurements',()=>{
@@ -257,11 +259,11 @@ test('gate helper rejects incomplete or physically inconsistent lintel measureme
  assert.throws(()=>planner.createGateObstacles({...base,lintel:{clearHeight:3.8}}),/верхней перемычки/);
  assert.throws(()=>planner.createGateObstacles({...base,lintel:{
   clearHeight:3.8,clearHeightUncertainty:0,floorDatumUncertainty:0,
-  thickness:0.2,thicknessUncertainty:0,depth:0.4,depthUncertainty:0
+  thickness:0.2,thicknessUncertainty:0,span:4.4,spanUncertainty:0.1,depth:0.4,depthUncertainty:0
  }}),/верхней перемычки/);
  assert.throws(()=>planner.createGateObstacles({...base,lintel:{
   clearHeight:0.6,clearHeightUncertainty:1,floorDatumUncertainty:0,
-  thickness:0.2,thicknessUncertainty:0,depth:0.4,depthUncertainty:0
+  thickness:0.2,thicknessUncertainty:0,span:4.4,spanUncertainty:0.1,depth:0.4,depthUncertainty:0
  }}),/вертикальные или горизонтальные границы/);
 });
 
@@ -280,7 +282,7 @@ test('vertical gate lintel clearance separates a measured low cab and reports ov
   lintel:{
    clearHeight:3.8,clearHeightUncertainty:0.03,floorDatumUncertainty:0.02,
    thickness:0.25,thicknessUncertainty:0.01,
-   depth:8,depthUncertainty:0
+   span:8,spanUncertainty:0,depth:8,depthUncertainty:0
   }
  });
  const separated=planner.createClearanceChecker([gate[2]],{
