@@ -505,8 +505,8 @@ test('configured dual-tire group envelopes span the measured outer width on each
  assert.equal(trailer.footprintModel,'configured-axle-side-group-envelope');
  assert.equal(rear.groupWidthConfigured,true);
  assert.equal(trailer.groupWidthConfigured,true);
- near(Math.max(...rear.polygon.map(point=>point.y))-Math.min(...rear.polygon.map(point=>point.y),0),0.72);
- near(Math.max(...trailer.polygon.map(point=>point.y))-Math.min(...trailer.polygon.map(point=>point.y),0),0.68);
+ near(Math.max(...rear.polygon.map(point=>point.y))-Math.min(...rear.polygon.map(point=>point.y)),0.72);
+ near(Math.max(...trailer.polygon.map(point=>point.y))-Math.min(...trailer.polygon.map(point=>point.y)),0.68);
  const parts=physics.vehicleCollisionParts(q,p);
  assert.ok(parts.find(part=>part.vehiclePart==='тягач').components.some(component=>component.name==='левое заднее колесо тягача'));
  assert.ok(parts.find(part=>part.vehiclePart==='полуприцеп').components.some(component=>component.name==='левое колесо 1-й оси полуприцепа'));
@@ -520,7 +520,7 @@ test('tire group calibration rejects widths smaller than one tire, overlapping p
  };
  assert.ok(physics.validateVehicleParams({...base,tractorRearTireGroupWidth:0.4})
   .some(message=>message.includes('не может быть меньше ширины')));
- assert.ok(physics.validateVehicleParams({...base,tractorRearTireGroupWidth:2.05})
+ assert.ok(physics.validateVehicleParams({...base,tractorRearTrack:1.4,tractorRearTireGroupWidth:1.4})
   .some(message=>message.includes('группы шин перекрываются')));
  assert.ok(physics.validateVehicleParams({...base,trailerTireGroupWidth:0.8})
   .some(message=>message.includes('колёсные группы выходят')));
