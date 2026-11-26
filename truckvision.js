@@ -1207,8 +1207,7 @@ function tireTrajectorySummaryText(metrics){
   const sampled=Number.isFinite(tire.sampledTravel)?tire.sampledTravel.toFixed(2):'не определена';
   const integrated=Number.isFinite(tire.integratedTravelEstimate)?
    tire.integratedTravelEstimate.toFixed(2):'не выдана';
-  const pair=tire.pairPosition==='outer'?' наружная':tire.pairPosition==='inner'?' внутренняя':'';
-  return tire.name+pair+' '+sampled+'/'+integrated;
+  return tire.name+' '+sampled+'/'+integrated;
  });
  const integration=result.integratedTravelComplete?
   'RK4 + составной Симпсон, все сегменты реконструированы':
