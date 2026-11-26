@@ -923,7 +923,7 @@
    right:finalizeTrack(axle.right)
   }));
   return {
-   samples:states.length,segments:segments.length,totalRouteDistance:routeDistance,
+   samples:states.length,segments,segmentCount:segments.length,totalRouteDistance:routeDistance,
    axles:finalizedAxles,
    segments,
    distanceMethod:segmentsUsingStepDistance&&segmentsUsingChordFallback?
