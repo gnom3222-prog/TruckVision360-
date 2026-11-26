@@ -571,3 +571,24 @@ test('camera gate repeatability requires explicit operator tolerances before col
  assert.match(camera.elements.cameraRepeatabilityStatus.textContent,/Повторяемость не оценена/);
  camera.fire('cameraStop','click');
 });
+
+test('camera gate repeatability series cannot mix manually entered map poses',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ const referencePoints=[{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}];
+ const gatePoints=[{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}];
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap(referencePoints);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap(gatePoints);
+ camera.fire('cameraReset','click');
+ camera.setVideoTime(0.2);
+ camera.elements.gateCenterX.value='13';
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap(referencePoints);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap(gatePoints);
+ assert.equal(camera.appliedRegistrations.length,0);
+ assert.match(camera.elements.cameraStatus.textContent,/Координаты центра или направление ворот изменились/);
+ camera.fire('cameraStop','click');
+});
