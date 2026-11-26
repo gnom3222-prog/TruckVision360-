@@ -150,9 +150,9 @@ test('unknown internal wheel height cannot be hidden by a measured body height p
  assert.ok(result.verticalUnverifiedCount>0);
 });
 
-test('route assessment never disables obstacle checks when map visibility is toggled off',()=>{
+test('route assessment preserves vertical intervals while retaining the explicit obstacle-check gate',()=>{
  const app=fs.readFileSync(path.resolve(__dirname,'../truckvision.js'),'utf8');
- assert.match(app,/const routeObstacles=sceneObstacles\(\);/);
- assert.doesNotMatch(app,/const routeObstacles=showObstacles\?sceneObstacles\(\):\[\]/);
+ assert.match(app,/const routeObstacles=showObstacles\?sceneObstacles\(\):\[\]/);
+ assert.match(app,/Автопроезд не запущен: сначала включите отображение и проверку препятствий/);
  assert.match(app,/zMin:obstacle\.zMin,zMax:obstacle\.zMax,zUncertainty:obstacle\.zUncertainty\?\?0/);
 });
