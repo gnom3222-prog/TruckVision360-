@@ -637,19 +637,19 @@ test('route assessment fails closed when per-wheel swept clearance cannot valida
 });
 
 
-test('route assessment blocks virtual driving when any wheel-sweep segment cannot be reconstructed',async()=>{
+test('route assessment blocks virtual driving for incomplete wheel sampling even when the route reaches its goal',async()=>{
  const simulator=bootSimulator({workerResult:incompleteWheelSamplingWorkerResult()});
  const {elements}=simulator;
- elements.goalX.value='22';
+ elements.goalX.value='1';
  elements.goalY.value='0';
- elements.goalHeading.value='0';
+ elements.goalHeading.value=String(0.2*180/Math.PI);
  await elements.planRoute.onclick();
  elements.alternativeRouteSelect.value='0';
  elements.alternativeRouteSelect.onchange();
  assert.match(elements.difficultyAdvice.textContent,/Промежуточная проверка не завершена на 2 сегментах/);
  assert.match(elements.difficultyAdvice.textContent,/Автопроезд остаётся заблокирован/);
  elements.routeStart.onclick();
- assert.match(elements.routeAdvice.textContent,/Автопроезд не запущен: предварительная проверка маршрута выявила риск/);
+ assert.match(elements.routeAdvice.textContent,/Автопроезд не запущен: проверка отдельных колёс не завершена или не подтверждена/);
 });
 
 
