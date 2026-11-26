@@ -166,7 +166,7 @@ say('Препятствие добавлено на карту: размеры '
   mode=null;pts=[];draw();return;
  }
  const repeatability=geometry.summarizeRepeatability(gateReadings,gateRepeatabilityTolerances);
- const repeatabilityText=' Повторяемость по '+repeatability.count+' отдельным кадрам: средняя ширина '+repeatability.meanWidth.toFixed(3)+' м, разброс '+repeatability.rangeWidth.toFixed(3)+' м (допуск '+repeatability.widthTolerance.toFixed(3)+' м); средняя высота '+repeatability.meanHeight.toFixed(3)+' м, разброс '+repeatability.rangeHeight.toFixed(3)+' м (допуск '+repeatability.heightTolerance.toFixed(3)+' м).';
+ const repeatabilityText=' Повторяемость по '+repeatability.count+' отдельным кадрам: средняя ширина '+repeatability.meanWidth.toFixed(3)+' м, диапазон '+repeatability.rangeWidth.toFixed(3)+' м, выборочное s '+repeatability.sampleStdDevWidth.toFixed(3)+' м (допуск '+repeatability.widthTolerance.toFixed(3)+' м); средняя высота '+repeatability.meanHeight.toFixed(3)+' м, диапазон '+repeatability.rangeHeight.toFixed(3)+' м, выборочное s '+repeatability.sampleStdDevHeight.toFixed(3)+' м (допуск '+repeatability.heightTolerance.toFixed(3)+' м). Screening-оболочки чувствительности: ширина ±'+repeatability.widthEnvelopeBound.toFixed(3)+' м, высота ±'+repeatability.heightEnvelopeBound.toFixed(3)+' м.';
  $('cameraRepeatabilityStatus').textContent=repeatabilityText+(repeatability.withinTolerance?' Допуск повторяемости выполнен; карта будет обновлена с консервативной оболочкой.':' Разброс превышает операторский допуск. Карта не обновлена; очистите серию и повторите измерения.');
  if(!repeatability.withinTolerance){
   gateRepeatabilityComplete=true;
