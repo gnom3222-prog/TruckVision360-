@@ -32,6 +32,9 @@ const cfg={
  trailerTrack:2.79,
  tractorRearTireGroupWidth:0,
  trailerTireGroupWidth:0,
+ trailerAxle1TireGroupWidth:0,
+ trailerAxle2TireGroupWidth:0,
+ trailerAxle3TireGroupWidth:0,
  tireLength:0.72,
  tireWidth:0.44,
  trailerMass:30000,
@@ -65,6 +68,9 @@ const cfg={
  trailerTrackUncertainty:0,
  tractorRearTireGroupWidthUncertainty:0,
  trailerTireGroupWidthUncertainty:0,
+ trailerAxle1TireGroupWidthUncertainty:0,
+ trailerAxle2TireGroupWidthUncertainty:0,
+ trailerAxle3TireGroupWidthUncertainty:0,
  tireLengthUncertainty:0,
  tireWidthUncertainty:0,
  cabOffsetUncertainty:0,
@@ -185,6 +191,9 @@ function readSettings(){
   trailerTrack:[1,4.5],
   tractorRearTireGroupWidth:[0,1.5],
   trailerTireGroupWidth:[0,1.5],
+  trailerAxle1TireGroupWidth:[0,1.5],
+  trailerAxle2TireGroupWidth:[0,1.5],
+  trailerAxle3TireGroupWidth:[0,1.5],
   tireLength:[0.2,1.5],
   tireWidth:[0.1,0.8],
   gateWidth:[1,20],
@@ -213,6 +222,9 @@ function readSettings(){
   trailerTrackUncertainty:[0,1.5],
   tractorRearTireGroupWidthUncertainty:[0,0.5],
   trailerTireGroupWidthUncertainty:[0,0.5],
+  trailerAxle1TireGroupWidthUncertainty:[0,0.5],
+  trailerAxle2TireGroupWidthUncertainty:[0,0.5],
+  trailerAxle3TireGroupWidthUncertainty:[0,0.5],
   tireLengthUncertainty:[0,0.5],
   tireWidthUncertainty:[0,0.3],
   cabOffsetUncertainty:[0,2],
@@ -246,6 +258,9 @@ function readSettings(){
   trailerTrackUncertainty:'trailerTrack',
   tractorRearTireGroupWidthUncertainty:'tractorRearTireGroupWidth',
   trailerTireGroupWidthUncertainty:'trailerTireGroupWidth',
+  trailerAxle1TireGroupWidthUncertainty:'trailerAxle1TireGroupWidth',
+  trailerAxle2TireGroupWidthUncertainty:'trailerAxle2TireGroupWidth',
+  trailerAxle3TireGroupWidthUncertainty:'trailerAxle3TireGroupWidth',
   tireLengthUncertainty:'tireLength',
   tireWidthUncertainty:'tireWidth',
   cabOffsetUncertainty:'cabOffset',
@@ -274,6 +289,13 @@ function readSettings(){
  if(candidate.trailerTireGroupWidth===0&&candidate.trailerTireGroupWidthUncertainty>0){
   errors.push('trailerTireGroupWidthUncertainty: сначала задайте измеренную номинальную ширину группы шин полуприцепа.');
  }
+ for(let axle=1;axle<=3;axle++){
+  const widthKey='trailerAxle'+axle+'TireGroupWidth';
+  const uncertaintyKey=widthKey+'Uncertainty';
+  if(candidate[widthKey]===0&&candidate[uncertaintyKey]>0){
+   errors.push(uncertaintyKey+': сначала задайте измеренную номинальную ширину группы шин '+axle+'-й оси полуприцепа.');
+  }
+ }
  if(errors.length)return {ok:false,changed:false,errors};
  const changed=Object.keys(cfg).some(key=>!Object.is(cfg[key],candidate[key]));
  Object.assign(cfg,candidate);
@@ -294,6 +316,9 @@ function vehicleParameterBoundsFromSettings(){
   trailerTrackUncertainty:'trailerTrack',
   tractorRearTireGroupWidthUncertainty:'tractorRearTireGroupWidth',
   trailerTireGroupWidthUncertainty:'trailerTireGroupWidth',
+  trailerAxle1TireGroupWidthUncertainty:'trailerAxle1TireGroupWidth',
+  trailerAxle2TireGroupWidthUncertainty:'trailerAxle2TireGroupWidth',
+  trailerAxle3TireGroupWidthUncertainty:'trailerAxle3TireGroupWidth',
   tireLengthUncertainty:'tireLength',
   tireWidthUncertainty:'tireWidth',
   cabOffsetUncertainty:'cabOffset',
