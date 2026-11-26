@@ -1,6 +1,6 @@
 'use strict';
-const CACHE = 'truckvision360-v142';
-const CORE = ['./', './index.html', './truckvision.js?v=20261126-11', './sensor-perception.js?v=20261126-2', './vehicle-physics.js?v=20261126-10', './articulated-planner.js?v=20261126-6', './planner-worker.js?v=20261126-7', './voice.js?v=20261123-4', './camera-geometry.js?v=20261126-2', './camera-measure.js?v=20261126-2', './manifest.webmanifest', './icon.svg'];
+const CACHE = 'truckvision360-v143';
+const CORE = ['./', './index.html', './truckvision.js?v=20261126-12', './sensor-perception.js?v=20261126-2', './vehicle-physics.js?v=20261126-11', './articulated-planner.js?v=20261126-6', './planner-worker.js?v=20261126-8', './voice.js?v=20261123-4', './camera-geometry.js?v=20261126-2', './camera-measure.js?v=20261126-2', './manifest.webmanifest', './icon.svg'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
 });
