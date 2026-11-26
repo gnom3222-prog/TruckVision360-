@@ -97,3 +97,36 @@ test('route clearance reports unverified vertical component profiles',()=>{
  assert.ok(result.verticalUnverifiedChecks>0);
  assert.equal(result.verticalEvaluatedChecks,0);
 });
+
+test('measured wheel height is checked even when the wheel footprint lies inside the 2D body outline',()=>{
+ const profiles={...allProfiles,
+  'tractor-body':{zMin:0.5,zMax:3.0},
+  'tractor-cab':{zMin:0.5,zMax:3.5}
+ };
+ const p={...params,vehicleVerticalProfiles:profiles};
+ const wheel=physics.wheelFootprints(pose,p,0)[0];
+ const obstacle={name:'Низкая балка у колеса',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:0.1,zMax:0.2};
+ const parts=physics.vehicleCollisionParts(pose,p);
+ const tractor=parts.find(part=>part.vehiclePart==='тягач');
+ assert.ok(tractor.components.some(component=>component.name===wheel.name));
+ const result=planner.clearance(pose,[obstacle],p);
+ assert.equal(result.distance,0);
+ assert.equal(result.verticalStatus,'vertical-overlap');
+});
+
+test('measured auxiliary height remains a separate component even inside the body footprint',()=>{
+ const p={...params,vehicleVerticalProfiles:{
+  ...allProfiles,'tractor-body':{zMin:0.5,zMax:3.0}
+ },auxiliaryEnvelopes:[{
+  name:'Верхний кронштейн внутри контура',anchor:'tractor-rear-axle',
+  longitudinalOffset:0,lateralOffset:0,length:0.4,width:0.4,
+  zMin:3.4,zMax:3.8,verticalUncertaintyMargin:0
+ }]};
+ const parts=physics.vehicleCollisionParts(pose,p);
+ const tractor=parts.find(part=>part.vehiclePart==='тягач');
+ assert.ok(tractor.components.some(component=>component.name==='Верхний кронштейн внутри контура'));
+ const obstacle={name:'Низкая балка',x:0,y:0,w:0.1,h:0.1,zMin:3.5,zMax:3.6};
+ const result=planner.clearance(pose,[obstacle],p);
+ assert.equal(result.distance,0);
+ assert.equal(result.verticalStatus,'vertical-overlap');
+});
