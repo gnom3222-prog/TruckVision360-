@@ -998,7 +998,8 @@ test('per-tire integrated estimates are withheld when RK4 endpoint reconstructio
  assert.equal(result.segmentsWithoutKinematicEstimate,1);
  assert.equal(result.integratedTravelComplete,false);
  assert.ok(result.tires.every(tire=>tire.integratedTravelEstimate===null));
- assert.ok(result.segments[0].endpointResidual.trailerHeading>1e-6);
+ assert.equal(result.segmentDiagnostics.length,1);
+ assert.ok(result.segmentDiagnostics[0].endpointResidual.trailerHeading>1e-6);
 });
 
 
