@@ -225,6 +225,85 @@ test('gate obstacle uncertainty rejects invalid bounds and a collapsed conservat
  assert.throws(()=>planner.createGateObstacles({...base,headingUncertaintyDeg:46}));
 });
 
+test('gate helper adds an oriented vertical lintel prism with measured dimensions and uncertainty',()=>{
+ const gate=planner.createGateObstacles({
+  centerX:10,centerY:-2,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2,
+  widthUncertainty:0.1,positionUncertainty:0.05,headingUncertaintyDeg:1,
+  lintel:{
+   clearHeight:3.8,clearHeightUncertainty:0.03,floorDatumUncertainty:0.02,
+   thickness:0.25,thicknessUncertainty:0.01,
+   depth:0.45,depthUncertainty:0.02
+  }
+ });
+ assert.equal(gate.length,3);
+ const beam=gate[2];
+ assert.equal(beam.name,'Верхняя перемычка ворот');
+ assert.equal(beam.kind,'gate-lintel');
+ assert.equal(beam.zMin,3.8);
+ assert.equal(beam.zMax,4.05);
+ assert.equal(beam.zUncertainty,0.06);
+ assert.equal(planner.validateObstacles(gate).length,0);
+ const along={x:Math.cos(Math.PI/2),y:Math.sin(Math.PI/2)};
+ const across={x:-along.y,y:along.x};
+ const alongValues=beam.polygon.map(point=>point.x*along.x+point.y*along.y);
+ const acrossValues=beam.polygon.map(point=>point.x*across.x+point.y*across.y);
+ assert.ok(Math.max(...alongValues)-Math.min(...alongValues)>=4.5);
+ assert.ok(Math.max(...acrossValues)-Math.min(...acrossValues)>=0.49);
+});
+
+test('gate helper rejects incomplete or physically inconsistent lintel measurements',()=>{
+ const base={centerX:0,centerY:0,clearWidth:4,postWidth:0.2,depth:0.6,heading:0};
+ assert.throws(()=>planner.createGateObstacles({...base,lintel:{clearHeight:3.8}}),/верхней перемычки/);
+ assert.throws(()=>planner.createGateObstacles({...base,lintel:{
+  clearHeight:3.8,clearHeightUncertainty:0,floorDatumUncertainty:0,
+  thickness:0.2,thicknessUncertainty:0,depth:0.4,depthUncertainty:0
+ }}),/верхней перемычки/);
+ assert.throws(()=>planner.createGateObstacles({...base,lintel:{
+  clearHeight:0.06,clearHeightUncertainty:0.1,floorDatumUncertainty:0,
+  thickness:0.2,thicknessUncertainty:0,depth:0.4,depthUncertainty:0
+ }}),/вертикальные или горизонтальные границы/);
+});
+
+test('vertical gate lintel clearance separates a measured low cab and reports overlap for a taller cab',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const baseProfiles={
+  'tractor-body':{zMin:0,zMax:3.5},
+  'tractor-cab':{zMin:0,zMax:3.5},
+  'trailer-body':{zMin:0,zMax:3.5},
+  'mirror':{zMin:0,zMax:3.5},
+  'tractor-wheel':{zMin:0,zMax:1},
+  'trailer-wheel':{zMin:0,zMax:1}
+ };
+ const gate=planner.createGateObstacles({
+  centerX:0,centerY:0,clearWidth:8,postWidth:0.2,depth:8,heading:0,
+  lintel:{
+   clearHeight:3.8,clearHeightUncertainty:0.03,floorDatumUncertainty:0.02,
+   thickness:0.25,thicknessUncertainty:0.01,
+   depth:8,depthUncertainty:0
+  }
+ });
+ const separated=planner.createClearanceChecker([gate[2]],{
+  ...params,vehicleVerticalProfiles:baseProfiles
+ })(q);
+ const cabSeparated=separated.perPart.find(item=>item.vehiclePart==='кабина');
+ assert.ok(cabSeparated);
+ assert.ok(cabSeparated.verticalEvaluatedObstacleCount>0);
+ assert.equal(cabSeparated.verticalUnverifiedObstacleCount,0);
+ assert.equal(cabSeparated.verticalStatus,'vertical-separated');
+ assert.ok(cabSeparated.verticalGap>0);
+ const overlapProfiles={
+  ...baseProfiles,
+  'tractor-cab':{zMin:0,zMax:4.0}
+ };
+ const overlap=planner.createClearanceChecker([gate[2]],{
+  ...params,vehicleVerticalProfiles:overlapProfiles
+ })(q);
+ const cabOverlap=overlap.perPart.find(item=>item.vehiclePart==='кабина');
+ assert.ok(cabOverlap);
+ assert.equal(cabOverlap.verticalStatus,'vertical-overlap');
+ assert.equal(cabOverlap.distance,0);
+});
+
 test('oriented gate jamb polygons participate in whole-vehicle clearance',()=>{
  const q={x:0,y:0,psi:0,psiT:0};
  const narrow=planner.createGateObstacles({
