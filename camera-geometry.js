@@ -302,18 +302,15 @@
   // each independent input separately. This is axis-wise sensitivity analysis,
   // not a joint Monte Carlo sample and not a deterministic error bound.
   let finiteVarianceWidth=0,finiteVarianceHeight=0;
-  let maxAxisAsymmetryRatio=0,nonlinearSensitivityChecks=0;
+  let maxAxisEvenShiftWidth=0,maxAxisEvenShiftHeight=0,nonlinearSensitivityChecks=0;
   let nonlinearSensitivityFailure=null;
   const addFinitePerturbation=(plus,minus)=>{
    const plusWidth=plus.width-base.width,minusWidth=minus.width-base.width;
    const plusHeight=plus.height-base.height,minusHeight=minus.height-base.height;
    finiteVarianceWidth+=(plusWidth*plusWidth+minusWidth*minusWidth)/2;
    finiteVarianceHeight+=(plusHeight*plusHeight+minusHeight*minusHeight)/2;
-   const asymmetryWidth=Math.abs(plusWidth+minusWidth)/
-    Math.max(Math.abs(plusWidth)+Math.abs(minusWidth),1e-12);
-   const asymmetryHeight=Math.abs(plusHeight+minusHeight)/
-    Math.max(Math.abs(plusHeight)+Math.abs(minusHeight),1e-12);
-   maxAxisAsymmetryRatio=Math.max(maxAxisAsymmetryRatio,asymmetryWidth,asymmetryHeight);
+   maxAxisEvenShiftWidth=Math.max(maxAxisEvenShiftWidth,Math.abs(plusWidth+minusWidth)/2);
+   maxAxisEvenShiftHeight=Math.max(maxAxisEvenShiftHeight,Math.abs(plusHeight+minusHeight)/2);
    nonlinearSensitivityChecks++;
   };
   const checkFinitePerturbation=(plusOptions,minusOptions)=>{
@@ -364,6 +361,10 @@
   const nonlinearSensitivityAvailable=nonlinearSensitivityFailure===null&&nonlinearSensitivityChecks>0;
   const nonlinearSigmaWidth=nonlinearSensitivityAvailable?Math.sqrt(finiteVarianceWidth):null;
   const nonlinearSigmaHeight=nonlinearSensitivityAvailable?Math.sqrt(finiteVarianceHeight):null;
+  const maxAxisAsymmetryRatio=nonlinearSensitivityAvailable?Math.max(
+   maxAxisEvenShiftWidth/Math.max(sigmaWidth,nonlinearSigmaWidth,1e-9),
+   maxAxisEvenShiftHeight/Math.max(sigmaHeight,nonlinearSigmaHeight,1e-9)
+  ):null;
   const relativeMismatch=(linearized,finite)=>{
    if(!Number.isFinite(finite))return Infinity;
    return Math.abs(finite-linearized)/Math.max(Math.abs(finite),Math.abs(linearized),1e-9);
