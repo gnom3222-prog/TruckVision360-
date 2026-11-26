@@ -1154,7 +1154,7 @@
   const longestIntegratedTire=complete?
    tires.reduce((best,tire)=>!best||tire.integratedTravelEstimate>best.integratedTravelEstimate?tire:best,null):null;
   return {
-   samples:states.length,segments:segments.length,totalRouteDistance:routeDistance,
+   samples:states.length,segments:segments.length,segmentDiagnostics:segments,totalRouteDistance:routeDistance,
    tires,totalSampledTireTravel,totalIntegratedTireTravel,longestSampledTire,longestIntegratedTire,
    segmentsUsingStepDistance,segmentsUsingChordFallback,
    segmentsWithKinematicEstimate,segmentsWithoutKinematicEstimate,
