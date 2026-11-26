@@ -208,6 +208,13 @@
   for(const p of b)for(let i=0;i<a.length;i++)d=Math.min(d,segDist(p,a[i],a[(i+1)%a.length]));
   return d;
  }
+ function distanceWithVertical(poly,obstacle,vehicleRange){
+  const horizontalDistance=polyDist(poly,obstacle.poly);
+  if(!obstacle.verticalRange)return {distance:horizontalDistance,horizontalDistance,verticalGap:null,verticalStatus:'2d-obstacle'};
+  if(!vehicleRange)return {distance:horizontalDistance,horizontalDistance,verticalGap:null,verticalStatus:'vehicle-height-unverified'};
+  const verticalGap=Math.max(0,obstacle.verticalRange.min-vehicleRange.max,vehicleRange.min-obstacle.verticalRange.max);
+  return {distance:Math.hypot(horizontalDistance,verticalGap),horizontalDistance,verticalGap,verticalStatus:verticalGap>1e-9?'vertical-separated':'vertical-overlap'};
+ }
  function polygonBounds(poly){
   let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
   for(const p of poly){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y);}
@@ -237,6 +244,14 @@
    if(o.nominalPolygon!==undefined&&!isConvexPolygon(o.nominalPolygon)){
     errors.push('Номинальный контур препятствия '+(index+1)+' должен быть конечным невырожденным выпуклым многоугольником.');
    }
+   const hasZMin=o.zMin!==undefined,hasZMax=o.zMax!==undefined;
+   if(hasZMin!==hasZMax){errors.push('Препятствие '+(index+1)+': вертикальный интервал должен содержать одновременно zMin и zMax.');}
+   else if(hasZMin&&(!Number.isFinite(o.zMin)||!Number.isFinite(o.zMax)||o.zMin< -2||o.zMax>30||o.zMax<=o.zMin)){
+    errors.push('Препятствие '+(index+1)+': zMin/zMax должны задавать конечный интервал от −2 до 30 м.');
+   }
+   const zUncertainty=o.zUncertainty??0;
+   if(!Number.isFinite(zUncertainty)||zUncertainty<0||zUncertainty>2)errors.push('Препятствие '+(index+1)+': zUncertainty должен находиться в диапазоне 0–2 м.');
+   if(!hasZMin&&zUncertainty>0)errors.push('Препятствие '+(index+1)+': zUncertainty можно задавать только вместе с zMin/zMax.');
   });
   return errors;
  }
@@ -302,26 +317,29 @@
   const obstacleErrors=validateObstacles(obstacles);
   if(obstacleErrors.length)throw new Error('Некорректные препятствия: '+obstacleErrors.join(' '));
   const prepared=obstacles.map(o=>{
-   const poly=obstaclePoly(o);
-   return {poly,bounds:polygonBounds(poly),name:o.name||'препятствие'};
+   const poly=obstaclePoly(o),zUncertainty=o.zUncertainty??0;
+   return {poly,bounds:polygonBounds(poly),name:o.name||'препятствие',
+    verticalRange:Number.isFinite(o.zMin)&&Number.isFinite(o.zMax)?{min:o.zMin-zUncertainty,max:o.zMax+zUncertainty}:null};
   });
+  const includeInternalComponentsForVertical=prepared.some(obstacle=>!!obstacle.verticalRange);
   return function(q,steerOverride){
    const steer=steerOverride!==undefined?steerOverride:(q&&q.steer!==undefined?q.steer:0);
-   const groups=rootPhysics.vehicleCollisionParts(q,p,steer);
+   const groups=rootPhysics.vehicleCollisionParts(q,p,steer,includeInternalComponentsForVertical);
    const perPart=groups.map(group=>({
-    distance:Infinity,obstacle:null,vehiclePart:group.vehiclePart,bodyIndex:group.bodyIndex,component:null
+    distance:Infinity,obstacle:null,vehiclePart:group.vehiclePart,bodyIndex:group.bodyIndex,component:null,
+    horizontalDistance:Infinity,verticalGap:null,verticalStatus:null,verticalUnverifiedObstacleCount:0,verticalEvaluatedObstacleCount:0
    }));
    for(const obstacle of prepared){
     for(let i=0;i<groups.length;i++){
      for(const component of groups[i].components){
       const bounds=polygonBounds(component.polygon);
       if(aabbDistance(bounds,obstacle.bounds)>=perPart[i].distance)continue;
-      const d=polyDist(component.polygon,obstacle.poly);
-      if(d<perPart[i].distance){
-       perPart[i]={
-        distance:d,obstacle:obstacle.name,vehiclePart:groups[i].vehiclePart,
-        bodyIndex:groups[i].bodyIndex,component:component.name
-       };
+      const measure=distanceWithVertical(component.polygon,obstacle,component.verticalRange);
+      if(obstacle.verticalRange){if(component.verticalRange)perPart[i].verticalEvaluatedObstacleCount++;else perPart[i].verticalUnverifiedObstacleCount++;}
+      if(measure.distance<perPart[i].distance){
+       perPart[i]={distance:measure.distance,horizontalDistance:measure.horizontalDistance,verticalGap:measure.verticalGap,verticalStatus:measure.verticalStatus,
+        obstacle:obstacle.name,vehiclePart:groups[i].vehiclePart,bodyIndex:groups[i].bodyIndex,component:component.name,
+        verticalUnverifiedObstacleCount:perPart[i].verticalUnverifiedObstacleCount,verticalEvaluatedObstacleCount:perPart[i].verticalEvaluatedObstacleCount};
       }
      }
     }
@@ -329,7 +347,8 @@
    let nearest=perPart[0];
    for(let i=1;i<perPart.length;i++)if(perPart[i].distance<nearest.distance)nearest=perPart[i];
    return {distance:nearest.distance,hit:nearest.obstacle,obstacle:nearest.obstacle,
-    vehiclePart:nearest.vehiclePart,bodyIndex:nearest.bodyIndex,component:nearest.component,perPart};
+    vehiclePart:nearest.vehiclePart,bodyIndex:nearest.bodyIndex,component:nearest.component,verticalStatus:nearest.verticalStatus,verticalGap:nearest.verticalGap,
+    verticalUnverifiedCount:perPart.reduce((sum,item)=>sum+item.verticalUnverifiedObstacleCount,0),verticalEvaluatedCount:perPart.reduce((sum,item)=>sum+item.verticalEvaluatedObstacleCount,0),perPart};
   };
  }
  function sweptDisplacementRatesPerMeter(steer,p,q=null,maxDistance=0.05){
@@ -476,6 +495,7 @@
    minimumClearanceLowerBound:Infinity,limitingDetail:null
   }));
   let previousState=null,previousCheck=null,distanceAlongRoute=0;
+  let verticalUnverifiedChecks=0,verticalEvaluatedChecks=0;
   const snapshot=q=>({x:q.x,y:q.y,psi:q.psi,psiT:q.psiT,gear:q.gear===-1?-1:1,
    steer:Number.isFinite(q.steer)?q.steer:0});
   for(let index=0;index<states.length;index++){
@@ -492,6 +512,8 @@
     throw new Error('Route state '+index+' has an invalid steering angle for per-part clearance analysis.');
    }
    const currentCheck=check(state);
+   verticalUnverifiedChecks+=currentCheck.verticalUnverifiedCount||0;
+   verticalEvaluatedChecks+=currentCheck.verticalEvaluatedCount||0;
    for(let partIndex=0;partIndex<parts.length;partIndex++){
     const sample=currentCheck.perPart[partIndex];
     if(sample.distance<parts[partIndex].minimumSampledClearance){
@@ -544,7 +566,7 @@
    item.minimumClearanceLowerBound<best.minimumClearanceLowerBound?item:best,parts[0]);
   return {
    statesAnalyzed:states.length,segmentsAnalyzed:Math.max(0,states.length-1),distanceAlongRoute,
-   parts,minimumClearanceLowerBound:limitingPart.minimumClearanceLowerBound,
+   parts,minimumClearanceLowerBound:limitingPart.minimumClearanceLowerBound,verticalUnverifiedChecks,verticalEvaluatedChecks,
    limitingPart:limitingPart.vehiclePart,limitingDetail:limitingPart.limitingDetail,
    method:'per-part Hausdorff displacement bound from each segment start pose',
    note:'Для сегмента атрибутируется часть автопоезда; ближайшее препятствие в середине сегмента может отличаться от препятствия в начальной позе.'
@@ -617,12 +639,16 @@
   }
   const obstacleErrors=validateObstacles(obstacles);
   if(obstacleErrors.length)throw new Error('Invalid obstacles for per-wheel clearance analysis: '+obstacleErrors.join(' '));
-  const prepared=obstacles.map(obstacle=>({poly:obstaclePoly(obstacle),name:obstacle.name||'препятствие'}));
+  const prepared=obstacles.map(obstacle=>{
+   const zUncertainty=obstacle.zUncertainty??0;
+   return {poly:obstaclePoly(obstacle),name:obstacle.name||'препятствие',verticalRange:Number.isFinite(obstacle.zMin)&&Number.isFinite(obstacle.zMax)?{min:obstacle.zMin-zUncertainty,max:obstacle.zMax+zUncertainty}:null};
+  });
   const uncertainty=Number.isFinite(p.footprintUncertainty)?p.footprintUncertainty:0;
   const tireLength=p.tireLength??0.72,tireWidth=p.tireWidth??0.44;
   const records=new Map();
   let previousState=null,previousChecks=null,distanceAlongRoute=0;
   let expectedFootprintCount=null;
+  let verticalUnverifiedChecks=0,verticalEvaluatedChecks=0;
   let segmentsWithIntermediateKinematicSamples=0,segmentsWithoutIntermediateKinematicSamples=0;
   let segmentsSkippedForNoObstacles=0,intermediateSamplesAnalyzed=0;
   let segmentsAtAdaptiveSamplingCap=0,maxAdaptiveIntervalsUsed=0;
@@ -674,13 +700,14 @@
     const footprintWidth=Number.isFinite(wheel.footprintWidth)?wheel.footprintWidth:tireWidth;
     const tireRadius=Math.hypot(tireLength/2+uncertainty,footprintWidth/2+uncertainty);
     const envelope=wheelEnvelopePolygon(wheel.center,tireRadius);
-    let envelopeDistance=Infinity,envelopeObstacle=null;
-    let polygonDistance=Infinity,polygonObstacle=null;
+    let envelopeDistance=Infinity,envelopeObstacle=null,envelopeVerticalStatus=null;
+    let polygonDistance=Infinity,polygonObstacle=null,polygonVerticalStatus=null;
     for(const obstacle of prepared){
-     const envelopeGap=polyDist(envelope,obstacle.poly);
-     if(envelopeGap<envelopeDistance){envelopeDistance=envelopeGap;envelopeObstacle=obstacle.name;}
-     const polygonGap=polyDist(wheel.polygon,obstacle.poly);
-     if(polygonGap<polygonDistance){polygonDistance=polygonGap;polygonObstacle=obstacle.name;}
+     const envelopeMeasure=distanceWithVertical(envelope,obstacle,wheel.verticalRange);
+     if(obstacle.verticalRange){if(wheel.verticalRange)verticalEvaluatedChecks++;else verticalUnverifiedChecks++;}
+     if(envelopeMeasure.distance<envelopeDistance){envelopeDistance=envelopeMeasure.distance;envelopeObstacle=obstacle.name;envelopeVerticalStatus=envelopeMeasure.verticalStatus;}
+     const polygonMeasure=distanceWithVertical(wheel.polygon,obstacle,wheel.verticalRange);
+     if(polygonMeasure.distance<polygonDistance){polygonDistance=polygonMeasure.distance;polygonObstacle=obstacle.name;polygonVerticalStatus=polygonMeasure.verticalStatus;}
     }
     let record=records.get(wheel.name);
     if(!record){
@@ -698,23 +725,23 @@
     if(polygonDistance<record.minimumSampledPolygonClearance){
      record.minimumSampledPolygonClearance=polygonDistance;
      record.minimumSampledPolygonDetail=Number.isFinite(polygonDistance)?{
-      obstacle:polygonObstacle,state:snapshot(state),distanceAlongRoute
+      obstacle:polygonObstacle,state:snapshot(state),distanceAlongRoute,verticalStatus:polygonVerticalStatus
      }:null;
     }
     if(envelopeDistance<record.minimumSampledEnvelopeClearance){
      record.minimumSampledEnvelopeClearance=envelopeDistance;
      record.minimumSampledEnvelopeDetail=Number.isFinite(envelopeDistance)?{
-      obstacle:envelopeObstacle,state:snapshot(state),distanceAlongRoute
+      obstacle:envelopeObstacle,state:snapshot(state),distanceAlongRoute,verticalStatus:envelopeVerticalStatus
      }:null;
     }
     if(envelopeDistance<record.minimumClearanceLowerBound){
      record.minimumClearanceLowerBound=envelopeDistance;
      record.limitingDetail=Number.isFinite(envelopeDistance)?{
       kind:'sampled-circumscribed-envelope',lowerBound:envelopeDistance,
-      obstacle:envelopeObstacle,state:snapshot(state),distanceAlongRoute
+      obstacle:envelopeObstacle,state:snapshot(state),distanceAlongRoute,verticalStatus:envelopeVerticalStatus
      }:null;
     }
-    return {wheel,envelopeDistance,envelopeObstacle,polygonDistance,polygonObstacle,tireRadius};
+    return {wheel,envelopeDistance,envelopeObstacle,envelopeVerticalStatus,polygonDistance,polygonObstacle,polygonVerticalStatus,tireRadius};
    });
    if(index>0){
     const previousGear=previousState.gear===-1?-1:1;
@@ -766,17 +793,18 @@
       throw new Error('Control-start wheel geometry count does not match the route footprint set.');
      }
      for(const wheel of controlStartFootprints){
-      let polygonDistance=Infinity,polygonObstacle=null;
+      let polygonDistance=Infinity,polygonObstacle=null,polygonVerticalStatus=null;
       for(const obstacle of prepared){
-       const gap=polyDist(wheel.polygon,obstacle.poly);
-       if(gap<polygonDistance){polygonDistance=gap;polygonObstacle=obstacle.name;}
+       const measure=distanceWithVertical(wheel.polygon,obstacle,wheel.verticalRange);
+       if(obstacle.verticalRange){if(wheel.verticalRange)verticalEvaluatedChecks++;else verticalUnverifiedChecks++;}
+       if(measure.distance<polygonDistance){polygonDistance=measure.distance;polygonObstacle=obstacle.name;polygonVerticalStatus=measure.verticalStatus;}
       }
       const record=records.get(wheel.name);
       if(!record)throw new Error('Wheel identity changed during control-start pose checking.');
       if(polygonDistance<record.minimumIntermediatePolygonClearance){
        record.minimumIntermediatePolygonClearance=polygonDistance;
        record.minimumIntermediatePolygonDetail=Number.isFinite(polygonDistance)?{
-        obstacle:polygonObstacle,
+        obstacle:polygonObstacle,verticalStatus:polygonVerticalStatus,
         state:snapshot({...previousState,gear:segmentGear,steer:segmentSteer,gearKnown:true,steerKnown:true}),
         distanceAlongRoute:segmentStartDistance,sampleFraction:0,controlStartPose:true
        }:null;
@@ -837,7 +865,7 @@
        const previous=previousByName.get(current.wheel.name);
        samplesByWheel.set(current.wheel.name,[{
         fraction:0,envelopeDistance:previous.envelopeDistance,
-        envelopeObstacle:previous.envelopeObstacle
+        envelopeObstacle:previous.envelopeObstacle,verticalStatus:previous.envelopeVerticalStatus
        }]);
       }
       for(const fraction of sampleFractions){
@@ -855,39 +883,36 @@
         const footprintWidth=Number.isFinite(wheel.footprintWidth)?wheel.footprintWidth:tireWidth;
         const tireRadius=Math.hypot(tireLength/2+uncertainty,footprintWidth/2+uncertainty);
         const envelope=wheelEnvelopePolygon(wheel.center,tireRadius);
-        let envelopeDistance=Infinity,envelopeObstacle=null;
-        let polygonDistance=Infinity,polygonObstacle=null;
+        let envelopeDistance=Infinity,envelopeObstacle=null,envelopeVerticalStatus=null;
+        let polygonDistance=Infinity,polygonObstacle=null,polygonVerticalStatus=null;
         for(const obstacle of prepared){
-         const envelopeGap=polyDist(envelope,obstacle.poly);
-         if(envelopeGap<envelopeDistance){
-          envelopeDistance=envelopeGap;
-          envelopeObstacle=obstacle.name;
-         }
-         const polygonGap=polyDist(wheel.polygon,obstacle.poly);
-         if(polygonGap<polygonDistance){
-          polygonDistance=polygonGap;
-          polygonObstacle=obstacle.name;
-         }
+         const envelopeMeasure=distanceWithVertical(envelope,obstacle,wheel.verticalRange);
+         if(obstacle.verticalRange){if(wheel.verticalRange)verticalEvaluatedChecks++;else verticalUnverifiedChecks++;}
+         if(envelopeMeasure.distance<envelopeDistance){envelopeDistance=envelopeMeasure.distance;envelopeObstacle=obstacle.name;envelopeVerticalStatus=envelopeMeasure.verticalStatus;}
+         const polygonMeasure=distanceWithVertical(wheel.polygon,obstacle,wheel.verticalRange);
+         if(polygonMeasure.distance<polygonDistance){polygonDistance=polygonMeasure.distance;polygonObstacle=obstacle.name;polygonVerticalStatus=polygonMeasure.verticalStatus;}
         }
         const record=records.get(wheel.name);
         if(!record)throw new Error('Wheel identity changed during intermediate swept sampling.');
         if(polygonDistance<record.minimumIntermediatePolygonClearance){
          record.minimumIntermediatePolygonClearance=polygonDistance;
          record.minimumIntermediatePolygonDetail=Number.isFinite(polygonDistance)?{
-          obstacle:polygonObstacle,state:snapshot({...intermediateState,gear:segmentGear,steer:segmentSteer}),
+          obstacle:polygonObstacle,verticalStatus:polygonVerticalStatus,
+          state:snapshot({...intermediateState,gear:segmentGear,steer:segmentSteer}),
           distanceAlongRoute:intermediateDistance,sampleFraction:fraction
          }:null;
         }
         if(envelopeDistance<record.minimumIntermediateEnvelopeClearance){
          record.minimumIntermediateEnvelopeClearance=envelopeDistance;
          record.minimumIntermediateEnvelopeDetail=Number.isFinite(envelopeDistance)?{
-          obstacle:envelopeObstacle,state:snapshot({...intermediateState,gear:segmentGear,steer:segmentSteer}),
+          obstacle:envelopeObstacle,verticalStatus:envelopeVerticalStatus,
+          state:snapshot({...intermediateState,gear:segmentGear,steer:segmentSteer}),
           distanceAlongRoute:intermediateDistance,sampleFraction:fraction
          }:null;
         }
         const wheelSamples=samplesByWheel.get(wheel.name);
         if(!wheelSamples)throw new Error('Wheel identity changed during adaptive swept sampling.');
-        wheelSamples.push({fraction,envelopeDistance,envelopeObstacle});
+        wheelSamples.push({fraction,envelopeDistance,envelopeObstacle,verticalStatus:envelopeVerticalStatus});
        }
        intermediateSamplesAnalyzed++;
       }
@@ -896,7 +921,7 @@
        const samples=samplesByWheel.get(wheelName);
        samples.push({
         fraction:1,envelopeDistance:current.envelopeDistance,
-        envelopeObstacle:current.envelopeObstacle
+        envelopeObstacle:current.envelopeObstacle,verticalStatus:current.envelopeVerticalStatus
        });
        const rate=ratesByWheel.get(wheelName);
        const halfIntervalDisplacementBound=rate*stepDistance/(2*intervalCount);
@@ -909,7 +934,7 @@
          record.minimumClearanceLowerBound=lowerBound;
          record.limitingDetail={
           kind:'adaptive-segment-circumscribed-envelope-lower-bound',lowerBound,
-          obstacleAtReference:reference.envelopeObstacle,referenceDistance:reference.envelopeDistance,
+          obstacleAtReference:reference.envelopeObstacle,referenceDistance:reference.envelopeDistance,verticalStatus:reference.verticalStatus,
           displacementRate:rate,stepDistance,intervalCount,
           intervalFractionStart:a.fraction,intervalFractionEnd:b.fraction,
           maximumCenterDisplacementBound:rate*stepDistance/intervalCount,
@@ -984,7 +1009,7 @@
    (!best||wheel.minimumClearanceLowerBound<best.minimumClearanceLowerBound)?wheel:best,null);
   return {
    statesAnalyzed:states.length,segmentsAnalyzed:Math.max(0,states.length-1),
-   distanceAlongRoute,wheels,limitingWheel,
+   distanceAlongRoute,wheels,limitingWheel,verticalUnverifiedChecks,verticalEvaluatedChecks,
    minimumClearanceLowerBound:limitingWheel?limitingWheel.minimumClearanceLowerBound:Infinity,
    segmentsWithIntermediateKinematicSamples,segmentsWithoutIntermediateKinematicSamples,
    segmentsSkippedForNoObstacles,intermediateSamplesAnalyzed,
