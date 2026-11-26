@@ -1,6 +1,6 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id),v=$('measureVideo'),c=$('measureOverlay'),ctx=c.getContext('2d'),status=$('cameraStatus'),geometry=window.TruckVisionCameraGeometry;
-let stream=null,streamRequestId=0,startPending=false,mode=null,pts=[],Hcal=null,referencePoints=null,referenceWidth=0,referenceHeight=0,fw=0,fh=0,frameLocked=false,frameCaptureId=0,frameCaptureTime=null,lastGateMeasurementFrameId=-1,lastGateFrameTime=null,gateRepeatabilityTolerances=null,gateRepeatabilityComplete=false;
+let stream=null,streamRequestId=0,startPending=false,mode=null,pts=[],Hcal=null,referencePoints=null,referenceWidth=0,referenceHeight=0,fw=0,fh=0,frameLocked=false,frameCaptureId=0,frameCaptureTime=null,lastGateMeasurementFrameId=-1,lastGateFrameTime=null,gateRepeatabilityTolerances=null,gateRepeatabilityPose=null,gateRepeatabilityComplete=false;
 const gateReadings=[];
 const say=s=>status.textContent=s,dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 function readMeasurementUncertainty(){
@@ -25,9 +25,20 @@ function readGateRepeatabilityTolerance(){
  }
  return {widthTolerance,heightTolerance};
 }
+function readGateMapPose(){
+ const xText=$('gateCenterX').value.trim(),yText=$('gateCenterY').value.trim(),headingText=$('gateHeadingDeg').value.trim();
+ if(!xText||!yText||!headingText)throw new Error('Введите центр ворот X/Y и направление линии ворот до начала серии повторов.');
+ const anchor={x:Number(xText),y:Number(yText)},headingDeg=Number(headingText);
+ if(![anchor.x,anchor.y,headingDeg].every(Number.isFinite)||
+    Math.abs(anchor.x)>10000||Math.abs(anchor.y)>10000||headingDeg< -180||headingDeg>180){
+  throw new Error('Проверьте координаты центра ворот и направление линии ворот.');
+ }
+ return {anchor,headingDeg};
+}
 function clearGateRepeatability(resetFrameTracking=false){
  gateReadings.length=0;
  gateRepeatabilityTolerances=null;
+ gateRepeatabilityPose=null;
  gateRepeatabilityComplete=false;
  if(resetFrameTracking){
   frameCaptureId=0;frameCaptureTime=null;lastGateMeasurementFrameId=-1;lastGateFrameTime=null;
@@ -156,6 +167,14 @@ say('Препятствие добавлено на карту: размеры '
   throw Error('Допуски повторяемости изменились внутри серии. Очистите серию и начните заново.');
  }
  if(!gateRepeatabilityTolerances)gateRepeatabilityTolerances=tolerances;
+ const mapPose=readGateMapPose();
+ if(gateRepeatabilityPose&&(
+    Math.abs(mapPose.anchor.x-gateRepeatabilityPose.anchor.x)>1e-9||
+    Math.abs(mapPose.anchor.y-gateRepeatabilityPose.anchor.y)>1e-9||
+    Math.abs(mapPose.headingDeg-gateRepeatabilityPose.headingDeg)>1e-9)){
+  throw Error('Координаты центра или направление ворот изменились внутри серии. Очистите серию и начните заново.');
+ }
+ if(!gateRepeatabilityPose)gateRepeatabilityPose=mapPose;
  gateReadings.push({width:w,height:h,sigmaWidth:measurement.sigmaWidth,sigmaHeight:measurement.sigmaHeight});
  lastGateMeasurementFrameId=frameCaptureId;
  lastGateFrameTime=frameCaptureTime;
@@ -174,8 +193,8 @@ say('Препятствие добавлено на карту: размеры '
   say('Повторяемость не подтверждена. Разброс ширины или высоты превышает введённый допуск. Ворота не обновлены; очистите серию и повторите измерения.');
   mode=null;pts=[];draw();return;
  }
- const anchor={x:Number($('gateCenterX').value),y:Number($('gateCenterY').value)};
- const headingDeg=Number($('gateHeadingDeg').value);
+ const anchor=gateRepeatabilityPose.anchor;
+ const headingDeg=gateRepeatabilityPose.headingDeg;
  const registration=geometry.registerGateOnMap(measurement,anchor,headingDeg*Math.PI/180,repeatability);
  const applyRegistration=window.TruckVisionApplyGateRegistration;
  if(typeof applyRegistration!=='function')throw Error('Привязка ворот к карте недоступна. Обновите приложение и повторите измерение.');
