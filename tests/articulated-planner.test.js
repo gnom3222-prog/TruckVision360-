@@ -1826,3 +1826,106 @@ test('geometry uncertainty planning preserves an incomplete nominal search',()=>
  assert.equal(result.geometrySensitivity.status,'nominal-search-incomplete');
  assert.equal(result.recommendation,null);
 });
+
+
+test('adaptive per-wheel displacement-rate bound covers dense RK4 references in forward and reverse at high articulation',()=>{
+ const p={...params,trailerTrack:2.79,footprintUncertainty:0.03};
+ const obstacle={x:60,y:60,w:0.2,h:0.2,name:'dense rate reference far obstacle'};
+ const stepDistance=0.12,denseSteps=96,denseStep=stepDistance/denseSteps;
+ for(const articulationDeg of [-70,-35,0,35,70]){
+  for(const steer of [-0.42,0,0.42]){
+   for(const gear of [-1,1]){
+    const start={
+     x:0,y:0,psi:0.2,psiT:0.2-articulationDeg*Math.PI/180,
+     gear,steer,stepDistance:0
+    };
+    const end=physics.rk4(start,gear*0.7,steer,stepDistance/0.7,p);
+    const result=planner.analyzeWheelTrajectoryClearance([
+     start,{...end,gear,steer,stepDistance}
+    ],[obstacle],p);
+    const segment=result.segmentDiagnostics[0];
+    assert.equal(segment.status,'rk4-adaptive-intermediate-samples');
+    assert.ok(Number.isFinite(segment.maxWheelCenterRatePerMeter));
+    let denseState=start;
+    let previous=physics.wheelFootprints(denseState,p,steer);
+    for(let sample=1;sample<=denseSteps;sample++){
+     denseState=physics.rk4(denseState,gear*0.7,steer,denseStep/0.7,p);
+     const current=physics.wheelFootprints(denseState,p,steer);
+     assert.equal(current.length,10);
+     for(let wheelIndex=0;wheelIndex<current.length;wheelIndex++){
+      const before=previous[wheelIndex],after=current[wheelIndex];
+      assert.equal(after.name,before.name);
+      const observedRate=Math.hypot(
+       after.center.x-before.center.x,after.center.y-before.center.y
+      )/denseStep;
+      assert.ok(observedRate<=segment.maxWheelCenterRatePerMeter+1e-4,
+       JSON.stringify({articulationDeg,steer,gear,wheel:after.name,observedRate,bound:segment.maxWheelCenterRatePerMeter}));
+     }
+     previous=current;
+    }
+   }
+  }
+ }
+});
+
+
+test('adaptive per-wheel interval lower bounds stay below dense reverse high-articulation clearance references',()=>{
+ const p={...params,trailerTrack:2.79,footprintUncertainty:0.05};
+ const articulationDeg=70,steer=-0.35,gear=-1,stepDistance=0.2,denseSteps=256;
+ const start={
+  x:0,y:0,psi:0.15,psiT:0.15-articulationDeg*Math.PI/180,
+  gear,steer,stepDistance:0
+ };
+ const middle=physics.rk4(start,gear*0.7,steer,stepDistance*0.5/0.7,p);
+ const target=physics.wheelFootprints(middle,p,steer).find(wheel=>
+  wheel.name==='левое колесо 1-й оси полуприцепа'
+ );
+ assert.ok(target);
+ const outward={x:-Math.sin(target.heading),y:Math.cos(target.heading)};
+ const obstacle={
+  x:target.center.x+outward.x*0.95,
+  y:target.center.y+outward.y*0.95,
+  w:0.2,h:0.2,name:'dense reverse clearance reference'
+ };
+ const end=physics.rk4(start,gear*0.7,steer,stepDistance/0.7,p);
+ const result=planner.analyzeWheelTrajectoryClearance([
+  start,{...end,gear,steer,stepDistance}
+ ],[obstacle],p);
+ const segment=result.segmentDiagnostics[0];
+ assert.equal(segment.status,'rk4-adaptive-intermediate-samples');
+ assert.ok(segment.intervalCount>4);
+ const tireRadius=Math.hypot(
+  p.tireLength/2+p.footprintUncertainty,
+  p.tireWidth/2+p.footprintUncertainty
+ );
+ const denseMinimumByWheel=new Map();
+ let state=start;
+ for(let sample=0;sample<=denseSteps;sample++){
+  if(sample>0)state=physics.rk4(state,gear*0.7,steer,
+   stepDistance/denseSteps/0.7,p);
+  for(const wheel of physics.wheelFootprints(state,p,steer)){
+   const dx=Math.max(
+    obstacle.x-obstacle.w/2-wheel.center.x,
+    0,
+    wheel.center.x-(obstacle.x+obstacle.w/2)
+   );
+   const dy=Math.max(
+    obstacle.y-obstacle.h/2-wheel.center.y,
+    0,
+    wheel.center.y-(obstacle.y+obstacle.h/2)
+   );
+   const circleClearance=Math.hypot(dx,dy)-tireRadius;
+   denseMinimumByWheel.set(wheel.name,Math.min(
+    denseMinimumByWheel.get(wheel.name)??Infinity,circleClearance
+   ));
+  }
+ }
+ for(const wheel of result.wheels){
+  const denseReference=denseMinimumByWheel.get(wheel.name);
+  assert.ok(Number.isFinite(denseReference));
+  assert.ok(denseReference>=0,
+   wheel.name+' must remain outside the tire circumscribed-circle reference in this test fixture');
+  assert.ok(wheel.minimumClearanceLowerBound<=denseReference+1e-4,
+   JSON.stringify({wheel:wheel.name,lowerBound:wheel.minimumClearanceLowerBound,denseReference}));
+ }
+});
