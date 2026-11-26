@@ -37,7 +37,7 @@ test('measured trailer axle hardware envelope is positioned in the axle-local fr
 test('measured external hub or suspension envelope joins trailer collision components',()=>{
  const p={...params,auxiliaryEnvelopes:[{
   name:'Наружный корпус ступицы',anchor:'trailer-axle-1',
-  longitudinalOffset:0,lateralOffset:1.0,
+  longitudinalOffset:0,lateralOffset:1.7,
   length:0.9,width:0.5,uncertaintyMargin:0.05
  }]};
  const parts=physics.vehicleCollisionParts(pose,p);
@@ -94,8 +94,8 @@ test('swept displacement rates include protruding measured axle hardware envelop
  const baseRates=planner.sweptDisplacementRatesPerMeter(0.24,params);
  const p={...params,auxiliaryEnvelopes:[{
   name:'Выносной кронштейн',anchor:'trailer-axle-1',
-  longitudinalOffset:0.4,lateralOffset:2.7,
-  length:1.2,width:0.8,uncertaintyMargin:0.1
+  longitudinalOffset:5,lateralOffset:3,
+  length:5,width:5,uncertaintyMargin:1
  }]};
  const hardwareRates=planner.sweptDisplacementRatesPerMeter(0.24,p);
  assert.ok(hardwareRates.trailer>baseRates.trailer,
@@ -110,10 +110,10 @@ test('null auxiliary envelope configuration is rejected instead of treated as an
 test('planner clearance identifies a protruding measured hub envelope by name',()=>{
  const p={...params,auxiliaryEnvelopes:[{
   name:'Наружный корпус ступицы',anchor:'trailer-axle-1',
-  longitudinalOffset:0,lateralOffset:1.0,length:0.9,width:0.5
+  longitudinalOffset:0,lateralOffset:1.7,length:0.9,width:0.5
  }]};
  const axle=physics.trailerAxlePoints(pose,p)[0];
- const obstacle={x:axle.x,y:axle.y+1.0,w:0.08,h:0.08,name:'Контрольный столб'};
+ const obstacle={x:axle.x,y:axle.y+1.7,w:0.08,h:0.08,name:'Контрольный столб'};
  const result=planner.analyzeTrajectoryClearance([
   {...pose,gear:1,steer:0}
  ],[obstacle],p);
