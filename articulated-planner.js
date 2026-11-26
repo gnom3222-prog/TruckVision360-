@@ -1192,6 +1192,16 @@
   }
   return peak;
  }
+ function nextGearTransitionBoundary(states,startIndex,currentGear){
+  if(!Array.isArray(states)||states.length<2||!Number.isInteger(startIndex)||
+     startIndex<0||startIndex>=states.length)return null;
+  const from=currentGear===-1?-1:1;
+  for(let index=Math.max(1,startIndex+1);index<states.length;index++){
+   const to=states[index]&&states[index].gear===-1?-1:1;
+   if(to!==from)return {from,to,changeIndex:index,boundaryIndex:index-1};
+  }
+  return null;
+ }
  function recommendStart(states,options={}){
   if(!Array.isArray(states)||states.length<2)return {ok:false,reason:'route-too-short'};
   const steeringThreshold=Number.isFinite(options.steeringThreshold)&&options.steeringThreshold>0?options.steeringThreshold:0.08;
@@ -2221,5 +2231,5 @@ function planAlternativesWithVehicleParameterBounds(options={}){
  };
 }
 
-return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,parameterEndpointVectors,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,articulationExposure,recommendStart,compareStartCandidates,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon,inflateObstaclePoseUncertainty});
+return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,parameterEndpointVectors,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,articulationExposure,recommendStart,nextGearTransitionBoundary,compareStartCandidates,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon,inflateObstaclePoseUncertainty});
 });
