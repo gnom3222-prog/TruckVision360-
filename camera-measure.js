@@ -1,7 +1,7 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id),v=$('measureVideo'),c=$('measureOverlay'),ctx=c.getContext('2d'),status=$('cameraStatus'),geometry=window.TruckVisionCameraGeometry;
-let stream=null,streamRequestId=0,startPending=false,mode=null,pts=[],Hcal=null,referencePoints=null,referenceWidth=0,referenceHeight=0,fw=0,fh=0,frameLocked=false,frameCaptureId=0,frameCaptureTime=null,lastGateMeasurementFrameId=-1,lastGateFrameTime=null,gateRepeatabilityTolerances=null,gateRepeatabilityPose=null,gateRepeatabilityMeasurementConfig=null,gateRepeatabilityComplete=false;
-const gateReadings=[];
+let stream=null,streamRequestId=0,startPending=false,mode=null,pts=[],Hcal=null,referencePoints=null,referenceWidth=0,referenceHeight=0,fw=0,fh=0,frameLocked=false,frameCaptureId=0,frameCaptureTime=null,lastGateMeasurementFrameId=-1,lastGateFrameTime=null,gateRepeatabilityTolerances=null,gateRepeatabilityPose=null,gateRepeatabilityMeasurementConfig=null,gateRepeatabilityComplete=false,lastObstacleMeasurementFrameId=-1,lastObstacleFrameTime=null,obstacleRepeatabilityTolerances=null,obstacleRepeatabilityPose=null,obstacleRepeatabilityMeasurementConfig=null,obstacleRepeatabilityComplete=false;
+const gateReadings=[],obstacleReadings=[];
 const say=s=>status.textContent=s,dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 function readMeasurementUncertainty(){
  const pointText=$('cameraPointSigma').value.trim();
@@ -35,6 +35,42 @@ function readGateMapPose(){
  }
  return {anchor,headingDeg};
 }
+function readObstacleRepeatabilityTolerance(){
+ const widthText=$('cameraObstacleRepeatabilityWidthTolerance').value.trim();
+ const depthText=$('cameraObstacleRepeatabilityDepthTolerance').value.trim();
+ if(!widthText||!depthText)throw new Error('Введите операторские допуски разброса ширины и глубины основания препятствия.');
+ const widthTolerance=Number(widthText),heightTolerance=Number(depthText);
+ if(!Number.isFinite(widthTolerance)||widthTolerance<0.001||widthTolerance>0.5||
+    !Number.isFinite(heightTolerance)||heightTolerance<0.001||heightTolerance>0.5){
+  throw new Error('Допуски повторяемости препятствия должны быть в диапазоне 0,001–0,5 м.');
+ }
+ return {widthTolerance,heightTolerance};
+}
+function readObstacleMapPose(){
+ const xText=$('cameraObstacleX').value.trim(),yText=$('cameraObstacleY').value.trim();
+ const headingText=$('cameraObstacleHeading').value.trim();
+ const name=$('cameraObstacleName').value.trim();
+ const xUncertaintyText=$('cameraObstaclePositionUncertaintyX').value.trim();
+ const yUncertaintyText=$('cameraObstaclePositionUncertaintyY').value.trim();
+ const headingUncertaintyText=$('cameraObstacleHeadingUncertaintyDeg').value.trim();
+ if(!xText||!yText||!headingText||!name)throw new Error('Введите название, центр X/Y и направление препятствия на карте до начала серии повторов.');
+ if(!xUncertaintyText||!yUncertaintyText||!headingUncertaintyText)throw new Error('Введите отдельные допуски положения X/Y и направления препятствия на карте.');
+ const anchor={x:Number(xText),y:Number(yText)},headingDeg=Number(headingText);
+ const poseUncertainty={
+  positionX:Number(xUncertaintyText),
+  positionY:Number(yUncertaintyText),
+  headingDeg:Number(headingUncertaintyText)
+ };
+ if(![anchor.x,anchor.y,headingDeg].every(Number.isFinite)||
+    Math.abs(anchor.x)>100||Math.abs(anchor.y)>100||headingDeg< -180||headingDeg>180||
+    ![poseUncertainty.positionX,poseUncertainty.positionY,poseUncertainty.headingDeg].every(Number.isFinite)||
+    poseUncertainty.positionX<0||poseUncertainty.positionX>2||
+    poseUncertainty.positionY<0||poseUncertainty.positionY>2||
+    poseUncertainty.headingDeg<0||poseUncertainty.headingDeg>45){
+  throw new Error('Проверьте координаты, направление и допуски ручной привязки препятствия.');
+ }
+ return {anchor,headingDeg,name,poseUncertainty};
+}
 function clearGateRepeatability(resetFrameTracking=false){
  gateReadings.length=0;
  gateRepeatabilityTolerances=null;
@@ -47,6 +83,16 @@ function clearGateRepeatability(resetFrameTracking=false){
  const output=$('cameraRepeatabilityStatus');
  if(output)output.textContent='Повторяемость не оценена. Нужны минимум три отдельно зафиксированных кадра.';
 }
+function clearObstacleRepeatability(resetFrameTracking=false){
+ obstacleReadings.length=0;
+ obstacleRepeatabilityTolerances=null;
+ obstacleRepeatabilityPose=null;
+ obstacleRepeatabilityMeasurementConfig=null;
+ obstacleRepeatabilityComplete=false;
+ if(resetFrameTracking){lastObstacleMeasurementFrameId=-1;lastObstacleFrameTime=null;}
+ const output=$('cameraObstacleRepeatabilityStatus');
+ if(output)output.textContent='Повторяемость препятствия не оценена. Нужны минимум три отдельно зафиксированных кадра.';
+}
 function lockFrame(){
  if(frameLocked)return true;
  if(!stream||!v.videoWidth||!v.videoHeight)return false;
@@ -55,7 +101,8 @@ function lockFrame(){
   say('Браузер не сообщил время видеокадра. Дождитесь стабильного изображения и повторите калибровку.');
   return false;
  }
- if(lastGateFrameTime!==null&&captureTime<=lastGateFrameTime+0.005){
+ const lastAcceptedFrameTime=Math.max(lastGateFrameTime===null?-Infinity:lastGateFrameTime,lastObstacleFrameTime===null?-Infinity:lastObstacleFrameTime);
+ if(Number.isFinite(lastAcceptedFrameTime)&&captureTime<=lastAcceptedFrameTime+0.005){
   say('Дождитесь следующего видеокадра после сброса калибровки.');
   return false;
  }
