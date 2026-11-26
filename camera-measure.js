@@ -1,44 +1,67 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id),v=$('measureVideo'),c=$('measureOverlay'),ctx=c.getContext('2d'),status=$('cameraStatus'),geometry=window.TruckVisionCameraGeometry;
-let stream=null,mode=null,pts=[],Hcal=null,referencePoints=null,referenceWidth=0,referenceHeight=0,fw=0,fh=0,frameLocked=false;
+let stream=null,streamRequestId=0,startPending=false,mode=null,pts=[],Hcal=null,referencePoints=null,referenceWidth=0,referenceHeight=0,fw=0,fh=0,frameLocked=false;
 const say=s=>status.textContent=s,dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 function lockFrame(){if(frameLocked)return true;if(!stream||!v.videoWidth||!v.videoHeight)return false;v.pause();frameLocked=true;return true;}
 function resumeFrame(){if(!frameLocked)return;frameLocked=false;if(stream)v.play().catch(()=>say('Не удалось возобновить видеопоток. Выключите и снова включите камеру.'));}
 function draw(){if(!v.videoWidth)return;const w=v.videoWidth,h=v.videoHeight;if(c.width!==w||c.height!==h){if(fw&&(w!==fw||h!==fh)){Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];resumeFrame();say('Изменился размер видеокадра. Калибровка сброшена; повторите её.');}c.width=w;c.height=h;fw=w;fh=h;}c.style.left=v.offsetLeft+'px';c.style.top=v.offsetTop+'px';c.style.width=v.clientWidth+'px';c.style.height=v.clientHeight+'px';ctx.clearRect(0,0,w,h);if(pts.length){ctx.strokeStyle='#ffe082';ctx.fillStyle='#ffe082';ctx.lineWidth=Math.max(3,w/500);ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));if(pts.length===4)ctx.closePath();ctx.stroke();pts.forEach((p,i)=>{ctx.beginPath();ctx.arc(p.x,p.y,Math.max(8,w/160),0,7);ctx.fill();ctx.fillStyle='#081321';ctx.font='bold '+Math.max(16,w/40)+'px system-ui';ctx.fillText((mode==='reference'?['1','2','3','4']:['A','B','C','D'])[i],p.x+8,p.y-8);ctx.fillStyle='#ffe082';});}}
-async function start(){if(stream)return;if(!geometry){say('Модуль геометрии камеры не загрузился. Обновите страницу и повторите попытку.');return;}if(!isSecureContext||!navigator.mediaDevices?.getUserMedia){say('Камера доступна только на защищённой HTTPS-странице в Safari.');return;}try{
- stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});
- const activeStream=stream;
- const handleEnded=()=>{
-  if(stream!==activeStream)return;
-  stream=null;
-  v.pause();
-  v.srcObject=null;
+async function start(){
+ if(stream||startPending)return;
+ if(document.visibilityState==='hidden'){say('Страница находится в фоне. Вернитесь в приложение и нажмите «Включить камеру».');return;}
+ if(!geometry){say('Модуль геометрии камеры не загрузился. Обновите страницу и повторите попытку.');return;}
+ if(!isSecureContext||!navigator.mediaDevices?.getUserMedia){say('Камера доступна только на защищённой HTTPS-странице в Safari.');return;}
+ const requestId=++streamRequestId;
+ startPending=true;
+ let acquiredStream=null;
+ try{
+  acquiredStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});
+  if(requestId!==streamRequestId||document.visibilityState==='hidden'){
+   acquiredStream.getTracks().forEach(t=>t.stop());
+   if(document.visibilityState==='hidden')say('Страница перешла в фон. Запрошенный поток остановлен; вернитесь и нажмите «Включить камеру».');
+   return;
+  }
+  stream=acquiredStream;
+  const activeStream=stream;
+  const handleEnded=()=>{
+   if(stream!==activeStream)return;
+   stream=null;
+   streamRequestId++;
+   startPending=false;
+   v.pause();
+   v.srcObject=null;
+   Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;
+   ctx.clearRect(0,0,c.width,c.height);
+   say('Видеопоток камеры завершился или был прерван. Калибровка сброшена; нажмите «Включить камеру» и повторите измерение.');
+  };
+  for(const track of activeStream.getTracks()){
+   if(typeof track.addEventListener==='function')track.addEventListener('ended',handleEnded,{once:true});
+   else track.onended=handleEnded;
+  }
+  v.srcObject=activeStream;
+  await v.play();
+  if(stream!==activeStream||requestId!==streamRequestId)throw new Error('Видеопоток камеры завершился до запуска.');
   Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;
-  ctx.clearRect(0,0,c.width,c.height);
-  say('Видеопоток камеры завершился или был прерван. Калибровка сброшена; нажмите «Включить камеру» и повторите измерение.');
- };
- for(const track of activeStream.getTracks()){
-  if(typeof track.addEventListener==='function')track.addEventListener('ended',handleEnded,{once:true});
-  else track.onended=handleEnded;
+  say('Камера включена. Установите прямоугольный эталон в ту же плоскость, что и объект. При нажатии «Калибровать» текущий кадр будет зафиксирован: отметьте эталон и объект на одном неподвижном изображении.');
+  draw();
+ }catch(e){
+  if(requestId!==streamRequestId){
+   acquiredStream?.getTracks().forEach(t=>t.stop());
+   return;
+  }
+  const failedStream=stream;stream=null;failedStream?.getTracks().forEach(t=>t.stop());v.srcObject=null;
+  const messages={
+   NotAllowedError:'Доступ к камере запрещён. Разрешите камеру для этого сайта в настройках Safari и нажмите «Включить камеру» ещё раз.',
+   NotFoundError:'Камера не найдена. Проверьте, что устройство имеет доступную камеру.',
+   NotReadableError:'Камера занята другим приложением или недоступна. Закройте другие приложения, использующие камеру.',
+   OverconstrainedError:'Камера не поддерживает запрошенное разрешение. Повторите запуск.',
+   SecurityError:'Браузер заблокировал камеру. Откройте приложение по HTTPS и проверьте разрешения сайта.'
+  };
+  say(messages[e.name]||('Не удалось включить камеру: '+(e.message||e.name)));
+ }finally{
+  if(requestId===streamRequestId)startPending=false;
  }
- v.srcObject=activeStream;
- await v.play();
- if(stream!==activeStream)throw new Error('Видеопоток камеры завершился до запуска.');
- Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;
- say('Камера включена. Установите прямоугольный эталон в ту же плоскость, что и объект. При нажатии «Калибровать» текущий кадр будет зафиксирован: отметьте эталон и объект на одном неподвижном изображении.');
- draw();
-}catch(e){
- const failedStream=stream;stream=null;failedStream?.getTracks().forEach(t=>t.stop());v.srcObject=null;
- const messages={
-  NotAllowedError:'Доступ к камере запрещён. Разрешите камеру для этого сайта в настройках Safari и нажмите «Включить камеру» ещё раз.',
-  NotFoundError:'Камера не найдена. Проверьте, что устройство имеет доступную камеру.',
-  NotReadableError:'Камера занята другим приложением или недоступна. Закройте другие приложения, использующие камеру.',
-  OverconstrainedError:'Камера не поддерживает запрошенное разрешение. Повторите запуск.',
-  SecurityError:'Браузер заблокировал камеру. Откройте приложение по HTTPS и проверьте разрешения сайта.'
- };
- say(messages[e.name]||('Не удалось включить камеру: '+(e.message||e.name)));
-}}
-function stop(){const activeStream=stream;stream=null;v.pause();activeStream?.getTracks().forEach(t=>t.stop());v.srcObject=null;Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;ctx.clearRect(0,0,c.width,c.height);say('Камера выключена. При следующем запуске нужна новая калибровка.');}
+}
+function stop(){streamRequestId++;startPending=false;const activeStream=stream;stream=null;v.pause();activeStream?.getTracks().forEach(t=>t.stop());v.srcObject=null;Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;ctx.clearRect(0,0,c.width,c.height);say('Камера выключена. При следующем запуске нужна новая калибровка.');}
 function choose(m){
  if(!stream||!v.videoWidth){say('Сначала включите камеру.');return;}
  if((m==='gate'||m==='obstacle')&&!Hcal){say('Сначала выполните калибровку.');return;}
@@ -85,5 +108,5 @@ say('Препятствие добавлено на карту: размеры '
  $('gateResult').textContent=dimensions+' Измеренная ширина, вручную заданные координаты центра ('+registration.centerX.toFixed(2)+', '+registration.centerY.toFixed(2)+' м) и курс линии ворот ('+registration.headingDeg.toFixed(1)+'°) перенесены в карту. Косяки ворот включены как препятствия. Ширина оболочки ±'+registration.widthUncertaintyBound.toFixed(3)+' м (приблизительно 2σ); расчётный чистый проём сужен до '+(registration.clearWidth-registration.widthUncertaintyBound).toFixed(3)+' м. Центр и курс не определяются камерой — их нужно задать в разделе «Ворота» и указать их допуски. Перепроверьте рулеткой.';
  say('Измерение применено к карте: ширина '+w.toFixed(2)+' м; центр ('+registration.centerX.toFixed(2)+', '+registration.centerY.toFixed(2)+' м); направление линии '+registration.headingDeg.toFixed(1)+'°. Косяки включены. Оценка чувствительности (1σ): ширина ±'+measurement.sigmaWidth.toFixed(3)+' м; высота ±'+measurement.sigmaHeight.toFixed(3)+' м. Нелинейная осевая проверка ±1σ выполнена; расхождение ширины '+(100*Number(measurement.nonlinearMismatchWidth||0)).toFixed(1)+'%, асимметрия '+(100*Number(measurement.maxAxisAsymmetryRatio||0)).toFixed(1)+'%. Для геометрии ворот применена отдельная оболочка ширины ±'+registration.widthUncertaintyBound.toFixed(3)+' м (2σ, приблизительное нормальное приближение); расчётный чистый проём сужен до '+(registration.clearWidth-registration.widthUncertaintyBound).toFixed(3)+' м. Положение и курс введены вручную, их погрешность не определена камерой. Это не полная точность камеры и не гарантия безопасного проезда.');
 }mode=null;pts=[];}}catch(err){const failedMode=mode;mode=null;pts=[];const unchanged=failedMode==='obstacle'?'Препятствие не добавлено. Проверьте координаты и повторите измерение.':'Ширина ворот не обновлена; проверьте актуальное значение рулеткой.';say((err.message||'Ошибка измерения. Повторите калибровку.')+' '+unchanged);}draw();});
-v.addEventListener('resize',draw);window.addEventListener('resize',draw);window.addEventListener('orientationchange',()=>{Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];resumeFrame();draw();say('Ориентация телефона изменилась. Калибровка сброшена. Повторите калибровку.');});['cameraReferenceWidth','cameraReferenceHeight'].forEach(id=>$(id).addEventListener('input',()=>{if(Hcal){Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];draw();say('Размер эталона изменён. Повторите калибровку перед измерением ворот.');}}));$('cameraStart').addEventListener('click',start);$('cameraStop').addEventListener('click',stop);$('cameraCalibrate').addEventListener('click',()=>choose('reference'));$('cameraMeasureGate').addEventListener('click',()=>choose('gate'));$('cameraMeasureObstacle')?.addEventListener('click',()=>choose('obstacle'));$('cameraClearObstacles')?.addEventListener('click',()=>{const clear=window.TruckVisionClearCameraObstacles;if(typeof clear==='function'&&clear()===true)say('Добавленные камерой препятствия удалены с карты.');});$('cameraReset').addEventListener('click',()=>{Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];draw();resumeFrame();say(stream?'Калибровка сброшена; видеопоток возобновлён. Переместите камеру к новой плоскости и выполните калибровку заново.':'Калибровка сброшена.');});v.addEventListener('loadedmetadata',draw);window.addEventListener('pagehide',stop);
+v.addEventListener('resize',draw);window.addEventListener('resize',draw);window.addEventListener('orientationchange',()=>{Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];resumeFrame();draw();say('Ориентация телефона изменилась. Калибровка сброшена. Повторите калибровку.');});['cameraReferenceWidth','cameraReferenceHeight'].forEach(id=>$(id).addEventListener('input',()=>{if(Hcal){Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];draw();say('Размер эталона изменён. Повторите калибровку перед измерением ворот.');}}));$('cameraStart').addEventListener('click',start);$('cameraStop').addEventListener('click',stop);$('cameraCalibrate').addEventListener('click',()=>choose('reference'));$('cameraMeasureGate').addEventListener('click',()=>choose('gate'));$('cameraMeasureObstacle')?.addEventListener('click',()=>choose('obstacle'));$('cameraClearObstacles')?.addEventListener('click',()=>{const clear=window.TruckVisionClearCameraObstacles;if(typeof clear==='function'&&clear()===true)say('Добавленные камерой препятствия удалены с карты.');});$('cameraReset').addEventListener('click',()=>{Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];draw();resumeFrame();say(stream?'Калибровка сброшена; видеопоток возобновлён. Переместите камеру к новой плоскости и выполните калибровку заново.':'Калибровка сброшена.');});v.addEventListener('loadedmetadata',draw);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&(stream||startPending)){stop();say('Страница перешла в фон. Камера остановлена, калибровка сброшена; вернитесь и нажмите «Включить камеру».');}});window.addEventListener('pagehide',stop);
 })();

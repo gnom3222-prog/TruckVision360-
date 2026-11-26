@@ -52,7 +52,8 @@ function makeHarness(options={}){
   registerGateOnMap(){return {centerX:12,centerY:0,headingDeg:90,clearWidth:4,widthUncertaintyBound:0.02,openingStart:{x:12,y:-2},openingEnd:{x:12,y:2}};}
  };
  const window={TruckVisionCameraGeometry:geometry,TruckVisionApplyGateRegistration(){registrationCalls++;return true;},TruckVisionAddCameraObstacle(){obstacleCalls++;return true;},addEventListener(){}};
- const document={getElementById(id){return elements[id]||null;}};
+ const documentListeners={};
+ const document={visibilityState:'visible',getElementById(id){return elements[id]||null;},addEventListener(type,fn){(documentListeners[type]||(documentListeners[type]=[])).push(fn);}};
  const navigator={mediaDevices:{async getUserMedia(){
   permissionCalls++;
   if(options.getUserMedia)return options.getUserMedia({createStream});
@@ -63,7 +64,7 @@ function makeHarness(options={}){
  const tapQuad=()=>{
   for(const [clientX,clientY] of [[10,10],[630,10],[630,470],[10,470]])canvas.fire('pointerdown',{clientX,clientY});
  };
- return {elements,video,tapQuad,tracks,get permissionCalls(){return permissionCalls;},get registrationCalls(){return registrationCalls;},get obstacleCalls(){return obstacleCalls;},get trackStops(){return trackStops;}};
+ return {elements,video,tapQuad,tracks,setVisibility(state){document.visibilityState=state;for(const fn of documentListeners.visibilitychange||[])fn();},get permissionCalls(){return permissionCalls;},get registrationCalls(){return registrationCalls;},get obstacleCalls(){return obstacleCalls;},get trackStops(){return trackStops;}};
 }
 
 test('camera permission is requested only after an explicit user action',async()=>{
