@@ -208,12 +208,31 @@
   for(const p of b)for(let i=0;i<a.length;i++)d=Math.min(d,segDist(p,a[i],a[(i+1)%a.length]));
   return d;
  }
+ function adjustVerticalRangeToRoadSurface(range,polygon,params){
+  if(!range)return null;
+  if(rootPhysics&&typeof rootPhysics.verticalRangeOnRoadSurface==='function'){
+   return rootPhysics.verticalRangeOnRoadSurface(range,polygon,params&&params.roadSurface);
+  }
+  return range;
+ }
+ function roadSurfaceGradientBound(params){
+  const surface=params&&params.roadSurface;
+  if(!surface)return 0;
+  return Math.hypot(surface.gradeX,surface.gradeY)+
+   Math.hypot(surface.gradeXUncertainty,surface.gradeYUncertainty);
+ }
+ function roadSurfaceSpatialRateScale(params){
+  return Math.hypot(1,roadSurfaceGradientBound(params));
+ }
  function distanceWithVertical(poly,obstacle,vehicleRange){
   const horizontalDistance=polyDist(poly,obstacle.poly);
-  if(!obstacle.verticalRange)return {distance:horizontalDistance,horizontalDistance,verticalGap:null,verticalStatus:'2d-obstacle'};
-  if(!vehicleRange)return {distance:horizontalDistance,horizontalDistance,verticalGap:null,verticalStatus:'vehicle-height-unverified'};
+  const roadSurfaceStatus=obstacle.roadSurfaceStatus||
+   (vehicleRange&&vehicleRange.roadSurfaceStatus)||null;
+  if(!obstacle.verticalRange)return {distance:horizontalDistance,horizontalDistance,verticalGap:null,verticalStatus:'2d-obstacle',roadSurfaceStatus};
+  if(!vehicleRange)return {distance:horizontalDistance,horizontalDistance,verticalGap:null,verticalStatus:'vehicle-height-unverified',roadSurfaceStatus};
   const verticalGap=Math.max(0,obstacle.verticalRange.min-vehicleRange.max,vehicleRange.min-obstacle.verticalRange.max);
-  return {distance:Math.hypot(horizontalDistance,verticalGap),horizontalDistance,verticalGap,verticalStatus:verticalGap>1e-9?'vertical-separated':'vertical-overlap'};
+  return {distance:Math.hypot(horizontalDistance,verticalGap),horizontalDistance,verticalGap,
+   verticalStatus:verticalGap>1e-9?'vertical-separated':'vertical-overlap',roadSurfaceStatus};
  }
  function polygonBounds(poly){
   let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
@@ -318,8 +337,11 @@
   if(obstacleErrors.length)throw new Error('Некорректные препятствия: '+obstacleErrors.join(' '));
   const prepared=obstacles.map(o=>{
    const poly=obstaclePoly(o),zUncertainty=o.zUncertainty??0;
-   return {poly,bounds:polygonBounds(poly),name:o.name||'препятствие',
-    verticalRange:Number.isFinite(o.zMin)&&Number.isFinite(o.zMax)?{min:o.zMin-zUncertainty,max:o.zMax+zUncertainty}:null};
+   const baseVerticalRange=Number.isFinite(o.zMin)&&Number.isFinite(o.zMax)?
+    {min:o.zMin-zUncertainty,max:o.zMax+zUncertainty}:null;
+   const verticalRange=adjustVerticalRangeToRoadSurface(baseVerticalRange,poly,p);
+   return {poly,bounds:polygonBounds(poly),name:o.name||'препятствие',verticalRange,
+    roadSurfaceStatus:verticalRange&&verticalRange.roadSurfaceStatus};
   });
   const includeInternalComponentsForVertical=prepared.some(obstacle=>!!obstacle.verticalRange);
   return function(q,steerOverride){
@@ -327,17 +349,19 @@
    const groups=rootPhysics.vehicleCollisionParts(q,p,steer,includeInternalComponentsForVertical);
    const perPart=groups.map(group=>({
     distance:Infinity,obstacle:null,vehiclePart:group.vehiclePart,bodyIndex:group.bodyIndex,component:null,
-    horizontalDistance:Infinity,verticalGap:null,verticalStatus:null,verticalUnverifiedObstacleCount:0,verticalEvaluatedObstacleCount:0
+    horizontalDistance:Infinity,verticalGap:null,verticalStatus:null,roadSurfaceStatus:null,verticalUnverifiedObstacleCount:0,verticalEvaluatedObstacleCount:0
    }));
    for(const obstacle of prepared){
     for(let i=0;i<groups.length;i++){
      for(const component of groups[i].components){
       const bounds=polygonBounds(component.polygon);
       if(aabbDistance(bounds,obstacle.bounds)>=perPart[i].distance)continue;
-      const measure=distanceWithVertical(component.polygon,obstacle,component.verticalRange);
+      const componentVerticalRange=adjustVerticalRangeToRoadSurface(component.verticalRange,component.polygon,p);
+      const measure=distanceWithVertical(component.polygon,obstacle,componentVerticalRange);
       if(obstacle.verticalRange){if(component.verticalRange)perPart[i].verticalEvaluatedObstacleCount++;else perPart[i].verticalUnverifiedObstacleCount++;}
       if(measure.distance<perPart[i].distance){
        perPart[i]={distance:measure.distance,horizontalDistance:measure.horizontalDistance,verticalGap:measure.verticalGap,verticalStatus:measure.verticalStatus,
+        roadSurfaceStatus:measure.roadSurfaceStatus,
         obstacle:obstacle.name,vehiclePart:groups[i].vehiclePart,bodyIndex:groups[i].bodyIndex,component:component.name,
         verticalUnverifiedObstacleCount:perPart[i].verticalUnverifiedObstacleCount,verticalEvaluatedObstacleCount:perPart[i].verticalEvaluatedObstacleCount};
       }
@@ -348,6 +372,8 @@
    for(let i=1;i<perPart.length;i++)if(perPart[i].distance<nearest.distance)nearest=perPart[i];
    return {distance:nearest.distance,hit:nearest.obstacle,obstacle:nearest.obstacle,
     vehiclePart:nearest.vehiclePart,bodyIndex:nearest.bodyIndex,component:nearest.component,verticalStatus:nearest.verticalStatus,verticalGap:nearest.verticalGap,
+    roadSurfaceStatus:nearest.roadSurfaceStatus||((obstacles||[]).some(obstacle=>Number.isFinite(obstacle.zMin)&&Number.isFinite(obstacle.zMax))?
+     (p.roadSurface?'configured-planar-surface-with-bounds':'flat-reference-assumed'):'not-used'),
     verticalUnverifiedCount:perPart.reduce((sum,item)=>sum+item.verticalUnverifiedObstacleCount,0),verticalEvaluatedCount:perPart.reduce((sum,item)=>sum+item.verticalEvaluatedObstacleCount,0),perPart};
   };
  }
@@ -475,10 +501,14 @@
     trailerPointRate=Math.max(trailerPointRate,Math.sqrt(Math.max(0,largestEigenvalue)));
    }
   }
+  const roadSurfaceGradient=roadSurfaceGradientBound(p);
+  const roadSurfaceRateScale=Math.hypot(1,roadSurfaceGradient);
   return {
-   tractor:1+tractorRadius*tractorYawPerMeter,
-   cab:1+cabRadiusFromRearAxle*tractorYawPerMeter,
-   trailer:trailerPointRate
+   tractor:(1+tractorRadius*tractorYawPerMeter)*roadSurfaceRateScale,
+   cab:(1+cabRadiusFromRearAxle*tractorYawPerMeter)*roadSurfaceRateScale,
+   trailer:trailerPointRate*roadSurfaceRateScale,
+   roadSurfaceGradientBound:roadSurfaceGradient,
+   roadSurfaceRateScale
   };
  }
  function sweptDisplacementPerMeter(steer,p,q=null,maxDistance=0.05){
@@ -640,8 +670,12 @@
   const obstacleErrors=validateObstacles(obstacles);
   if(obstacleErrors.length)throw new Error('Invalid obstacles for per-wheel clearance analysis: '+obstacleErrors.join(' '));
   const prepared=obstacles.map(obstacle=>{
-   const zUncertainty=obstacle.zUncertainty??0;
-   return {poly:obstaclePoly(obstacle),name:obstacle.name||'препятствие',verticalRange:Number.isFinite(obstacle.zMin)&&Number.isFinite(obstacle.zMax)?{min:obstacle.zMin-zUncertainty,max:obstacle.zMax+zUncertainty}:null};
+   const poly=obstaclePoly(obstacle),zUncertainty=obstacle.zUncertainty??0;
+   const baseVerticalRange=Number.isFinite(obstacle.zMin)&&Number.isFinite(obstacle.zMax)?
+    {min:obstacle.zMin-zUncertainty,max:obstacle.zMax+zUncertainty}:null;
+   const verticalRange=adjustVerticalRangeToRoadSurface(baseVerticalRange,poly,p);
+   return {poly,name:obstacle.name||'препятствие',verticalRange,
+    roadSurfaceStatus:verticalRange&&verticalRange.roadSurfaceStatus};
   });
   const uncertainty=Number.isFinite(p.footprintUncertainty)?p.footprintUncertainty:0;
   const tireLength=p.tireLength??0.72,tireWidth=p.tireWidth??0.44;
@@ -700,14 +734,24 @@
     const footprintWidth=Number.isFinite(wheel.footprintWidth)?wheel.footprintWidth:tireWidth;
     const tireRadius=Math.hypot(tireLength/2+uncertainty,footprintWidth/2+uncertainty);
     const envelope=wheelEnvelopePolygon(wheel.center,tireRadius);
-    let envelopeDistance=Infinity,envelopeObstacle=null,envelopeVerticalStatus=null;
-    let polygonDistance=Infinity,polygonObstacle=null,polygonVerticalStatus=null;
+    const wheelVerticalRange=adjustVerticalRangeToRoadSurface(wheel.verticalRange,wheel.polygon,p);
+    const envelopeVerticalRange=adjustVerticalRangeToRoadSurface(wheel.verticalRange,envelope,p);
+    let envelopeDistance=Infinity,envelopeObstacle=null,envelopeVerticalStatus=null,envelopeVerticalGap=null,envelopeRoadSurfaceStatus=null;
+    let polygonDistance=Infinity,polygonObstacle=null,polygonVerticalStatus=null,polygonVerticalGap=null,polygonRoadSurfaceStatus=null;
     for(const obstacle of prepared){
-     const envelopeMeasure=distanceWithVertical(envelope,obstacle,wheel.verticalRange);
-     if(obstacle.verticalRange){if(wheel.verticalRange)verticalEvaluatedChecks++;else verticalUnverifiedChecks++;}
-     if(envelopeMeasure.distance<envelopeDistance){envelopeDistance=envelopeMeasure.distance;envelopeObstacle=obstacle.name;envelopeVerticalStatus=envelopeMeasure.verticalStatus;}
-     const polygonMeasure=distanceWithVertical(wheel.polygon,obstacle,wheel.verticalRange);
-     if(polygonMeasure.distance<polygonDistance){polygonDistance=polygonMeasure.distance;polygonObstacle=obstacle.name;polygonVerticalStatus=polygonMeasure.verticalStatus;}
+     const envelopeMeasure=distanceWithVertical(envelope,obstacle,envelopeVerticalRange);
+     if(obstacle.verticalRange){if(envelopeVerticalRange)verticalEvaluatedChecks++;else verticalUnverifiedChecks++;}
+     if(envelopeMeasure.distance<envelopeDistance){
+      envelopeDistance=envelopeMeasure.distance;envelopeObstacle=obstacle.name;
+      envelopeVerticalStatus=envelopeMeasure.verticalStatus;envelopeVerticalGap=envelopeMeasure.verticalGap;
+      envelopeRoadSurfaceStatus=envelopeMeasure.roadSurfaceStatus;
+     }
+     const polygonMeasure=distanceWithVertical(wheel.polygon,obstacle,wheelVerticalRange);
+     if(polygonMeasure.distance<polygonDistance){
+      polygonDistance=polygonMeasure.distance;polygonObstacle=obstacle.name;
+      polygonVerticalStatus=polygonMeasure.verticalStatus;polygonVerticalGap=polygonMeasure.verticalGap;
+      polygonRoadSurfaceStatus=polygonMeasure.roadSurfaceStatus;
+     }
     }
     let record=records.get(wheel.name);
     if(!record){
@@ -725,13 +769,13 @@
     if(polygonDistance<record.minimumSampledPolygonClearance){
      record.minimumSampledPolygonClearance=polygonDistance;
      record.minimumSampledPolygonDetail=Number.isFinite(polygonDistance)?{
-      obstacle:polygonObstacle,state:snapshot(state),distanceAlongRoute,verticalStatus:polygonVerticalStatus
+      obstacle:polygonObstacle,state:snapshot(state),distanceAlongRoute,verticalStatus:polygonVerticalStatus,verticalGap:polygonVerticalGap,roadSurfaceStatus:polygonRoadSurfaceStatus
      }:null;
     }
     if(envelopeDistance<record.minimumSampledEnvelopeClearance){
      record.minimumSampledEnvelopeClearance=envelopeDistance;
      record.minimumSampledEnvelopeDetail=Number.isFinite(envelopeDistance)?{
-      obstacle:envelopeObstacle,state:snapshot(state),distanceAlongRoute,verticalStatus:envelopeVerticalStatus
+      obstacle:envelopeObstacle,state:snapshot(state),distanceAlongRoute,verticalStatus:envelopeVerticalStatus,verticalGap:envelopeVerticalGap,roadSurfaceStatus:envelopeRoadSurfaceStatus
      }:null;
     }
     if(envelopeDistance<record.minimumClearanceLowerBound){
@@ -741,7 +785,7 @@
       obstacle:envelopeObstacle,state:snapshot(state),distanceAlongRoute,verticalStatus:envelopeVerticalStatus
      }:null;
     }
-    return {wheel,envelopeDistance,envelopeObstacle,envelopeVerticalStatus,polygonDistance,polygonObstacle,polygonVerticalStatus,tireRadius};
+    return {wheel,envelopeDistance,envelopeObstacle,envelopeVerticalStatus,envelopeVerticalGap,envelopeRoadSurfaceStatus,polygonDistance,polygonObstacle,polygonVerticalStatus,polygonVerticalGap,polygonRoadSurfaceStatus,tireRadius};
    });
    if(index>0){
     const previousGear=previousState.gear===-1?-1:1;
@@ -767,7 +811,7 @@
       const previous=previousByName.get(current.wheel.name);
       if(!previous)throw new Error('Wheel identity changed between adjacent route states.');
       if(!Number.isFinite(previous.envelopeDistance))continue;
-      const rate=wheelCenterDisplacementRatePerMeter(current.wheel,p,previousState,state);
+      const rate=wheelCenterDisplacementRatePerMeter(current.wheel,p,previousState,state)*roadSurfaceSpatialRateScale(p);
       const lowerBound=previous.envelopeDistance-rate*stepDistance;
       const record=records.get(current.wheel.name);
       if(lowerBound<record.minimumClearanceLowerBound){
@@ -793,18 +837,23 @@
       throw new Error('Control-start wheel geometry count does not match the route footprint set.');
      }
      for(const wheel of controlStartFootprints){
-      let polygonDistance=Infinity,polygonObstacle=null,polygonVerticalStatus=null;
+      const wheelVerticalRange=adjustVerticalRangeToRoadSurface(wheel.verticalRange,wheel.polygon,p);
+      let polygonDistance=Infinity,polygonObstacle=null,polygonVerticalStatus=null,polygonVerticalGap=null,polygonRoadSurfaceStatus=null;
       for(const obstacle of prepared){
-       const measure=distanceWithVertical(wheel.polygon,obstacle,wheel.verticalRange);
-       if(obstacle.verticalRange){if(wheel.verticalRange)verticalEvaluatedChecks++;else verticalUnverifiedChecks++;}
-       if(measure.distance<polygonDistance){polygonDistance=measure.distance;polygonObstacle=obstacle.name;polygonVerticalStatus=measure.verticalStatus;}
+       const measure=distanceWithVertical(wheel.polygon,obstacle,wheelVerticalRange);
+       if(obstacle.verticalRange){if(wheelVerticalRange)verticalEvaluatedChecks++;else verticalUnverifiedChecks++;}
+       if(measure.distance<polygonDistance){
+        polygonDistance=measure.distance;polygonObstacle=obstacle.name;
+        polygonVerticalStatus=measure.verticalStatus;polygonVerticalGap=measure.verticalGap;
+        polygonRoadSurfaceStatus=measure.roadSurfaceStatus;
+       }
       }
       const record=records.get(wheel.name);
       if(!record)throw new Error('Wheel identity changed during control-start pose checking.');
       if(polygonDistance<record.minimumIntermediatePolygonClearance){
        record.minimumIntermediatePolygonClearance=polygonDistance;
        record.minimumIntermediatePolygonDetail=Number.isFinite(polygonDistance)?{
-        obstacle:polygonObstacle,verticalStatus:polygonVerticalStatus,
+        obstacle:polygonObstacle,verticalStatus:polygonVerticalStatus,verticalGap:polygonVerticalGap,roadSurfaceStatus:polygonRoadSurfaceStatus,
         state:snapshot({...previousState,gear:segmentGear,steer:segmentSteer,gearKnown:true,steerKnown:true}),
         distanceAlongRoute:segmentStartDistance,sampleFraction:0,controlStartPose:true
        }:null;
@@ -840,7 +889,7 @@
       for(const current of currentChecks){
        const previous=previousByName.get(current.wheel.name);
        if(!previous)throw new Error('Wheel identity changed between adjacent route states.');
-       const rate=wheelCenterDisplacementRatePerMeter(current.wheel,p,previousState,state);
+       const rate=wheelCenterDisplacementRatePerMeter(current.wheel,p,previousState,state)*roadSurfaceSpatialRateScale(p);
        if(!Number.isFinite(rate)||rate<0)throw new Error('Wheel displacement-rate bound is invalid.');
        ratesByWheel.set(current.wheel.name,rate);
        maxWheelRate=Math.max(maxWheelRate,rate);
@@ -883,21 +932,31 @@
         const footprintWidth=Number.isFinite(wheel.footprintWidth)?wheel.footprintWidth:tireWidth;
         const tireRadius=Math.hypot(tireLength/2+uncertainty,footprintWidth/2+uncertainty);
         const envelope=wheelEnvelopePolygon(wheel.center,tireRadius);
-        let envelopeDistance=Infinity,envelopeObstacle=null,envelopeVerticalStatus=null;
-        let polygonDistance=Infinity,polygonObstacle=null,polygonVerticalStatus=null;
+        const wheelVerticalRange=adjustVerticalRangeToRoadSurface(wheel.verticalRange,wheel.polygon,p);
+        const envelopeVerticalRange=adjustVerticalRangeToRoadSurface(wheel.verticalRange,envelope,p);
+        let envelopeDistance=Infinity,envelopeObstacle=null,envelopeVerticalStatus=null,envelopeVerticalGap=null,envelopeRoadSurfaceStatus=null;
+        let polygonDistance=Infinity,polygonObstacle=null,polygonVerticalStatus=null,polygonVerticalGap=null,polygonRoadSurfaceStatus=null;
         for(const obstacle of prepared){
-         const envelopeMeasure=distanceWithVertical(envelope,obstacle,wheel.verticalRange);
-         if(obstacle.verticalRange){if(wheel.verticalRange)verticalEvaluatedChecks++;else verticalUnverifiedChecks++;}
-         if(envelopeMeasure.distance<envelopeDistance){envelopeDistance=envelopeMeasure.distance;envelopeObstacle=obstacle.name;envelopeVerticalStatus=envelopeMeasure.verticalStatus;}
-         const polygonMeasure=distanceWithVertical(wheel.polygon,obstacle,wheel.verticalRange);
-         if(polygonMeasure.distance<polygonDistance){polygonDistance=polygonMeasure.distance;polygonObstacle=obstacle.name;polygonVerticalStatus=polygonMeasure.verticalStatus;}
+         const envelopeMeasure=distanceWithVertical(envelope,obstacle,envelopeVerticalRange);
+         if(obstacle.verticalRange){if(envelopeVerticalRange)verticalEvaluatedChecks++;else verticalUnverifiedChecks++;}
+         if(envelopeMeasure.distance<envelopeDistance){
+          envelopeDistance=envelopeMeasure.distance;envelopeObstacle=obstacle.name;
+          envelopeVerticalStatus=envelopeMeasure.verticalStatus;envelopeVerticalGap=envelopeMeasure.verticalGap;
+          envelopeRoadSurfaceStatus=envelopeMeasure.roadSurfaceStatus;
+         }
+         const polygonMeasure=distanceWithVertical(wheel.polygon,obstacle,wheelVerticalRange);
+         if(polygonMeasure.distance<polygonDistance){
+          polygonDistance=polygonMeasure.distance;polygonObstacle=obstacle.name;
+          polygonVerticalStatus=polygonMeasure.verticalStatus;polygonVerticalGap=polygonMeasure.verticalGap;
+          polygonRoadSurfaceStatus=polygonMeasure.roadSurfaceStatus;
+         }
         }
         const record=records.get(wheel.name);
         if(!record)throw new Error('Wheel identity changed during intermediate swept sampling.');
         if(polygonDistance<record.minimumIntermediatePolygonClearance){
          record.minimumIntermediatePolygonClearance=polygonDistance;
          record.minimumIntermediatePolygonDetail=Number.isFinite(polygonDistance)?{
-          obstacle:polygonObstacle,verticalStatus:polygonVerticalStatus,
+          obstacle:polygonObstacle,verticalStatus:polygonVerticalStatus,verticalGap:polygonVerticalGap,roadSurfaceStatus:polygonRoadSurfaceStatus,
           state:snapshot({...intermediateState,gear:segmentGear,steer:segmentSteer}),
           distanceAlongRoute:intermediateDistance,sampleFraction:fraction
          }:null;
@@ -905,14 +964,14 @@
         if(envelopeDistance<record.minimumIntermediateEnvelopeClearance){
          record.minimumIntermediateEnvelopeClearance=envelopeDistance;
          record.minimumIntermediateEnvelopeDetail=Number.isFinite(envelopeDistance)?{
-          obstacle:envelopeObstacle,verticalStatus:envelopeVerticalStatus,
+          obstacle:envelopeObstacle,verticalStatus:envelopeVerticalStatus,verticalGap:envelopeVerticalGap,roadSurfaceStatus:envelopeRoadSurfaceStatus,
           state:snapshot({...intermediateState,gear:segmentGear,steer:segmentSteer}),
           distanceAlongRoute:intermediateDistance,sampleFraction:fraction
          }:null;
         }
         const wheelSamples=samplesByWheel.get(wheel.name);
         if(!wheelSamples)throw new Error('Wheel identity changed during adaptive swept sampling.');
-        wheelSamples.push({fraction,envelopeDistance,envelopeObstacle,verticalStatus:envelopeVerticalStatus});
+        wheelSamples.push({fraction,envelopeDistance,envelopeObstacle,verticalStatus:envelopeVerticalStatus,roadSurfaceStatus:envelopeRoadSurfaceStatus});
        }
        intermediateSamplesAnalyzed++;
       }
@@ -934,7 +993,7 @@
          record.minimumClearanceLowerBound=lowerBound;
          record.limitingDetail={
           kind:'adaptive-segment-circumscribed-envelope-lower-bound',lowerBound,
-          obstacleAtReference:reference.envelopeObstacle,referenceDistance:reference.envelopeDistance,verticalStatus:reference.verticalStatus,
+          obstacleAtReference:reference.envelopeObstacle,referenceDistance:reference.envelopeDistance,verticalStatus:reference.verticalStatus,roadSurfaceStatus:reference.roadSurfaceStatus,
           displacementRate:rate,stepDistance,intervalCount,
           intervalFractionStart:a.fraction,intervalFractionEnd:b.fraction,
           maximumCenterDisplacementBound:rate*stepDistance/intervalCount,
@@ -1010,6 +1069,8 @@
   return {
    statesAnalyzed:states.length,segmentsAnalyzed:Math.max(0,states.length-1),
    distanceAlongRoute,wheels,limitingWheel,verticalUnverifiedChecks,verticalEvaluatedChecks,
+   roadSurfaceStatus:prepared.some(obstacle=>!!obstacle.verticalRange)?
+    (p.roadSurface?'configured-planar-surface-with-bounds':'flat-reference-assumed'):'not-used',
    minimumClearanceLowerBound:limitingWheel?limitingWheel.minimumClearanceLowerBound:Infinity,
    segmentsWithIntermediateKinematicSamples,segmentsWithoutIntermediateKinematicSamples,
    segmentsSkippedForNoObstacles,intermediateSamplesAnalyzed,

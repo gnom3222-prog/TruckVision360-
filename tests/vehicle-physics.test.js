@@ -1015,3 +1015,42 @@ test('coarse per-tire Simpson path estimates converge toward a dense RK4 referen
  assert.ok(errors.every(Number.isFinite));
  assert.ok(Math.max(...errors)<1e-6,'refined route sampling should closely match each tire-center path integral');
 });
+
+
+test('bounded planar road surface computes elevation extrema across a component footprint',()=>{
+ const polygon=[
+  {x:10,y:0},{x:12,y:0},{x:12,y:2},{x:10,y:2}
+ ];
+ const surface={
+  originX:0,originY:0,originZ:0,gradeX:0.1,gradeY:0.05,
+  originZUncertainty:0.01,gradeXUncertainty:0.001,gradeYUncertainty:0.002,
+  surfaceResidualUncertainty:0.01
+ };
+ const elevation=physics.roadSurfaceElevationRange(polygon,surface);
+ assert.equal(elevation.status,'configured-planar-surface-with-bounds');
+ near(elevation.min,0.97,1e-12);
+ near(elevation.max,1.336,1e-12);
+ const shifted=physics.verticalRangeOnRoadSurface({min:2,max:3},polygon,surface);
+ near(shifted.min,2.97,1e-12);
+ near(shifted.max,4.336,1e-12);
+ assert.equal(shifted.roadSurfaceStatus,'configured-planar-surface-with-bounds');
+});
+
+test('missing road-surface calibration is explicitly reported as a flat-reference assumption',()=>{
+ const polygon=[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
+ const elevation=physics.roadSurfaceElevationRange(polygon,null);
+ assert.deepEqual(elevation,{min:0,max:0,status:'flat-reference-assumed'});
+ const shifted=physics.verticalRangeOnRoadSurface({min:0.2,max:0.8},polygon,null);
+ assert.deepEqual(shifted,{min:0.2,max:0.8,roadSurfaceStatus:'flat-reference-assumed'});
+});
+
+test('road-surface calibration rejects missing uncertainty bounds and excessive grades',()=>{
+ const incomplete={originX:0,originY:0,originZ:0,gradeX:0,gradeY:0};
+ assert.ok(physics.validateRoadSurface(incomplete).some(error=>error.includes('originZUncertainty')));
+ const steep={
+  originX:0,originY:0,originZ:0,gradeX:0.3,gradeY:0,
+  originZUncertainty:0,gradeXUncertainty:0,gradeYUncertainty:0,surfaceResidualUncertainty:0
+ };
+ assert.ok(physics.validateRoadSurface(steep).some(error=>error.includes('gradeX')));
+ assert.deepEqual(physics.validateRoadSurface(null),[]);
+});

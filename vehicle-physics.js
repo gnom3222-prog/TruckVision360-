@@ -251,6 +251,71 @@
   return {min:profile.zMin-margin,max:profile.zMax+margin};
  }
 
+ function validateRoadSurface(surface){
+  const errors=[];
+  if(surface===undefined||surface===null)return errors;
+  if(!surface||typeof surface!=='object'||Array.isArray(surface)){
+   return ['roadSurface должен быть JSON-объектом или null.'];
+  }
+  const required=['originX','originY','originZ','gradeX','gradeY',
+   'originZUncertainty','gradeXUncertainty','gradeYUncertainty','surfaceResidualUncertainty'];
+  for(const key of required){
+   if(!Number.isFinite(surface[key])){
+    errors.push('roadSurface.'+key+' должен быть задан конечным измеренным числом.');
+   }
+  }
+  const limits={
+   originX:[-100000,100000],originY:[-100000,100000],originZ:[-100,100],
+   gradeX:[-0.25,0.25],gradeY:[-0.25,0.25],
+   originZUncertainty:[0,1],gradeXUncertainty:[0,0.05],
+   gradeYUncertainty:[0,0.05],surfaceResidualUncertainty:[0,1]
+  };
+  for(const [key,[min,max]] of Object.entries(limits)){
+   const value=surface[key];
+   if(Number.isFinite(value)&&(value<min||value>max)){
+    errors.push('roadSurface.'+key+' должен находиться в диапазоне '+min+'–'+max+'.');
+   }
+  }
+  return errors;
+ }
+
+ function roadSurfaceElevationRange(polygon,surface){
+  if(!Array.isArray(polygon)||polygon.length<3||
+     !polygon.every(point=>point&&Number.isFinite(point.x)&&Number.isFinite(point.y)))return null;
+  if(surface===undefined||surface===null){
+   return {min:0,max:0,status:'flat-reference-assumed'};
+  }
+  const errors=validateRoadSurface(surface);
+  if(errors.length)return null;
+  const lower=[],upper=[];
+  for(const point of polygon){
+   const dx=point.x-surface.originX,dy=point.y-surface.originY;
+   const elevation=surface.originZ+surface.gradeX*dx+surface.gradeY*dy;
+   const uncertainty=surface.originZUncertainty+
+    Math.abs(dx)*surface.gradeXUncertainty+
+    Math.abs(dy)*surface.gradeYUncertainty+
+    surface.surfaceResidualUncertainty;
+   lower.push(elevation-uncertainty);
+   upper.push(elevation+uncertainty);
+  }
+  return {
+   min:Math.min(...lower),
+   max:Math.max(...upper),
+   status:'configured-planar-surface-with-bounds'
+  };
+ }
+
+ function verticalRangeOnRoadSurface(range,polygon,surface){
+  if(!range||!Number.isFinite(range.min)||!Number.isFinite(range.max)||range.max<range.min)return null;
+  const elevation=roadSurfaceElevationRange(polygon,surface);
+  if(!elevation)return null;
+  return {
+   min:range.min+elevation.min,
+   max:range.max+elevation.max,
+   roadSurfaceStatus:elevation.status
+  };
+ }
+
  function vehicleVerticalRange(params,key){
   const profiles=params&&params.vehicleVerticalProfiles;
   return profiles&&profiles[key]?verticalRangeFromProfile(profiles[key]):null;
@@ -420,6 +485,7 @@
   }
   errors.push(...validateAuxiliaryEnvelopes(params.auxiliaryEnvelopes));
   errors.push(...validateVehicleVerticalProfiles(params.vehicleVerticalProfiles));
+  errors.push(...validateRoadSurface(params.roadSurface));
   return errors;
  }
 
@@ -1353,5 +1419,5 @@
   };
  }
 
- return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,VEHICLE_VERTICAL_PROFILE_KEYS,validateVehicleParams,validateTireGroupWidthUncertainty,validateAuxiliaryEnvelopes,validateVehicleVerticalProfiles,verticalRangeFromProfile,vehicleVerticalRange,auxiliaryEnvelopePolygons,trailerAxleTireGroupWidths,trailerAxleTireCenterSpacings,trailerAxleSpacings,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,wheelTireTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
+ return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,VEHICLE_VERTICAL_PROFILE_KEYS,validateRoadSurface,roadSurfaceElevationRange,verticalRangeOnRoadSurface,validateVehicleParams,validateTireGroupWidthUncertainty,validateAuxiliaryEnvelopes,validateVehicleVerticalProfiles,verticalRangeFromProfile,vehicleVerticalRange,auxiliaryEnvelopePolygons,trailerAxleTireGroupWidths,trailerAxleTireCenterSpacings,trailerAxleSpacings,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,wheelTireTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
 });

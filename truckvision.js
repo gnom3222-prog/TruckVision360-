@@ -48,6 +48,7 @@ const cfg={
  tireWidth:0.44,
  auxiliaryEnvelopes:[],
  vehicleVerticalProfiles:{},
+ roadSurface:null,
  verticalObstacles:[],
  trailerMass:30000,
  mu:0.7,
@@ -194,10 +195,10 @@ window.TruckVisionClearPerceptionFrame=()=>{
 function readSettings(){
  const candidate={...cfg};
  for(const key of Object.keys(candidate)){
-  if(['auxiliaryEnvelopes','vehicleVerticalProfiles','verticalObstacles'].includes(key)){
+  if(['auxiliaryEnvelopes','vehicleVerticalProfiles','roadSurface','verticalObstacles'].includes(key)){
    const input=$(key);
    if(input){
-    const fallback=key==='vehicleVerticalProfiles'?'{}':'[]';
+    const fallback=key==='roadSurface'?'null':key==='vehicleVerticalProfiles'?'{}':'[]';
     try{candidate[key]=JSON.parse(String(input.value||fallback));}
     catch(error){return {ok:false,changed:false,errors:[key+': введите корректный JSON.']};}
    }
@@ -1123,6 +1124,11 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   }else{
    reasons.push('вертикальные препятствия проверены по вручную заданным высотным интервалам и профилям компонентов; динамика подвески не моделируется');
   }
+  if(wheelClearance?.roadSurfaceStatus==='flat-reference-assumed'){
+   reasons.push('уклон дороги не откалиброван: вертикальные интервалы сопоставлены при допущении плоской поверхности');
+  }else if(wheelClearance?.roadSurfaceStatus==='configured-planar-surface-with-bounds'){
+   reasons.push('учтена заданная плоскость дороги с указанными границами неопределённости; локальные неровности вне этого диапазона не моделируются');
+  }
  }
  if(reverseDistance>0)reasons.push('задний ход: '+reverseSegments+' участков, '+reverseDistance.toFixed(1)+' м');
  if(gearChanges)reasons.push('переключений передачи: '+gearChanges);
@@ -1193,6 +1199,10 @@ function wheelClearanceSummaryText(metrics){
  const incomplete=wheelClearance?.segmentsWithoutIntermediateKinematicSamples>0?
   ' Промежуточная проверка не завершена на '+wheelClearance.segmentsWithoutIntermediateKinematicSamples+
   ' сегментах; виртуальный автопроезд заблокирован.':'';
+ const surfaceReference=wheelClearance?.roadSurfaceStatus==='flat-reference-assumed'?
+  ' Вертикальные интервалы сопоставлены при допущении плоской поверхности; уклон не откалиброван.':
+  wheelClearance?.roadSurfaceStatus==='configured-planar-surface-with-bounds'?
+   ' Учтена заданная плоскость дороги с границами неопределённости; это не 3D-карта рельефа.':'';
  const controlTransitions=wheelClearance?[
   wheelClearance.segmentsWithInitialGearSelection>0?
    ' Исходная передача не измерялась; первое направление рассматривается как выбранное действие планировщика.':'',
@@ -1215,7 +1225,7 @@ function wheelClearanceSummaryText(metrics){
   ).join('; ')+'.':'';
  const wheel=metrics?.limitingWheelClearance;
  if(!wheel||!Number.isFinite(wheel.minimumClearanceLowerBound)){
-  return 'Индивидуальный зазор колёс не определён.'+perWheel+adaptive+cap+incomplete+controlTransitions;
+  return 'Индивидуальный зазор колёс не определён.'+perWheel+adaptive+cap+incomplete+controlTransitions+surfaceReference;
  }
  const detail=wheel.limitingDetail||{};
  const obstacle=detail.obstacleAtReference||detail.obstacle||'не выделено';
@@ -1226,7 +1236,7 @@ function wheelClearanceSummaryText(metrics){
    ' в позе около '+Number(detail.distanceAlongRoute).toFixed(1)+' м пути':'';
  return 'Ограничивающее колесо: '+wheel.name+'; нижняя оценка по описанной оболочке '+
   wheel.minimumClearanceLowerBound.toFixed(2)+' м; препятствие «'+obstacle+'»'+location+
-  ' (консервативная геометрическая оценка).'+perWheel+adaptive+cap+incomplete+controlTransitions;
+  ' (консервативная геометрическая оценка).'+perWheel+adaptive+cap+incomplete+controlTransitions+surfaceReference;
 }
 
 function wheelTrackSummaryText(metrics){
@@ -1313,7 +1323,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261126-8');
+   worker=new Worker('./planner-worker.js?v=20261126-9');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
