@@ -462,8 +462,9 @@
 
  function registerGateOnMap(measurement,anchor,headingRadians,repeatability){
   if(!measurement||!Array.isArray(measurement.points)||measurement.points.length!==4||
-     !Number.isFinite(measurement.width)||measurement.width<=0||measurement.width>50){
-   throw new Error('Измерение ворот должно содержать четыре угла и положительную конечную ширину.');
+     !Number.isFinite(measurement.width)||measurement.width<=0||measurement.width>50||
+     !Number.isFinite(measurement.height)||measurement.height<=0||measurement.height>50){
+   throw new Error('Измерение ворот должно содержать четыре угла и положительные конечные ширину и высоту.');
   }
   if(!anchor||!Number.isFinite(anchor.x)||!Number.isFinite(anchor.y)||
      Math.abs(anchor.x)>10000||Math.abs(anchor.y)>10000||!Number.isFinite(headingRadians)){
@@ -475,44 +476,58 @@
   const points=measurement.points;
   const shapeDiagnostics=quadShapeDiagnostics(points);
   const derivedWidth=shapeDiagnostics.width;
+  const derivedHeight=shapeDiagnostics.height;
   if(shapeDiagnostics.warning){
    throw new Error('Форма измеренного проёма заметно отличается от прямоугольника. Проверьте четыре угла и положение эталона в той же плоскости.');
   }
-  if(repeatability!==undefined&&repeatability!==null){
-   if(repeatability.withinTolerance!==true||repeatability.count<3||repeatability.count>10||
-      repeatability.status!=='repeatable-within-operator-tolerance'||
-      ![repeatability.meanWidth,repeatability.meanHeight,repeatability.widthTolerance,repeatability.heightTolerance,
-        repeatability.widthEnvelopeBound,repeatability.heightEnvelopeBound].every(Number.isFinite)||
-      repeatability.widthTolerance<=0||repeatability.heightTolerance<=0||
-      repeatability.widthEnvelopeBound<=0||repeatability.heightEnvelopeBound<=0||
-      repeatability.widthEnvelopeBound+1e-9<2*measurement.sigmaWidth||
-      repeatability.heightEnvelopeBound+1e-9<2*measurement.sigmaHeight){
-    throw new Error('Повторяемость ворот не подтверждена. Измерение нельзя переносить на карту.');
-   }
+  if(Math.abs(measurement.width-derivedWidth)>Math.max(0.01,derivedWidth*0.01)){
+   throw new Error('Ширина измерения не совпадает с шириной, рассчитанной по четырём углам. Повторите измерение.');
   }
-  const clearWidth=repeatability?repeatability.meanWidth:measurement.width;
-  const widthConsistencyTolerance=repeatability?
-   Math.max(0.01,derivedWidth*0.01,repeatability.widthTolerance):
-   Math.max(0.01,derivedWidth*0.01);
-  if(Math.abs(clearWidth-derivedWidth)>widthConsistencyTolerance){
-   throw new Error('Средняя ширина повторных измерений не согласуется с последним контуром. Повторите серию измерений.');
+  if(Math.abs(measurement.height-derivedHeight)>Math.max(0.01,derivedHeight*0.01)){
+   throw new Error('Высота измерения не совпадает с высотой, рассчитанной по четырём углам. Повторите измерение.');
   }
+  const sigmaWidth=measurement.sigmaWidth;
+  const sigmaHeight=measurement.sigmaHeight;
+  if(!Number.isFinite(sigmaWidth)||sigmaWidth<0||sigmaWidth>25||
+     !Number.isFinite(sigmaHeight)||sigmaHeight<0||sigmaHeight>25){
+   throw new Error('Оценки 1σ ширины и высоты должны быть конечными и неотрицательными.');
+  }
+  if(!repeatability||repeatability.withinTolerance!==true||
+     !Number.isInteger(repeatability.count)||repeatability.count<3||repeatability.count>10||
+     repeatability.status!=='repeatable-within-operator-tolerance'||
+     ![repeatability.meanWidth,repeatability.meanHeight,
+       repeatability.maxDeviationWidth,repeatability.maxDeviationHeight,
+       repeatability.widthTolerance,repeatability.heightTolerance,
+       repeatability.widthEnvelopeBound,repeatability.heightEnvelopeBound].every(Number.isFinite)||
+     repeatability.meanWidth<=0||repeatability.meanHeight<=0||
+     repeatability.maxDeviationWidth<0||repeatability.maxDeviationHeight<0||
+     repeatability.widthTolerance<=0||repeatability.widthTolerance>0.5||
+     repeatability.heightTolerance<=0||repeatability.heightTolerance>0.5||
+     repeatability.maxDeviationWidth>repeatability.widthTolerance||
+     repeatability.maxDeviationHeight>repeatability.heightTolerance||
+     repeatability.widthEnvelopeBound<=0||repeatability.heightEnvelopeBound<=0||
+     repeatability.widthEnvelopeBound+1e-9<2*sigmaWidth||
+     repeatability.heightEnvelopeBound+1e-9<2*sigmaHeight){
+   throw new Error('Повторяемость ворот не подтверждена. Нужны минимум три согласованных кадра и корректные оболочки неопределённости.');
+  }
+  // The final frozen frame must be one member of the accepted series. Do not
+  // let a caller pair an unrelated contour with a fabricated repeat summary.
+  if(Math.abs(repeatability.meanWidth-measurement.width)>repeatability.maxDeviationWidth+1e-8||
+     Math.abs(repeatability.meanHeight-measurement.height)>repeatability.maxDeviationHeight+1e-8){
+   throw new Error('Последний контур не согласуется с серией повторных измерений. Повторите серию.');
+  }
+  const clearWidth=repeatability.meanWidth;
+  const clearHeight=repeatability.meanHeight;
   if(measurement.nonlinearSensitivityAvailable!==true||measurement.nonlinearWarning===true){
    throw new Error('Нелинейная проверка неопределённости не пройдена. Повторите калибровку с более крупным эталоном и устойчивым ракурсом; измерение нельзя переносить на карту.');
   }
-  const sigmaWidth=measurement.sigmaWidth;
-  if(!Number.isFinite(sigmaWidth)||sigmaWidth<0||sigmaWidth>25){
-   throw new Error('Оценка 1σ ширины должна быть конечной и неотрицательной.');
+  const widthUncertaintyBound=repeatability.widthEnvelopeBound;
+  const heightUncertaintyBound=repeatability.heightEnvelopeBound;
+  if(widthUncertaintyBound>2||heightUncertaintyBound>2){
+   throw new Error('Оболочка неопределённости ширины или высоты превышает поддерживаемый предел 2 м. Измерение нельзя переносить на карту.');
   }
-  // A single frame uses a local 2σ screening approximation. A repeated series
-  // uses the observed deviations plus each frame's own 2σ sensitivity; shared
-  // reference-size error is not reduced by averaging. Neither is a hard bound.
-  const widthUncertaintyBound=repeatability?repeatability.widthEnvelopeBound:2*sigmaWidth;
-  if(widthUncertaintyBound>2){
-   throw new Error('Оболочка неопределённости ширины превышает поддерживаемый предел 2 м. Измерение нельзя переносить на карту.');
-  }
-  if(widthUncertaintyBound>=clearWidth-0.05){
-   throw new Error('Неопределённость ширины сопоставима с самим проёмом. Измерение нельзя переносить на карту.');
+  if(widthUncertaintyBound>=clearWidth-0.05||heightUncertaintyBound>=clearHeight-0.05){
+   throw new Error('Неопределённость сопоставима с размером проёма. Измерение нельзя переносить на карту.');
   }
   const leftMid={
    x:(points[0].x+points[3].x)/2,
@@ -534,12 +549,27 @@
    headingRadians:heading,
    headingDeg:heading*180/Math.PI,
    clearWidth,
+   clearHeight,
    widthSigma:sigmaWidth,
+   heightSigma:sigmaHeight,
    widthUncertaintyBound,
+   heightUncertaintyBound,
    widthUncertaintyMultiplier:2,
-   widthUncertaintyModel:repeatability?repeatability.uncertaintyModel:'2-sigma-normal-approximation',
-   heightUncertaintyBound:repeatability?repeatability.heightEnvelopeBound:2*measurement.sigmaHeight,
-   repeatability:repeatability?{count:repeatability.count,meanWidth:repeatability.meanWidth,meanHeight:repeatability.meanHeight,sampleStdDevWidth:repeatability.sampleStdDevWidth,sampleStdDevHeight:repeatability.sampleStdDevHeight,rangeWidth:repeatability.rangeWidth,rangeHeight:repeatability.rangeHeight,widthTolerance:repeatability.widthTolerance,heightTolerance:repeatability.heightTolerance,heightEnvelopeBound:repeatability.heightEnvelopeBound}:null,
+   widthUncertaintyModel:repeatability.uncertaintyModel,
+   repeatability:{
+    count:repeatability.count,
+    meanWidth:repeatability.meanWidth,
+    meanHeight:repeatability.meanHeight,
+    sampleStdDevWidth:repeatability.sampleStdDevWidth,
+    sampleStdDevHeight:repeatability.sampleStdDevHeight,
+    rangeWidth:repeatability.rangeWidth,
+    rangeHeight:repeatability.rangeHeight,
+    maxDeviationWidth:repeatability.maxDeviationWidth,
+    maxDeviationHeight:repeatability.maxDeviationHeight,
+    widthTolerance:repeatability.widthTolerance,
+    heightTolerance:repeatability.heightTolerance,
+    heightEnvelopeBound:repeatability.heightEnvelopeBound
+   },
    nonlinearSensitivityModel:measurement.nonlinearSensitivityModel,
    nonlinearMismatchWidth:measurement.nonlinearMismatchWidth,
    maxAxisAsymmetryRatio:measurement.maxAxisAsymmetryRatio,
