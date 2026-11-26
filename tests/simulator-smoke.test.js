@@ -372,6 +372,25 @@ test('camera gate registration activates a measured lintel only with explicit th
  assert.match(elements.routeAdvice.textContent,/Параметры модели изменены/);
 });
 
+test('camera gate registration rejects a lintel without explicit alignment confirmation',()=>{
+ const {elements,windowObject}=bootSimulator();
+ elements.gateLintelEnabled.checked=true;
+ elements.gateLintelFloorUncertainty.value='0.02';
+ elements.gateLintelThickness.value='0.25';
+ elements.gateLintelThicknessUncertainty.value='0.01';
+ elements.gateLintelSpan.value='4.6';
+ elements.gateLintelSpanUncertainty.value='0.1';
+ elements.gateLintelDepth.value='0.45';
+ elements.gateLintelDepthUncertainty.value='0.02';
+ const before=elements.gateWidth.value;
+ const applied=windowObject.TruckVisionApplyGateRegistration({
+  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08,
+  clearHeight:4.1,heightUncertaintyBound:0.12
+ });
+ assert.equal(applied,false);
+ assert.equal(elements.gateWidth.value,before);
+});
+
 test('camera gate registration rejects an enabled lintel without measured beam dimensions',()=>{
  const {elements,windowObject}=bootSimulator();
  elements.gateLintelEnabled.checked=true;
