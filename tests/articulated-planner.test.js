@@ -234,7 +234,7 @@ test('gate width uncertainty narrows the opening and map pose uncertainty expand
 
 test('gate obstacle uncertainty rejects invalid bounds and a collapsed conservative opening',()=>{
  const base={centerX:0,centerY:0,clearWidth:3,postWidth:0.2,depth:0.6,heading:0,widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1};
- assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,centerX:0,centerY:0,clearWidth:3,postWidth:0.2,depth:0.6,heading:0}),/положительные границы неопределённости/);
+ assert.throws(()=>planner.createGateObstacles({centerX:0,centerY:0,clearWidth:3,postWidth:0.2,depth:0.6,heading:0}),/положительные границы неопределённости/);
  assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,...base,widthUncertainty:0}));
  assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,...base,positionUncertainty:0}));
  assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,...base,headingUncertaintyDeg:0}));
