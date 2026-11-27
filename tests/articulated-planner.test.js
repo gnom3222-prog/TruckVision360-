@@ -2589,3 +2589,48 @@ test('ground-supported obstacle height is compared only in a calibrated road dat
  assert.equal(cabMissingProfile.verticalStatus,'vehicle-height-unverified');
  assert.equal(cabMissingProfile.distance,0);
 });
+
+
+test('swept tractor rate uses configurable front overhang, rear overhang, and body width',()=>{
+ const base={
+  ...params,tractorFrontOverhang:4.0,tractorRearOverhang:1.2,tractorBodyWidth:2.0,
+  cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:1.9
+ };
+ const nominal=planner.sweptDisplacementRatesPerMeter(0.2,base).tractor;
+ const longerFront=planner.sweptDisplacementRatesPerMeter(0.2,{...base,tractorFrontOverhang:6.5}).tractor;
+ const longerRear=planner.sweptDisplacementRatesPerMeter(0.2,{...base,tractorRearOverhang:4.5}).tractor;
+ const widerBody=planner.sweptDisplacementRatesPerMeter(0.2,{...base,tractorBodyWidth:3.0}).tractor;
+ assert.ok(longerFront>nominal,'front corner must increase the tractor sweep bound');
+ assert.ok(longerRear>nominal,'rear corner must increase the tractor sweep bound');
+ assert.ok(widerBody>nominal,'wider body must increase the tractor sweep bound');
+});
+
+test('bounded planner accepts uncertainty intervals for all configurable tractor outer dimensions',()=>{
+ const start={x:0,y:0,psi:0,psiT:0};
+ const calibratedParams={
+  ...params,tractorFrontOverhang:5.0,tractorRearOverhang:1.2,tractorBodyWidth:2.55
+ };
+ let target={...start};
+ for(let i=0;i<12;i++)target=physics.rk4(target,0.7,0.24,0.05/0.7,calibratedParams);
+ for(const [key,delta] of [
+  ['tractorFrontOverhang',0.001],
+  ['tractorRearOverhang',0.001],
+  ['tractorBodyWidth',0.001]
+ ]){
+  const nominal=calibratedParams[key];
+  const result=planner.planAlternativesWithVehicleParameterBounds({
+   start,goal:{x:target.x,y:target.y,heading:target.psi},
+   params:calibratedParams,obstacles:[],integrate,
+   alternativeMaxExpansions:1200,
+   positionTolerance:0.05,headingTolerance:0.02,
+   maxTerminalArticulation:0.5,minClearance:0.30,
+   measurementUncertainty:0,obstaclePositionUncertainty:0,
+   obstacleSizeUncertainty:0,vehicleFootprintUncertainty:0,
+   vehicleParameterBounds:{[key]:{min:nominal-delta,max:nominal+delta}}
+  });
+  assert.equal(result.ok,true,key+': '+JSON.stringify(result));
+  assert.equal(result.parameterSensitivity.activeParameterCount,1,key);
+  assert.equal(result.parameterSensitivity.testedScenarioCount,2,key);
+  assert.equal(result.parameterSensitivity.coverage,'full-endpoint-combinations',key);
+ }
+});
