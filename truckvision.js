@@ -68,7 +68,9 @@ const cfg={
  gatePositionUncertainty:0,
  gateHeadingUncertaintyDeg:0,
  gatePostWidth:0.25,
+ gatePostWidthUncertainty:0,
  gateDepth:0.6,
+ gateDepthUncertainty:0,
  gateLintelEnabled:false,
  gateLintelClearHeight:0,
  gateLintelCameraHeightUncertainty:0,
@@ -152,7 +154,9 @@ function gateGeometryForPlanner(){
   centerY:cfg.gateCenterY,
   clearWidth:cfg.gateWidth,
   postWidth:cfg.gatePostWidth,
+  postWidthUncertainty:cfg.gatePostWidthUncertainty,
   depth:cfg.gateDepth,
+  depthUncertainty:cfg.gateDepthUncertainty,
   heading:cfg.gateHeadingDeg*Math.PI/180,
   widthUncertainty:cfg.gateWidthUncertainty,
   positionUncertainty:cfg.gatePositionUncertainty,
@@ -261,7 +265,9 @@ function readSettings(){
   const requiredGateBounds=[
    ['gateWidthUncertainty',candidate.gateWidthUncertainty,0.001,2],
    ['gatePositionUncertainty',candidate.gatePositionUncertainty,0.001,2],
-   ['gateHeadingUncertaintyDeg',candidate.gateHeadingUncertaintyDeg,0.001,45]
+   ['gateHeadingUncertaintyDeg',candidate.gateHeadingUncertaintyDeg,0.001,45],
+   ['gatePostWidthUncertainty',candidate.gatePostWidthUncertainty,0.001,1],
+   ['gateDepthUncertainty',candidate.gateDepthUncertainty,0.001,2]
   ];
   for(const [key,value,min,max] of requiredGateBounds){
    if(!Number.isFinite(value)||value<min||value>max){
@@ -289,7 +295,9 @@ function readSettings(){
    const gateCandidate={
     centerX:candidate.gateCenterX,centerY:candidate.gateCenterY,
     clearWidth:candidate.gateWidth,postWidth:candidate.gatePostWidth,
-    depth:candidate.gateDepth,heading:candidate.gateHeadingDeg*Math.PI/180,
+    postWidthUncertainty:candidate.gatePostWidthUncertainty,
+    depth:candidate.gateDepth,depthUncertainty:candidate.gateDepthUncertainty,
+    heading:candidate.gateHeadingDeg*Math.PI/180,
     widthUncertainty:candidate.gateWidthUncertainty,
     positionUncertainty:candidate.gatePositionUncertainty,
     headingUncertaintyDeg:candidate.gateHeadingUncertaintyDeg
@@ -361,7 +369,9 @@ function readSettings(){
   gatePositionUncertainty:[0,2],
   gateHeadingUncertaintyDeg:[0,45],
   gatePostWidth:[0.05,2],
+  gatePostWidthUncertainty:[0,1],
   gateDepth:[0.05,10],
+  gateDepthUncertainty:[0,2],
   gateLintelClearHeight:[0,15],
   gateLintelCameraHeightUncertainty:[0,2],
   gateLintelFloorUncertainty:[0,1],
@@ -2539,7 +2549,9 @@ function applyCameraGateRegistration(registration){
   return Number(input.value);
  };
  const postWidth=readGateSetting('gatePostWidth','gatePostWidth');
+ const postWidthUncertainty=readGateSetting('gatePostWidthUncertainty','gatePostWidthUncertainty');
  const depth=readGateSetting('gateDepth','gateDepth');
+ const depthUncertainty=readGateSetting('gateDepthUncertainty','gateDepthUncertainty');
  const positionUncertainty=readGateSetting('gatePositionUncertainty','gatePositionUncertainty');
  const headingUncertaintyDeg=readGateSetting('gateHeadingUncertaintyDeg','gateHeadingUncertaintyDeg');
  const lintelEnabled=!!($('gateLintelEnabled')&&$('gateLintelEnabled').checked);
@@ -2557,12 +2569,13 @@ function applyCameraGateRegistration(registration){
  }:null;
  if(lintelEnabled&&!lintelAlignmentConfirmed)return false;
  if(![centerX,centerY,clearWidth,headingDeg,widthUncertaintyBound,
-      postWidth,depth,positionUncertainty,headingUncertaintyDeg].every(Number.isFinite)||
+      postWidth,postWidthUncertainty,depth,depthUncertainty,positionUncertainty,headingUncertaintyDeg].every(Number.isFinite)||
     Math.abs(centerX)>100||Math.abs(centerY)>100||
     clearWidth<1||clearWidth>20||headingDeg<-180||headingDeg>180||
     widthUncertaintyBound<0.001||widthUncertaintyBound>2||
     widthUncertaintyBound>=clearWidth-0.05||
-    postWidth<0.05||postWidth>2||depth<0.05||depth>10||
+    postWidth<0.05||postWidth>2||postWidthUncertainty<0.001||postWidthUncertainty>1||postWidthUncertainty>=postWidth||
+    depth<0.05||depth>10||depthUncertainty<0.001||depthUncertainty>2||depthUncertainty>=depth||
     positionUncertainty<0.001||positionUncertainty>2||
     headingUncertaintyDeg<0.001||headingUncertaintyDeg>45||
     !Number.isFinite(clearHeight)||clearHeight<=0.5||clearHeight>15||
@@ -2572,7 +2585,7 @@ function applyCameraGateRegistration(registration){
  try{
   const gate={
    centerX,centerY,clearWidth,
-   postWidth,depth,
+   postWidth,postWidthUncertainty,depth,depthUncertainty,
    heading:headingDeg*Math.PI/180,
    widthUncertainty:widthUncertaintyBound,
    positionUncertainty,
@@ -2589,7 +2602,9 @@ function applyCameraGateRegistration(registration){
  cfg.gateCenterY=centerY;
  cfg.gateHeadingDeg=headingDeg;
  cfg.gatePostWidth=postWidth;
+ cfg.gatePostWidthUncertainty=postWidthUncertainty;
  cfg.gateDepth=depth;
+ cfg.gateDepthUncertainty=depthUncertainty;
  cfg.gatePositionUncertainty=positionUncertainty;
  cfg.gateHeadingUncertaintyDeg=headingUncertaintyDeg;
  cfg.gateLintelEnabled=lintelEnabled;
