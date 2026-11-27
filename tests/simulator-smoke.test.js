@@ -168,11 +168,11 @@ test('route planning is blocked when any enabled gate dimension or pose bound is
 test('camera gate registration rejects zero jamb dimension or pose uncertainty atomically',()=>{
  const {elements,windowObject}=bootSimulator();
  const fields=['gatePostWidthUncertainty','gateDepthUncertainty','gatePositionUncertainty','gateHeadingUncertaintyDeg'];
- const before=[elements.gateWidth.value,elements.gateWidthUncertainty.value,elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value,elements.gatePostWidthUncertainty.value,elements.gateDepthUncertainty.value];
+ const before=[elements.gateWidth.value,elements.gateWidthUncertainty.value,elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value];
  for(const field of fields){
   elements[field].value='0';
   assert.equal(windowObject.TruckVisionApplyGateRegistration({centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08,clearHeight:3.8,heightUncertaintyBound:0.05}),false,field+' must reject registration');
-  assert.deepEqual([elements.gateWidth.value,elements.gateWidthUncertainty.value,elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value,elements.gatePostWidthUncertainty.value,elements.gateDepthUncertainty.value],before);
+  assert.deepEqual([elements.gateWidth.value,elements.gateWidthUncertainty.value,elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value],before);
   elements[field].value=field==='gatePostWidthUncertainty'?'0.02':field==='gateDepthUncertainty'?'0.03':field==='gatePositionUncertainty'?'0.05':'1';
  }
  assert.equal(windowObject.TruckVisionApplyGateRegistration({
