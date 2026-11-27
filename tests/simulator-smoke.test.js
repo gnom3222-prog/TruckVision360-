@@ -785,6 +785,17 @@ test('route assessment names the individual trailer wheel that limits the swept 
  assert.match(elements.difficultyAdvice.textContent,/Автопроезд остаётся заблокирован/);
 });
 
+test('route assessment labels the default Volvo FH and tri-axle geometry as preliminary when bounds are zero',async()=>{
+ const simulator=bootSimulator({workerResult:perPartClearanceWorkerResult()});
+ const {elements}=simulator;
+ await elements.planRoute.onclick();
+ elements.alternativeRouteSelect.value='0';
+ elements.alternativeRouteSelect.onchange();
+ assert.match(elements.difficultyAdvice.textContent,/геометрия модели Volvo FH 4×2 и трёхосного полуприцепа предварительная/);
+ assert.match(elements.difficultyAdvice.textContent,/нулевой допуск означает «не задан», а не точность/);
+ assert.match(elements.difficultyAdvice.textContent,/рекомендация стороны и направления начала манёвра не подтверждена/);
+});
+
 test('route assessment fails closed when per-wheel swept clearance cannot validate integration steps',async()=>{
  const simulator=bootSimulator({workerResult:conservativeSelectionWorkerResult()});
  const {elements}=simulator;
