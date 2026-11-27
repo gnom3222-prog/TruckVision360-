@@ -1367,9 +1367,14 @@ test('auxiliary envelopes require explicit local offsets and a positive combined
   headingOffsetDeg:0,uncertaintyMargin:0.001
  };
  assert.deepEqual(physics.validateAuxiliaryEnvelopes([valid]),[]);
- for(const key of ['longitudinalOffset','lateralOffset','headingOffsetDeg']){
+ const requiredFields=[
+  ['longitudinalOffset','продольное смещение'],
+  ['lateralOffset','поперечное смещение'],
+  ['headingOffsetDeg','угловое смещение']
+ ];
+ for(const [key,message] of requiredFields){
   const missing={...valid};delete missing[key];
-  assert.ok(physics.validateAuxiliaryEnvelopes([missing]).some(error=>error.includes(key)),key);
+  assert.ok(physics.validateAuxiliaryEnvelopes([missing]).some(error=>error.includes(message)),key);
  }
  for(const margin of [undefined,0,0.0005,-0.01,1.01]){
   const candidate={...valid};
