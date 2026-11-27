@@ -839,6 +839,21 @@ test('swept bound uses the exact axle-centered trailer corner radius across long
 });
 
 
+test('route segment distance prefers integrated path length and validates the coordinate chord',()=>{
+ const curved=planner.routeSegmentDistance(
+  {x:0,y:0},{x:0.5,y:0.5,stepDistance:1},1,'test'
+ );
+ assert.equal(curved.source,'integration-stepDistance');
+ assert.equal(curved.distance,1);
+ assert.ok(Math.abs(curved.chordSpacing-Math.hypot(0.5,0.5))<1e-12);
+ const fallback=planner.routeSegmentDistance({x:0,y:0},{x:0.5,y:0.5},1,'test');
+ assert.equal(fallback.source,'coordinate-chord-fallback');
+ assert.equal(fallback.distance,fallback.chordSpacing);
+ assert.throws(()=>planner.routeSegmentDistance(
+  {x:0,y:0},{x:0.2,y:0,stepDistance:0.1},1,'test'
+ ),/moves farther than its integration stepDistance/);
+});
+
 test('articulation exposure locates the peak angle and cumulative route distance',()=>{
  const result=planner.articulationExposure([
   {x:0,y:0,psi:0,psiT:0,gear:1,steer:0},
@@ -851,12 +866,79 @@ test('articulation exposure locates the peak angle and cumulative route distance
  assert.equal(result.gear,-1);
  assert.ok(Math.abs(result.maxAngleDegrees-60)<1e-9);
  assert.ok(Math.abs(result.distanceAlongRoute-3)<1e-9);
+ assert.equal(result.distanceSource,'coordinate-chord-fallback');
+ assert.equal(result.stepDistanceSegmentCount,0);
+ assert.equal(result.chordFallbackSegmentCount,3);
+ assert.ok(Math.abs(result.maxSampleChordSpacing-2)<1e-12);
  assert.deepEqual(result.state,{x:3,y:0,psi:Math.PI/3,psiT:0,gear:-1,steer:-0.12});
  assert.equal(result.sampleCount,4);
  assert.ok(Math.abs(result.maxSampleSpacing-2)<1e-12);
  assert.ok(result.maxAdjacentAngleChangeDegrees>50);
+ const expectedPerMeter=Math.abs(Math.atan2(Math.sin(0.1-Math.PI/3),Math.cos(0.1-Math.PI/3)))*180/Math.PI;
+ assert.ok(Math.abs(result.maxSampledAngleChangePerMeterDegrees-expectedPerMeter)<1e-9);
+ assert.equal(result.maxSampledAngleChangePerMeterSegmentIndex,2);
+ assert.ok(Math.abs(result.maxSampledAngleChangePerMeterDistanceAlongRoute-3.5)<1e-12);
+ assert.equal(result.zeroDistanceAngleChangeCount,0);
  assert.equal(result.samplingMethod,'discrete-route-states');
  assert.equal(result.continuousPeakVerified,false);
+});
+
+test('articulation exposure reports maximum sampled angle change per metre on the tightest segment',()=>{
+ const result=planner.articulationExposure([
+  {x:0,y:0,psi:0,psiT:0},
+  {x:2,y:0,psi:0.1,psiT:0},
+  {x:3,y:0,psi:0.3,psiT:0}
+ ]);
+ assert.ok(Math.abs(result.maxSampledAngleChangePerMeterDegrees-(0.2*180/Math.PI))<1e-9);
+ assert.equal(result.maxSampledAngleChangePerMeterSegmentIndex,1);
+ assert.ok(Math.abs(result.maxSampledAngleChangePerMeterDistanceAlongRoute-2.5)<1e-12);
+ assert.equal(result.zeroDistanceAngleChangeCount,0);
+});
+
+test('articulation exposure uses planner stepDistance instead of the shorter coordinate chord',()=>{
+ const result=planner.articulationExposure([
+  {x:0,y:0,psi:0,psiT:0,stepDistance:0},
+  {x:0.5,y:0.5,psi:0.2,psiT:0,stepDistance:1.0},
+  {x:0.7,y:1.0,psi:0.4,psiT:0,stepDistance:0.6}
+ ]);
+ const angleChangeDegrees=0.2*180/Math.PI;
+ assert.equal(result.distanceSource,'integration-stepDistance');
+ assert.equal(result.stepDistanceSegmentCount,2);
+ assert.equal(result.chordFallbackSegmentCount,0);
+ assert.ok(Math.abs(result.distanceAlongRoute-1.6)<1e-12);
+ assert.ok(Math.abs(result.maxSampleSpacing-1.0)<1e-12);
+ assert.ok(Math.abs(result.maxSampleChordSpacing-Math.hypot(0.5,0.5))<1e-12);
+ assert.ok(Math.abs(result.maxSampledAngleChangePerMeterDegrees-angleChangeDegrees/0.6)<1e-9);
+ assert.equal(result.maxSampledAngleChangePerMeterSegmentIndex,1);
+ assert.ok(Math.abs(result.maxSampledAngleChangePerMeterDistanceAlongRoute-1.3)<1e-12);
+});
+
+test('start recommendation reports first-turn distance using planner stepDistance',()=>{
+ const result=planner.recommendStart([
+  {x:0,y:0,gear:1,steer:0,stepDistance:0},
+  {x:0.5,y:0.5,gear:1,steer:0,stepDistance:1.0},
+  {x:0.7,y:1.0,gear:1,steer:0.12,stepDistance:0.6}
+ ]);
+ assert.equal(result.ok,true);
+ assert.equal(result.firstTurn,'left');
+ assert.ok(Math.abs(result.firstTurnDistance-1.6)<1e-12);
+});
+
+test('articulation exposure rejects an integration stepDistance shorter than its coordinate chord',()=>{
+ assert.throws(()=>planner.articulationExposure([
+  {x:0,y:0,psi:0,psiT:0,stepDistance:0},
+  {x:0.2,y:0,psi:0.1,psiT:0,stepDistance:0.1}
+ ]),/moves farther than its integration stepDistance/);
+});
+
+test('articulation exposure flags angle jumps with no translation and does not invent a per-metre rate',()=>{
+ const result=planner.articulationExposure([
+  {x:0,y:0,psi:0,psiT:0},
+  {x:0,y:0,psi:0.2,psiT:0}
+ ]);
+ assert.equal(result.maxSampledAngleChangePerMeterDegrees,null);
+ assert.equal(result.maxSampledAngleChangePerMeterSegmentIndex,null);
+ assert.equal(result.zeroDistanceAngleChangeCount,1);
 });
 
 test('articulation exposure reports zero spacing for a single sampled state',()=>{
@@ -866,6 +948,12 @@ test('articulation exposure reports zero spacing for a single sampled state',()=
  assert.equal(result.sampleCount,1);
  assert.equal(result.maxSampleSpacing,0);
  assert.equal(result.maxAdjacentAngleChangeDegrees,0);
+ assert.equal(result.maxSampledAngleChangePerMeterDegrees,null);
+ assert.equal(result.maxSampledAngleChangePerMeterSegmentIndex,null);
+ assert.equal(result.zeroDistanceAngleChangeCount,0);
+ assert.equal(result.distanceSource,'no-segments');
+ assert.equal(result.stepDistanceSegmentCount,0);
+ assert.equal(result.chordFallbackSegmentCount,0);
  assert.equal(result.continuousPeakVerified,false);
 });
 

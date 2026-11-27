@@ -188,6 +188,24 @@ test('three-axle scrub exposure reports peak lateral speed separately for each a
  assert.equal(result.integration,'composite-simpson-4-subintervals');
 });
 
+test('three-axle axle scrub diagnostic preserves asymmetric axle offsets and opposite lateral directions',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,
+  trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerAxleSpacing12:0.8,trailerAxleSpacing23:1.6
+ };
+ const q={x:0,y:0,psi:0.2,psiT:0.05};
+ const diagnostic=physics.trailerAxleDiagnostics(q,0.7,0.18,p);
+ assert.equal(diagnostic.axles.length,3);
+ near(diagnostic.axles[0].offsetFromGroupCenter,0.8);
+ near(diagnostic.axles[1].offsetFromGroupCenter,0);
+ near(diagnostic.axles[2].offsetFromGroupCenter,-1.6);
+ near(diagnostic.axles[0].lateralVelocity,diagnostic.trailerYawRate*0.8);
+ near(diagnostic.axles[2].lateralVelocity,diagnostic.trailerYawRate*-1.6);
+ assert.ok(diagnostic.axles[0].lateralVelocity*diagnostic.axles[2].lateralVelocity<0);
+ near(Math.abs(diagnostic.axles[2].lateralVelocity),2*Math.abs(diagnostic.axles[0].lateralVelocity));
+});
+
 test('three-axle scrub exposure uses planner stepDistance instead of endpoint chord',()=>{
  const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3};
  const start={x:0,y:0,psi:0,psiT:0,gear:1,steer:0.18};
