@@ -45,7 +45,7 @@ function bootCamera(options={}){
    emit(type){for(const fn of listeners[type]||[])fn();}
   };
   mediaTracks.push(track);
-  return{getTracks:()=>[track],getVideoTracks:()=>[track]};
+  return{getTracks:()=>[track],getVideoTracks:()=>options.noVideoTrack?[]:[track]};
  };
  const appliedRegistrations=[],obstacleRegistrations=[];
  const win={
@@ -148,6 +148,21 @@ test('camera diagnostics remain explicit when the browser omits track settings',
  camera.fire('cameraStop','click');
 });
 
+test('camera diagnostics remain explicit when getSettings throws',async()=>{
+ const camera=bootCamera({trackSettingsError:true});
+ await camera.fire('cameraStart','click');
+ assert.match(camera.elements.cameraStreamInfo.textContent,/направление не возвращено getSettings/);
+ assert.match(camera.elements.cameraStreamInfo.textContent,/размер кадра не сообщён/);
+ camera.fire('cameraStop','click');
+});
+
+test('camera measurement stops a stream that contains no video track',async()=>{
+ const camera=bootCamera({noVideoTrack:true});
+ await camera.fire('cameraStart','click');
+ assert.equal(camera.trackStops,1);
+ assert.equal(camera.elements.measureVideo.srcObject,null);
+ assert.match(camera.elements.cameraStatus.textContent,/не вернул видеодорожку камеры/);
+});
 test('camera permission is requested only on tap; measurement reports uncertainty and orientation invalidates calibration',async()=>{
  const camera=bootCamera();
  assert.equal(camera.permissionRequests,0,'loading the camera module must not request permission');
