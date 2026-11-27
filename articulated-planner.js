@@ -2065,7 +2065,8 @@ function planAlternativesWithGeometryUncertainty(options={}){
   }
   try{
    const nominalGatePosts=createGateObstaclesInternal({
-    ...gateGeometry,widthUncertainty:0,positionUncertainty:0,headingUncertaintyDeg:0
+    ...gateGeometry,widthUncertainty:0,postWidthUncertainty:0,depthUncertainty:0,
+    positionUncertainty:0,headingUncertaintyDeg:0
    },true);
    const boundedGatePosts=createGateObstacles(gateGeometry);
    const nominalStaticObstacles=nominalizedObstacles.filter(obstacle=>obstacle?.kind!=='gate-jamb');
