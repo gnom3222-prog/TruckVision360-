@@ -19,6 +19,9 @@
   trailerAxleSpacing12:{min:0,max:5,optional:true},
   trailerAxleSpacing23:{min:0,max:5,optional:true},
   footprintUncertainty:{min:0,max:1,optional:true},
+  tractorFrontOverhang:{min:1,max:10,optional:true},
+  tractorRearOverhang:{min:0.2,max:5,optional:true},
+  tractorBodyWidth:{min:1.8,max:3.2,optional:true},
   cabOffset:{min:0,max:6,optional:true},
   cabFront:{min:0.5,max:3.5,optional:true},
   cabRear:{min:0.3,max:2.5,optional:true},
@@ -593,6 +596,9 @@
   check('cabFront','cabFrontUncertainty','передний вылет кабины');
   check('cabRear','cabRearUncertainty','задний вылет кабины');
   check('cabWidth','cabWidthUncertainty','ширина кабины');
+  check('tractorFrontOverhang','tractorFrontOverhangUncertainty','передний вылет общего контура тягача от задней оси');
+  check('tractorRearOverhang','tractorRearOverhangUncertainty','задний вылет общего контура тягача за заднюю ось');
+  check('tractorBodyWidth','tractorBodyWidthUncertainty','ширина общего контура тягача');
   const footprint=params&&(Number.isFinite(params.vehicleFootprintUncertainty)?
    params.vehicleFootprintUncertainty:params.footprintUncertainty);
   if(!Number.isFinite(footprint)||footprint<=0){
@@ -681,20 +687,25 @@
    });
   }
 
-  // Cab dimensions are configurable calibration inputs, not factory defaults.
+  // The outer tractor envelope is independently configurable; defaults preserve
+  // the legacy illustration only and are not measured Volvo FH dimensions.
+  const tractorFrontOverhang=params.tractorFrontOverhang??5.0;
+  const tractorRearOverhang=params.tractorRearOverhang??1.2;
+  const tractorBodyWidth=params.tractorBodyWidth??2.55;
   const cabOffset=params.cabOffset??2.1;
   const cabFront=params.cabFront??1.35;
   const cabRear=params.cabRear??0.9;
   const cabWidth=params.cabWidth??2.25;
-  const validCabEnvelope=[cabOffset,cabFront,cabRear,cabWidth].every(Number.isFinite)&&
+  const validCabEnvelope=[tractorFrontOverhang,tractorRearOverhang,tractorBodyWidth,
+   cabOffset,cabFront,cabRear,cabWidth].every(Number.isFinite)&&
    cabOffset>=0&&cabOffset<=6&&cabFront>=0.5&&cabFront<=3.5&&
    cabRear>=0.3&&cabRear<=2.5&&cabWidth>=1.8&&cabWidth<=2.55;
   if(validCabEnvelope&&(
-   cabOffset+cabFront>5+1e-9||
-   cabOffset-cabRear< -1.2-1e-9||
-   cabWidth>2.55+1e-9
+   cabOffset+cabFront>tractorFrontOverhang+1e-9||
+   cabOffset-cabRear< -tractorRearOverhang-1e-9||
+   cabWidth>tractorBodyWidth+1e-9
   )){
-   errors.push('Геометрия кабины выходит за пределы общего контура тягача; проверьте положение, длину и ширину кабины.');
+   errors.push('Геометрия кабины выходит за пределы измеряемого общего контура тягача; проверьте передний/задний вылет и ширину.');
   }
 
   const mirrorOutboard=params.mirrorOutboard??0;
@@ -707,11 +718,11 @@
    // Mirror housings may extend beyond the cab's front/rear edges, but
    // they must remain within the tractor's outer longitudinal envelope.
    // This is a packaging bound, not a measured Volvo mirror-bracket model.
-   const tractorRearEdge=-1.2;
-   const tractorFrontEdge=5.0;
+   const tractorRearEdge=-tractorRearOverhang;
+   const tractorFrontEdge=tractorFrontOverhang;
    if(mirrorLongitudinal-mirrorLength/2<tractorRearEdge-1e-9||
       mirrorLongitudinal+mirrorLength/2>tractorFrontEdge+1e-9){
-    errors.push('mirrorLongitudinal/mirrorLength: оболочка зеркал должна оставаться внутри продольного контура тягача (-1,20…5,00 м).');
+    errors.push('mirrorLongitudinal/mirrorLength: оболочка зеркал должна оставаться внутри текущего продольного контура тягача (-'+tractorRearOverhang.toFixed(2)+'…'+tractorFrontOverhang.toFixed(2)+' м).');
    }
   }
 
@@ -895,10 +906,13 @@
   const cab=localPoint(q,q.psi,cabOffset);
   const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
   const trailerKingpinToFront=params.trailerKingpinToFront??1.5;
-  // The tractor rectangle remains a broad outer envelope. The cab is a
-  // nested diagnostic component whose dimensions can be calibrated separately.
+  const tractorFrontOverhang=params.tractorFrontOverhang??5.0;
+  const tractorRearOverhang=params.tractorRearOverhang??1.2;
+  const tractorBodyWidth=params.tractorBodyWidth??2.55;
+  // The tractor rectangle is a measured/configurable outer envelope. Fallbacks
+  // retain the legacy display only; calibration status still reports missing bounds.
   return[
-   bodyCorners(q,q.psi,5+uncertainty,-1.2-uncertainty,2.55+2*uncertainty),
+   bodyCorners(q,q.psi,tractorFrontOverhang+uncertainty,-tractorRearOverhang-uncertainty,tractorBodyWidth+2*uncertainty),
    bodyCorners(cab,q.psi,cabFront+uncertainty,-cabRear-uncertainty,cabWidth+2*uncertainty),
    bodyCorners(h,q.psiT,trailerKingpinToFront+uncertainty,-(params.trailerLength-trailerKingpinToFront+uncertainty),params.trailerWidth+2*uncertainty)
   ];
@@ -976,14 +990,17 @@
   const wheels=buildWheelFootprints(q,params,steer);
   const auxiliary=auxiliaryEnvelopePolygons(q,params);
   const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
+  const tractorFrontOverhang=params.tractorFrontOverhang??5.0;
+  const tractorRearOverhang=params.tractorRearOverhang??1.2;
+  const tractorBodyWidth=params.tractorBodyWidth??2.55;
   const tractorWheelComponents=wheels.filter(wheel=>
    wheel.vehiclePart==='тягач'&&(includeInternalComponentsForVertical||!!wheel.verticalRange||polygonOutsideEnvelope(
-    wheel.polygon,q,q.psi,5+uncertainty,-1.2-uncertainty,2.55+2*uncertainty
+    wheel.polygon,q,q.psi,tractorFrontOverhang+uncertainty,-tractorRearOverhang-uncertainty,tractorBodyWidth+2*uncertainty
    ))
   );
   const tractorAuxiliaryComponents=auxiliary.filter(component=>
    component.vehiclePart==='тягач'&&(includeInternalComponentsForVertical||!!component.verticalRange||polygonOutsideEnvelope(
-    component.polygon,q,q.psi,5+uncertainty,-1.2-uncertainty,2.55+2*uncertainty
+    component.polygon,q,q.psi,tractorFrontOverhang+uncertainty,-tractorRearOverhang-uncertainty,tractorBodyWidth+2*uncertainty
    ))
   );
   const hitch=hitchPoint(q,params);
