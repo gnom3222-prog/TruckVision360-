@@ -1333,6 +1333,9 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   reasons.push('повышенный пиковый угол сочленения '+maxBeta.toFixed(1)+'° на '+
    articulationPeak.distanceAlongRoute.toFixed(1)+' м пути');
  }
+ reasons.push('пиковый угол сочленения — дискретная оценка по '+
+  articulationPeak.sampleCount+' точкам; максимальный шаг '+
+  articulationPeak.maxSampleSpacing.toFixed(3)+' м; непрерывный максимум между точками не подтверждён');
  if(clearanceInsufficient)reasons.push('недостаточный зазор после резерва погрешности');
  if(wheelClearanceIncomplete)reasons.push('промежуточная кинематическая проверка колёс не завершена для '+wheelClearance.segmentsWithoutIntermediateKinematicSamples+' сегментов; виртуальный автопроезд заблокирован');
  if(wheelClearanceError)reasons.push('индивидуальная проверка колёс не подтверждена: '+wheelClearanceError);
@@ -1360,7 +1363,14 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   wheelTrackSegmentsWithoutKinematicEstimate:wheelTrajectory.segmentsWithoutKinematicEstimate,
   wheelTrackSummary,tireTrajectory,tireTrajectoryError,
   level:collision||!reached||articulationBlocked||clearanceInsufficient?'Не пройден':score>=7?'Высокая':score>=3?'Средняя':'Низкая',
-  maxBeta,articulationPeak,articulationWarning,clearance:minClearance,clearanceDetail:minClearanceDetail,
+  maxBeta,articulationPeak,articulationWarning,
+  articulationSampling:{
+   sampleCount:articulationPeak.sampleCount,
+   maxSampleSpacing:articulationPeak.maxSampleSpacing,
+   maxAdjacentAngleChangeDegrees:articulationPeak.maxAdjacentAngleChangeDegrees,
+   continuousPeakVerified:articulationPeak.continuousPeakVerified
+  },
+  clearance:minClearance,clearanceDetail:minClearanceDetail,
   clearanceLowerBound:clearanceForAssessment,effectiveClearance,
   clearanceByPart,limitingPartClearance,trajectoryClearance,sweptClearanceDetail,
   wheelClearance,limitingWheelClearance,wheelClearanceError,intermediateWheelContact,wheelClearanceIncomplete,
@@ -1927,7 +1937,9 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
   const peakGearText=m.articulationPeak.gear<0?'задним ходом':'вперёд';
   const articulationPeakText='пик угла сочленения '+m.articulationPeak.maxAngleDegrees.toFixed(1)+
    '° на '+m.articulationPeak.distanceAlongRoute.toFixed(1)+' м пути (X '+
-   m.articulationPeak.state.x.toFixed(1)+' м, Y '+m.articulationPeak.state.y.toFixed(1)+' м), '+peakGearText;
+   m.articulationPeak.state.x.toFixed(1)+' м, Y '+m.articulationPeak.state.y.toFixed(1)+' м), '+peakGearText+
+   '; дискретная оценка по '+m.articulationPeak.sampleCount+' точкам, максимальный шаг '+
+   m.articulationPeak.maxSampleSpacing.toFixed(3)+' м; непрерывный максимум между точками не подтверждён';
   $('routeAdvice').textContent=
    'Начало манёвра: '+gearText+'; первое рулевое действие: '+firstTurnText+
    '. Сторона определяется по первому значимому управляющему углу планировщика (порог 0,08 рад), а не по одному лишь направлению на цель.'+recommendationNote+sensitivityNote+parameterNote+' Маршрут до точки ('+
