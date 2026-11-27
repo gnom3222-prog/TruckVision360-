@@ -29,12 +29,19 @@ function readGateMapPose(){
  const xText=$('gateCenterX').value.trim(),yText=$('gateCenterY').value.trim(),headingText=$('gateHeadingDeg').value.trim();
  const positionUncertaintyText=$('gatePositionUncertainty').value.trim();
  const headingUncertaintyText=$('gateHeadingUncertaintyDeg').value.trim();
+ const postWidthUncertaintyText=$('gatePostWidthUncertainty').value.trim();
+ const depthUncertaintyText=$('gateDepthUncertainty').value.trim();
  if(!xText||!yText||!headingText)throw new Error('Введите центр ворот X/Y и направление линии ворот до начала серии повторов.');
  if(!positionUncertaintyText||!headingUncertaintyText)throw new Error('Введите положительные допуски ручного положения и направления ворот. Камера не определяет привязку к карте.');
+ if(!postWidthUncertaintyText||!depthUncertaintyText)throw new Error('Введите положительные допуски толщины и глубины косяков. Камера не измеряет эти размеры.');
  const anchor={x:Number(xText),y:Number(yText)},headingDeg=Number(headingText);
  const poseUncertainty={
   position:Number(positionUncertaintyText),
   headingDeg:Number(headingUncertaintyText)
+ };
+ const jambUncertainty={
+  postWidth:Number(postWidthUncertaintyText),
+  depth:Number(depthUncertaintyText)
  };
  if(![anchor.x,anchor.y,headingDeg].every(Number.isFinite)||
     Math.abs(anchor.x)>10000||Math.abs(anchor.y)>10000||headingDeg< -180||headingDeg>180){
@@ -44,7 +51,11 @@ function readGateMapPose(){
     !Number.isFinite(poseUncertainty.headingDeg)||poseUncertainty.headingDeg<0.001||poseUncertainty.headingDeg>45){
   throw new Error('Допуски привязки ворот должны быть положительными: 0,001–2 м по X/Y и 0,001–45° по направлению. Ноль не считается точностью.');
  }
- return {anchor,headingDeg,poseUncertainty};
+ if(!Number.isFinite(jambUncertainty.postWidth)||jambUncertainty.postWidth<0.001||jambUncertainty.postWidth>1||
+    !Number.isFinite(jambUncertainty.depth)||jambUncertainty.depth<0.001||jambUncertainty.depth>2){
+  throw new Error('Допуски толщины косяка должны быть 0,001–1 м, глубины — 0,001–2 м. Ноль не считается точностью.');
+ }
+ return {anchor,headingDeg,poseUncertainty,jambUncertainty};
 }
 function readObstacleRepeatabilityTolerance(){
  const widthText=$('cameraObstacleRepeatabilityWidthTolerance').value.trim();
@@ -317,8 +328,10 @@ say('Основание добавлено после трёх отдельны�
     Math.abs(mapPose.anchor.y-gateRepeatabilityPose.anchor.y)>1e-9||
     Math.abs(mapPose.headingDeg-gateRepeatabilityPose.headingDeg)>1e-9||
     Math.abs(mapPose.poseUncertainty.position-gateRepeatabilityPose.poseUncertainty.position)>1e-12||
-    Math.abs(mapPose.poseUncertainty.headingDeg-gateRepeatabilityPose.poseUncertainty.headingDeg)>1e-12)){
-  throw Error('Координаты, направление или допуски привязки ворот изменились внутри серии. Очистите серию и начните заново.');
+    Math.abs(mapPose.poseUncertainty.headingDeg-gateRepeatabilityPose.poseUncertainty.headingDeg)>1e-12||
+    Math.abs(mapPose.jambUncertainty.postWidth-gateRepeatabilityPose.jambUncertainty.postWidth)>1e-12||
+    Math.abs(mapPose.jambUncertainty.depth-gateRepeatabilityPose.jambUncertainty.depth)>1e-12)){
+  throw Error('Координаты, направление или допуски привязки/размеров косяков ворот изменились внутри серии. Очистите серию и начните заново.');
  }
  const measurementConfig={referenceWidth,referenceHeight,sigmaPixels,sigmaReference};
  if(gateRepeatabilityMeasurementConfig&&(
