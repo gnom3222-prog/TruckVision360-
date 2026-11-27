@@ -503,10 +503,15 @@
    tireLength/2+footprintUncertainty,
    Math.max(tireWidth,tractorRearGroupWidth)/2+footprintUncertainty
   );
-  // Bound each tire corner by distance to its axle center plus the tire's
-  // circumscribed radius; this remains conservative for any steer orientation.
+  const tractorFrontOverhang=p.tractorFrontOverhang??5.0;
+  const tractorRearOverhang=p.tractorRearOverhang??1.2;
+  const tractorBodyWidth=p.tractorBodyWidth??2.55;
+  const tractorHalfWidth=tractorBodyWidth/2+footprintUncertainty;
+  // Bound both front and rear body corners about the rear-axle reference;
+  // tire corners and configured hardware are included separately below.
   let tractorRadius=Math.max(
-   Math.hypot(5+footprintUncertainty,(2.55+2*footprintUncertainty)/2),
+   Math.hypot(tractorFrontOverhang+footprintUncertainty,tractorHalfWidth),
+   Math.hypot(tractorRearOverhang+footprintUncertainty,tractorHalfWidth),
    Math.hypot(wheelbase,tractorFrontTrack/2)+tractorWheelCornerRadius,
    Math.hypot(0,tractorRearTrack/2)+tractorWheelCornerRadius
   );
@@ -2276,6 +2281,9 @@ function planAlternativesWithVehicleParameterBounds(options={}){
   trailerAxle3TireCenterSpacing:[0,1.5],
   tireLength:[0.2,1.5],
   tireWidth:[0.1,0.8],
+  tractorFrontOverhang:[1,10],
+  tractorRearOverhang:[0.2,5],
+  tractorBodyWidth:[1.8,3.2],
   cabOffset:[0,6],
   cabFront:[0.5,3.5],
   cabRear:[0.3,2.5],
