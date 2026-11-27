@@ -9,7 +9,7 @@ const geometry=require('../camera-geometry.js');
 function bootCamera(options={}){
  const elements={},windowListeners={},documentListeners={};
  const context={clearRect(){},beginPath(){},moveTo(){},lineTo(){},closePath(){},stroke(){},arc(){},fill(){},fillText(){}};
- const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateWidthUncertainty','gateCenterX','gateCenterY','gateHeadingDeg','gatePostWidth','gateDepth','gatePositionUncertainty','gateHeadingUncertaintyDeg','gatePostWidthUncertainty','gateDepthUncertainty','gateLintelEnabled','gateLintelAlignmentConfirmed','gateLintelFloorUncertainty','gateLintelThickness','gateLintelThicknessUncertainty','gateLintelSpan','gateLintelSpanUncertainty','gateLintelDepth','gateLintelDepthUncertainty','gateResult','cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg','cameraObstacleRepeatabilityWidthTolerance','cameraObstacleRepeatabilityDepthTolerance','cameraObstacleRepeatabilityStatus','cameraClearObstacleRepeats','cameraObstacleHeight','cameraObstacleHeightUncertainty','cameraObstacleBaseDatumUncertainty','cameraObstacleVerticalDatumConfirmed','cameraRepeatabilityWidthTolerance','cameraRepeatabilityHeightTolerance','cameraRepeatabilityStatus','cameraClearGateRepeats'];
+ const ids=['measureVideo','measureOverlay','cameraStatus','cameraStreamInfo','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateWidthUncertainty','gateCenterX','gateCenterY','gateHeadingDeg','gatePostWidth','gateDepth','gatePositionUncertainty','gateHeadingUncertaintyDeg','gatePostWidthUncertainty','gateDepthUncertainty','gateLintelEnabled','gateLintelAlignmentConfirmed','gateLintelFloorUncertainty','gateLintelThickness','gateLintelThicknessUncertainty','gateLintelSpan','gateLintelSpanUncertainty','gateLintelDepth','gateLintelDepthUncertainty','gateResult','cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg','cameraObstacleRepeatabilityWidthTolerance','cameraObstacleRepeatabilityDepthTolerance','cameraObstacleRepeatabilityStatus','cameraClearObstacleRepeats','cameraObstacleHeight','cameraObstacleHeightUncertainty','cameraObstacleBaseDatumUncertainty','cameraObstacleVerticalDatumConfirmed','cameraRepeatabilityWidthTolerance','cameraRepeatabilityHeightTolerance','cameraRepeatabilityStatus','cameraClearGateRepeats'];
  for(const id of ids){
   elements[id]={
    id,value:({
@@ -35,13 +35,17 @@ function bootCamera(options={}){
  const mediaTracks=[];
  const createStream=()=>{
   const listeners={};
+  const trackSettings=options.trackSettings===false?null:(options.trackSettings||{facingMode:'environment',width:1280,height:720,frameRate:30,deviceId:'test-device-id'});
   const track={
+   kind:'video',
+   label:options.trackLabel||'Back Camera',
+   getSettings:options.trackSettingsError?()=>{throw new Error('settings unavailable');}:trackSettings?()=>({...trackSettings}):undefined,
    stop(){trackStops++;},
    addEventListener(type,fn){(listeners[type]??=[]).push(fn);},
    emit(type){for(const fn of listeners[type]||[])fn();}
   };
   mediaTracks.push(track);
-  return{getTracks:()=>[track]};
+  return{getTracks:()=>[track],getVideoTracks:()=>[track]};
  };
  const appliedRegistrations=[],obstacleRegistrations=[];
  const win={
@@ -110,6 +114,38 @@ test('camera measurement refuses a browser fallback when the rear-facing camera 
  assert.equal(camera.requestedConstraints[0].video.facingMode.exact,'environment');
  assert.match(camera.elements.cameraStatus.textContent,/заднюю камеру/);
  assert.equal(camera.trackStops,0,'no stream should be retained when the rear-facing constraint fails');
+});
+
+test('camera stream diagnostics report browser-provided rear direction and video settings without exposing device identifiers',async()=>{
+ const camera=bootCamera({trackLabel:'Back Camera 1',trackSettings:{facingMode:'environment',width:1280,height:720,frameRate:29.97,deviceId:'private-device-id',groupId:'private-group-id'}});
+ await camera.fire('cameraStart','click');
+ const info=camera.elements.cameraStreamInfo.textContent;
+ assert.match(info,/Back Camera 1/);
+ assert.match(info,/environment/);
+ assert.match(info,/1280×720 px/);
+ assert.match(info,/30\.0 кадр\/с/);
+ assert.match(info,/объектив 1×\/0,5×/);
+ assert.doesNotMatch(info,/private-device-id|private-group-id/);
+ camera.fire('cameraStop','click');
+ assert.match(camera.elements.cameraStreamInfo.textContent,/камера выключена/);
+});
+
+test('camera stream is stopped when reported track settings contradict the rear-facing request',async()=>{
+ const camera=bootCamera({trackSettings:{facingMode:'user',width:1280,height:720}});
+ await camera.fire('cameraStart','click');
+ assert.equal(camera.trackStops,1);
+ assert.equal(camera.elements.measureVideo.srcObject,null);
+ assert.match(camera.elements.cameraStatus.textContent,/не заднее направление камеры/);
+ assert.match(camera.elements.cameraStreamInfo.textContent,/камера не запущена/);
+});
+
+test('camera diagnostics remain explicit when the browser omits track settings',async()=>{
+ const camera=bootCamera({trackSettings:false});
+ await camera.fire('cameraStart','click');
+ assert.match(camera.elements.cameraStreamInfo.textContent,/направление не возвращено getSettings/);
+ assert.match(camera.elements.cameraStreamInfo.textContent,/размер кадра не сообщён/);
+ assert.match(camera.elements.cameraStreamInfo.textContent,/Объектив 1×\/0,5×/);
+ camera.fire('cameraStop','click');
 });
 
 test('camera permission is requested only on tap; measurement reports uncertainty and orientation invalidates calibration',async()=>{
