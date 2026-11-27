@@ -281,8 +281,8 @@ test('gate helper rejects incomplete or physically inconsistent lintel measureme
   thickness:0.2,thicknessUncertainty:0,span:4.4,spanUncertainty:0.1,depth:0.4,depthUncertainty:0
  }}),/верхней перемычки/);
  assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,...base,lintel:{
-  clearHeight:0.6,clearHeightUncertainty:1,floorDatumUncertainty:0,
-  thickness:0.2,thicknessUncertainty:0,span:4.4,spanUncertainty:0.1,depth:0.4,depthUncertainty:0
+  clearHeight:0.6,clearHeightUncertainty:1,floorDatumUncertainty:0.001,
+  thickness:0.2,thicknessUncertainty:0.001,span:4.4,spanUncertainty:0.1,depth:0.4,depthUncertainty:0.001
  }}),/вертикальные или горизонтальные границы/);
 });
 
