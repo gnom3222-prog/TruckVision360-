@@ -106,6 +106,8 @@ test('vehicle geometry accepts two independent trailer axle spacings without a c
  assert.ok(physics.validateVehicleParams(missingOne).some(message=>
   message.startsWith('trailerAxleSpacing:')
  ));
+ const fallbackProvided={...missingOne,trailerAxleSpacing:1.3};
+ assert.deepEqual(physics.validateVehicleParams(fallbackProvided),[]);
 
  const zeroOne={...independent,trailerAxleSpacing23:0};
  assert.ok(physics.validateVehicleParams(zeroOne).some(message=>
