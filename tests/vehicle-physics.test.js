@@ -1227,7 +1227,7 @@ test('vehicle geometry calibration status accepts explicit bounds and checks ena
   tractorSteeringTrack:2.05,tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.79,
   trailerAxle1Track:0,trailerAxle2Track:0,trailerAxle3Track:0,
   tireLength:0.72,tireWidth:0.44,cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25,
-  mirrorOutboard:0,vehicleFootprintUncertainty:0.03,
+  mirrorOutboard:0,mirrorLongitudinal:3.0,mirrorLength:0.8,vehicleFootprintUncertainty:0.03,
   wheelbaseUncertainty:0.02,hitchOffsetUncertainty:0.02,kingpinAxlesUncertainty:0.05,
   trailerLengthUncertainty:0.03,trailerWidthUncertainty:0.02,trailerAxleSpacingUncertainty:0.01,
   tractorSteeringTrackUncertainty:0.01,tractorFrontTrackUncertainty:0.01,tractorRearTrackUncertainty:0.01,
