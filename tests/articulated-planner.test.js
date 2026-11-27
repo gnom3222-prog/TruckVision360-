@@ -2410,7 +2410,7 @@ test('vertical wheel clearance shifts component and obstacle heights along the c
 test('downhill road grade reduces the modeled vertical separation and remains bounded',()=>{
  const p={
   ...params,roadSurface:flatRoadSurface,
-  vehicleVerticalProfiles:{'tractor-front-wheel':{zMin:0,zMax:1},uncertaintyMargin:0.02}
+  vehicleVerticalProfiles:{'tractor-front-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02}}
  };
  const q={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
  const target=physics.wheelFootprints(q,p,0).find(wheel=>wheel.name==='левое переднее колесо тягача');
