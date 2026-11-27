@@ -3,7 +3,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const physics=require('../vehicle-physics.js');
 const planner=require('../articulated-planner.js');
-const params={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,tractorSteeringTrack:2.05,tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.11,tireLength:0.72,tireWidth:0.44};
+const params={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerKingpinToFront:1.5,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,tractorSteeringTrack:2.05,tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.11,tireLength:0.72,tireWidth:0.44};
 const integrate=(q,v,steer,dt,p)=>physics.rk4(q,v,steer,dt,p);
 const flatRoadSurface={
  originX:0,originY:0,originZ:0,gradeX:0,gradeY:0,
@@ -702,8 +702,9 @@ test('swept bound uses the exact axle-centered trailer corner radius across long
   for(const steer of steeringValues){
    const yaw=Math.abs(Math.tan(steer)/p.wheelbase);
    const a=p.hitchOffset*yaw;
-   const front=p.kingpinAxles+1.5;
-   const rear=p.kingpinAxles-(p.trailerLength-1.5);
+   const trailerKingpinToFront=p.trailerKingpinToFront??1.5;
+   const front=p.kingpinAxles+trailerKingpinToFront;
+   const rear=p.kingpinAxles-(p.trailerLength-trailerKingpinToFront);
    const trailerTrack=p.trailerTrack??(p.trailerWidth+0.24);
    const tireWidth=p.tireWidth??0.44;
    const tireHalfLength=(p.tireLength??0.72)/2;
@@ -1426,7 +1427,7 @@ test('vehicle parameter bounds report not-varied instead of implying zero physic
   alternativeMaxExpansions:1200,
   positionTolerance:0.05,headingTolerance:0.02,
   maxTerminalArticulation:0.5,
-  vehicleParameterBounds:{wheelbase:{min:3.8,max:3.8}}
+  vehicleParameterBounds:{wheelbase:{min:3.8,max:3.8},trailerKingpinToFront:{min:1.5,max:1.5}}
  });
  assert.equal(result.ok,true,JSON.stringify(result));
  assert.equal(result.parameterSensitivity.status,'not-varied');
@@ -1569,6 +1570,19 @@ test('swept displacement bound grows to include configured mirror corners',()=>{
  assert.equal(withMirrors.trailer,base.trailer);
 });
 
+
+test('trailer swept displacement bound follows the measured kingpin-to-front offset',()=>{
+ const base=planner.sweptDisplacementRatesPerMeter(0.25,{
+  ...params,trailerLength:13.6,trailerKingpinToFront:1.5
+ });
+ const longerFront=planner.sweptDisplacementRatesPerMeter(0.25,{
+  ...params,trailerLength:13.6,trailerKingpinToFront:2.5
+ });
+ assert.ok(longerFront.trailer>base.trailer,
+  'a longer measured front overhang must enlarge the trailer swept envelope');
+ assert.equal(longerFront.tractor,base.tractor);
+ assert.equal(longerFront.cab,base.cab);
+});
 
 test('trailer swept displacement bound includes the outboard tire track',()=>{
  const narrow=planner.sweptDisplacementRatesPerMeter(0.25,{

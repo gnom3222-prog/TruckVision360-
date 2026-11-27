@@ -557,8 +557,9 @@
    );
    cabRadiusFromRearAxle=Math.max(cabRadiusFromRearAxle,mirrorRadius);
   }
-  const trailerFrontFromAxle=kingpinAxles+1.5+footprintUncertainty;
-  const trailerRearFromAxle=kingpinAxles-(trailerLength-1.5+footprintUncertainty);
+  const trailerKingpinToFront=p.trailerKingpinToFront??1.5;
+  const trailerFrontFromAxle=kingpinAxles+trailerKingpinToFront+footprintUncertainty;
+  const trailerRearFromAxle=kingpinAxles-(trailerLength-trailerKingpinToFront+footprintUncertainty);
   const trailerAxleOffsets=typeof rootPhysics.trailerAxleOffsets==='function'?
    rootPhysics.trailerAxleOffsets(p):[(p.trailerAxleSpacing??1.3),0,-(p.trailerAxleSpacing??1.3)];
   const trailerWheelHalfLength=tireLength/2+footprintUncertainty;
@@ -2251,6 +2252,7 @@ function planAlternativesWithVehicleParameterBounds(options={}){
   wheelbase:[1,15],
   hitchOffset:[0,5],
   kingpinAxles:[0.5,30],
+  trailerKingpinToFront:[0.2,5],
   trailerLength:[4,30],
   trailerWidth:[1.5,5],
   trailerAxleSpacing:[0.3,5],

@@ -285,8 +285,10 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <p class="small">Колёсная база 3,80 м, положение седла и расстояние до тележки полуприцепа — предварительные значения. Сверьте их с документами именно вашего тягача и полуприцепа перед испытаниями.</p>
 
 <div class="section">Полуприцеп</div>
+<p class="small">Передний торец задаётся отдельно от общей длины: измерьте вдоль продольной оси от центра шкворня до передней грани кузова. Задний вылет вычисляется как общая длина минус это расстояние. Значение 1,50 м — только исходное допущение, не заводская спецификация.</p>
 <div class="grid">
-<div><label for="trailerLength">Длина, м</label><input id="trailerLength" type="number" value="13.60" step="0.1"></div>
+<div><label for="trailerLength">Длина кузова полуприцепа, м</label><input id="trailerLength" type="number" min="4" max="30" value="13.60" step="0.01"></div>
+<div><label for="trailerKingpinToFront">От шкворня до переднего торца кузова, м</label><input id="trailerKingpinToFront" type="number" min="0.2" max="5" value="1.50" step="0.01"></div>
 <div><label for="trailerWidth">Ширина, м</label><input id="trailerWidth" type="number" value="2.55" step="0.05"></div>
 <div><label for="kingpinAxles">Шкворень — центр группы осей, м</label><input id="kingpinAxles" type="number" value="8.00" step="0.1"></div>
 <div><label for="trailerAxleSpacing">Общий шаг соседних осей, м (резервное значение)</label><input id="trailerAxleSpacing" type="number" min="0.3" max="5" value="1.30" step="0.01"></div>
@@ -402,6 +404,7 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <div><label for="hitchOffsetUncertainty">Задняя ось — седло ±, м</label><input id="hitchOffsetUncertainty" type="number" min="0" max="1" value="0" step="0.01"></div>
 <div><label for="kingpinAxlesUncertainty">Шкворень — центр тележки ±, м</label><input id="kingpinAxlesUncertainty" type="number" min="0" max="5" value="0" step="0.01"></div>
 <div><label for="trailerLengthUncertainty">Длина полуприцепа ±, м</label><input id="trailerLengthUncertainty" type="number" min="0" max="5" value="0" step="0.01"></div>
+<div><label for="trailerKingpinToFrontUncertainty">Шкворень — передний торец ±, м</label><input id="trailerKingpinToFrontUncertainty" type="number" min="0" max="2" value="0" step="0.01"></div>
 <div><label for="trailerWidthUncertainty">Ширина полуприцепа ±, м</label><input id="trailerWidthUncertainty" type="number" min="0" max="1.5" value="0" step="0.01"></div>
 <div><label for="trailerAxleSpacingUncertainty">Общий шаг осей ±, м</label><input id="trailerAxleSpacingUncertainty" type="number" min="0" max="2" value="0" step="0.01"></div>
 <div><label for="trailerAxleSpacing12Uncertainty">Расстояние 1–2 оси ±, м</label><input id="trailerAxleSpacing12Uncertainty" type="number" min="0" max="2" value="0" step="0.01"></div>
@@ -432,7 +435,7 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <div><label for="mirrorLongitudinalUncertainty">Продольное положение зеркал ±, м</label><input id="mirrorLongitudinalUncertainty" type="number" min="0" max="1" value="0" step="0.01"></div>
 <div><label for="mirrorLengthUncertainty">Длина оболочки зеркал ±, м</label><input id="mirrorLengthUncertainty" type="number" min="0" max="0.5" value="0" step="0.01"></div>
 </div>
-<p class="small">Указывайте только подтверждённый диапазон по документам или контрольным измерениям. Значение 0 означает «допуск не задан», а не доказанную точность. Если хотя бы один ключевой геометрический допуск равен нулю или отсутствует, оценка маршрута явно помечается как предварительная; положительные значения всё равно не подтверждают источник и методику измерений. Для общей или индивидуальной ширины группы сдвоенных шин сначала задайте ненулевую измеренную номинальную ширину соответствующего поля; допуск при нулевом индивидуальном номинале отклоняется. Для 1–3 активных параметров планировщик проверяет все сочетания нижних и верхних границ; для 4–7 применяется 8-строчный парный covering array над GF(2)^3, для 8–15 — 16-строчный над GF(2)^4, а для 16–31 — 32-строчный над GF(2)^5. Каждая пара проверяется во всех четырёх сочетаниях min/max, плюс совместный верхний угол; полные многопараметрические комбинации не перебираются. Промежуточные значения проверяются по одному параметру за раз. Допуски кабины и зеркал меняют их статические контуры столкновений; вынос зеркала при номинале 0 проверяется от 0 до верхнего допуска. Ограничения парного покрытия не доказывают безопасность на всём непрерывном диапазоне. Независимая динамика шин, подвески и осей не моделируется.</p>
+<p class="small">Указывайте только подтверждённый диапазон по документам или контрольным измерениям. Значение 0 означает «допуск не задан», а не доказанную точность. Если хотя бы один ключевой геометрический допуск равен нулю или отсутствует, оценка маршрута явно помечается как предварительная; положительные значения всё равно не подтверждают источник и методику измерений. Допуск `trailerKingpinToFrontUncertainty` варьирует положение переднего торца относительно шкворня; задний вылет пересчитывается из общей длины, а крайние значения проверяются вместе с положениями трёх осей. Для общей или индивидуальной ширины группы сдвоенных шин сначала задайте ненулевую измеренную номинальную ширину соответствующего поля; допуск при нулевом индивидуальном номинале отклоняется. Для 1–3 активных параметров планировщик проверяет все сочетания нижних и верхних границ; для 4–7 применяется 8-строчный парный covering array над GF(2)^3, для 8–15 — 16-строчный над GF(2)^4, а для 16–31 — 32-строчный над GF(2)^5. Каждая пара проверяется во всех четырёх сочетаниях min/max, плюс совместный верхний угол; полные многопараметрические комбинации не перебираются. Промежуточные значения проверяются по одному параметру за раз. Допуски кабины и зеркал меняют их статические контуры столкновений; вынос зеркала при номинале 0 проверяется от 0 до верхнего допуска. Ограничения парного покрытия не доказывают безопасность на всём непрерывном диапазоне. Независимая динамика шин, подвески и осей не моделируется.</p>
 <div class="row" style="margin-top:8px">
 <button id="apply">Применить параметры</button>
 <button id="assess" class="primary">Оценить проём</button>
@@ -532,10 +535,10 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 </section>
 </main>
 
-<script src="vehicle-physics.js?v=20261127-5"></script>
-<script src="articulated-planner.js?v=20261127-2"></script>
+<script src="vehicle-physics.js?v=20261127-6"></script>
+<script src="articulated-planner.js?v=20261127-3"></script>
 <script src="sensor-perception.js?v=20261126-2"></script>
-<script src="truckvision.js?v=20261127-6"></script>
+<script src="truckvision.js?v=20261127-7"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261126-5"></script>
 <script src="camera-measure.js?v=20261126-10"></script>

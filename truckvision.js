@@ -16,6 +16,7 @@ const cfg={
  tractorMass:8500,
  engineForce:24000,
  trailerLength:13.6,
+ trailerKingpinToFront:1.5,
  trailerWidth:2.55,
  kingpinAxles:8,
  trailerAxleSpacing:1.3,
@@ -84,6 +85,7 @@ const cfg={
  hitchOffsetUncertainty:0,
  kingpinAxlesUncertainty:0,
  trailerLengthUncertainty:0,
+ trailerKingpinToFrontUncertainty:0,
  trailerWidthUncertainty:0,
  trailerAxleSpacingUncertainty:0,
  trailerAxleSpacing12Uncertainty:0,
@@ -306,6 +308,7 @@ function readSettings(){
   hitchOffsetUncertainty:[0,1],
   kingpinAxlesUncertainty:[0,5],
   trailerLengthUncertainty:[0,5],
+  trailerKingpinToFrontUncertainty:[0,2],
   trailerWidthUncertainty:[0,1.5],
   trailerAxleSpacingUncertainty:[0,2],
   trailerAxleSpacing12Uncertainty:[0,2],
@@ -383,6 +386,7 @@ function readSettings(){
   hitchOffsetUncertainty:'hitchOffset',
   kingpinAxlesUncertainty:'kingpinAxles',
   trailerLengthUncertainty:'trailerLength',
+  trailerKingpinToFrontUncertainty:'trailerKingpinToFront',
   trailerWidthUncertainty:'trailerWidth',
   trailerAxleSpacingUncertainty:'trailerAxleSpacing',
   trailerAxleSpacing12Uncertainty:'trailerAxleSpacing12',
@@ -452,6 +456,7 @@ function vehicleParameterBoundsFromSettings(){
   hitchOffsetUncertainty:'hitchOffset',
   kingpinAxlesUncertainty:'kingpinAxles',
   trailerLengthUncertainty:'trailerLength',
+  trailerKingpinToFrontUncertainty:'trailerKingpinToFront',
   trailerWidthUncertainty:'trailerWidth',
   trailerAxleSpacingUncertainty:'trailerAxleSpacing',
   trailerAxleSpacing12Uncertainty:'trailerAxleSpacing12',
@@ -1417,7 +1422,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261127-2');
+   worker=new Worker('./planner-worker.js?v=20261127-3');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
@@ -2113,7 +2118,8 @@ function draw(){
 
  physics.vehiclePolygons(state,{...cfg,footprintUncertainty:cfg.vehicleFootprintUncertainty})
   .forEach(poly=>drawEnvelopePolygon(poly,'#ffd18b'));
- drawBody(h,state.psiT,1.5,-(cfg.trailerLength-1.5),cfg.trailerWidth,'#315b78');
+ const trailerKingpinToFront=cfg.trailerKingpinToFront??1.5;
+ drawBody(h,state.psiT,trailerKingpinToFront,-(cfg.trailerLength-trailerKingpinToFront),cfg.trailerWidth,'#315b78');
  drawBody(state,state.psi,5,-1.2,2.55,'#087fa5');
  drawBody(localPoint(state,state.psi,cfg.cabOffset),state.psi,cfg.cabFront,-cfg.cabRear,cfg.cabWidth,'#35c8ef');
  drawVehicleDetails();
