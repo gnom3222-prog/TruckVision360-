@@ -165,24 +165,29 @@ test('route planning is blocked when any enabled gate dimension or pose bound is
  }
 });
 
-test('camera gate registration rejects zero jamb dimension or pose uncertainty atomically',()=>{
+test('camera gate registration rejects invalid jamb dimensions and zero jamb/pose bounds atomically',()=>{
  const {elements,windowObject}=bootSimulator();
- const fields=['gatePostWidthUncertainty','gateDepthUncertainty','gatePositionUncertainty','gateHeadingUncertaintyDeg'];
+ const fields=[
+  ['gatePostWidth','0','0.25'],['gateDepth','0','0.6'],
+  ['gatePostWidthUncertainty','0','0.02'],['gateDepthUncertainty','0','0.03'],
+  ['gatePositionUncertainty','0','0.05'],['gateHeadingUncertaintyDeg','0','1']
+ ];
  const before=[elements.gateWidth.value,elements.gateWidthUncertainty.value,elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value];
- for(const field of fields){
-  elements[field].value='0';
-  assert.equal(windowObject.TruckVisionApplyGateRegistration({centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08,clearHeight:3.8,heightUncertaintyBound:0.05}),false,field+' must reject registration');
+ for(const [field,invalidValue,validValue] of fields){
+  elements[field].value=invalidValue;
+  assert.equal(windowObject.TruckVisionApplyGateRegistration({
+   centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,
+   widthUncertaintyBound:0.08,clearHeight:3.8,heightUncertaintyBound:0.05
+  }),false,field+' must reject registration');
   assert.deepEqual([elements.gateWidth.value,elements.gateWidthUncertainty.value,elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value],before);
-  elements[field].value=field==='gatePostWidthUncertainty'?'0.02':field==='gateDepthUncertainty'?'0.03':field==='gatePositionUncertainty'?'0.05':'1';
+  elements[field].value=validValue;
  }
  assert.equal(windowObject.TruckVisionApplyGateRegistration({
   centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,
   widthUncertaintyBound:0.08,clearHeight:3.8,heightUncertaintyBound:0.05
- }),true,'registration should succeed after all positive bounds are restored');
- assert.equal(elements.gatePostWidthUncertainty.value,'0.02');
- assert.equal(elements.gateDepthUncertainty.value,'0.03');
+ }),true,'registration should succeed after all valid jamb dimensions and positive bounds are restored');
 });
-
+ 
 test('route planning is blocked when an enabled gate lintel lacks alignment confirmation',()=>{
  const {elements}=bootSimulator();
  elements.gateEnabled.checked=true;
