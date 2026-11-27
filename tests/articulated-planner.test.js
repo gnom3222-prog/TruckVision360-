@@ -2979,3 +2979,71 @@ test('trajectory clearance tracks an auxiliary envelope through a swept segment 
  assert.equal(tractor.limitingDetail.componentAtReference,'measured side step');
  assert.equal(tractor.limitingDetail.obstacleAtReference,'post along side-step path');
 });
+
+
+test('start recommendation mirrors steering and tractor yaw while preserving gear and lead-in distance',()=>{
+ for(const gear of [1,-1]){
+  const states=[
+   {x:0,y:0,psi:0,psiT:0,gear,steer:0,stepDistance:0},
+   {x:gear*0.2,y:0,psi:0,psiT:0,gear,steer:0,stepDistance:0.2},
+   {x:gear*0.4,y:0.01,psi:gear*0.04,psiT:gear*0.02,gear,steer:0.12,stepDistance:0.2},
+   {x:gear*0.6,y:0.05,psi:gear*0.08,psiT:gear*0.04,gear,steer:0.12,stepDistance:0.2}
+  ];
+  const mirrored=states.map(state=>({...state,y:-state.y,psi:-state.psi,psiT:-state.psiT,steer:-state.steer}));
+  const originalAdvice=planner.recommendStart(states);
+  const mirroredAdvice=planner.recommendStart(mirrored);
+  assert.equal(originalAdvice.ok,true);
+  assert.equal(mirroredAdvice.ok,true);
+  assert.equal(originalAdvice.initialGear,gear);
+  assert.equal(mirroredAdvice.initialGear,gear);
+  assert.equal(originalAdvice.firstTurn,'left');
+  assert.equal(mirroredAdvice.firstTurn,'right');
+  assert.equal(originalAdvice.tractorYawDirection,gear===1?'left':'right');
+  assert.equal(mirroredAdvice.tractorYawDirection,gear===1?'right':'left');
+  assert.ok(Math.abs(originalAdvice.firstTurnDistance-mirroredAdvice.firstTurnDistance)<1e-12);
+ }
+});
+
+test('start-action evidence explains the nearest different action with an auditable score breakdown',()=>{
+ const candidates=[
+  {label:'вперёд, руль влево',cost:12.5,initialGear:1,firstTurn:'left',steeringWheelDirection:'left',firstTurnGear:1,tractorYawDirection:'left',firstTurnDistance:0.8,
+   scoreComponents:{pathLength:10,gearChangePenalty:0.75,articulationPenalty:0.5,clearancePenalty:1.25}},
+  {label:'назад, руль вправо',cost:14,initialGear:-1,firstTurn:'right',steeringWheelDirection:'right',firstTurnGear:-1,tractorYawDirection:'left',firstTurnDistance:0.8,
+   scoreComponents:{pathLength:11,gearChangePenalty:1.5,articulationPenalty:0.75,clearancePenalty:0.75}},
+  {label:'вперёд, руль влево — близкий вариант',cost:12.6,initialGear:1,firstTurn:'left',steeringWheelDirection:'left',firstTurnGear:1,tractorYawDirection:'left',firstTurnDistance:0.9,
+   scoreComponents:{pathLength:10.1,gearChangePenalty:0.75,articulationPenalty:0.5,clearancePenalty:1.25}}
+ ];
+ const result=planner.explainStartActionComparison(candidates,0);
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.status,'compared-different-action');
+ assert.equal(result.alternative.index,1);
+ assert.ok(Math.abs(result.scoreDelta-1.5)<1e-12);
+ assert.deepEqual(result.componentDeltas,{pathLength:1,gearChangePenalty:0.75,articulationPenalty:0.25,clearancePenalty:-0.5});
+ assert.equal(result.dominantComponent,'pathLength');
+ assert.equal(result.selectedHasLowerTotalScore,true);
+});
+
+test('start-action evidence does not claim a side advantage without a different-action candidate',()=>{
+ const candidates=[
+  {label:'forward left',cost:4,initialGear:1,firstTurn:'left',firstTurnGear:1,tractorYawDirection:'left',firstTurnDistance:1,
+   scoreComponents:{pathLength:3,gearChangePenalty:0,articulationPenalty:0.5,clearancePenalty:0.5}},
+  {label:'forward left near',cost:4.1,initialGear:1,firstTurn:'left',firstTurnGear:1,tractorYawDirection:'left',firstTurnDistance:1.1,
+   scoreComponents:{pathLength:3.1,gearChangePenalty:0,articulationPenalty:0.5,clearancePenalty:0.5}}
+ ];
+ const result=planner.explainStartActionComparison(candidates,0);
+ assert.equal(result.ok,true);
+ assert.equal(result.status,'no-different-action-alternative');
+ assert.equal(result.alternative,null);
+});
+
+test('start-action evidence rejects an inconsistent score decomposition',()=>{
+ const candidates=[
+  {label:'forward left',cost:4,initialGear:1,firstTurn:'left',firstTurnGear:1,tractorYawDirection:'left',firstTurnDistance:1,
+   scoreComponents:{pathLength:3,gearChangePenalty:0,articulationPenalty:0.5,clearancePenalty:0.5}},
+  {label:'reverse right',cost:5,initialGear:-1,firstTurn:'right',firstTurnGear:-1,tractorYawDirection:'left',firstTurnDistance:1,
+   scoreComponents:{pathLength:4,gearChangePenalty:0,articulationPenalty:0.5,clearancePenalty:0.1}}
+ ];
+ const result=planner.explainStartActionComparison(candidates,0);
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'score-breakdown-mismatch');
+});
