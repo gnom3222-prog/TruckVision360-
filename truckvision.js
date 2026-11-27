@@ -1656,7 +1656,7 @@ if(result.reason==='geometry-sensitive-start'||result.reason==='geometry-envelop
  const geometry=result.geometrySensitivity||{};
  const gate=geometry.gateGeometryUncertainty;
  const gateNote=gate&&gate.enabled?
-  ' Совместная оболочка ворот: ширина '+Number(gate.nominalClearWidth).toFixed(2)+' → '+Number(gate.conservativeClearWidth).toFixed(2)+' м; центр ±'+Number(gate.positionUncertaintyPerAxis).toFixed(2)+' м по X/Y; курс ±'+Number(gate.headingUncertaintyDeg).toFixed(2)+'°.':
+  ' Совместная оболочка ворот: чистая ширина '+Number(gate.nominalClearWidth).toFixed(2)+' → '+Number(gate.conservativeClearWidth).toFixed(2)+' м; толщина косяка '+Number(gate.nominalPostWidth).toFixed(2)+' → '+Number(gate.conservativePostWidth).toFixed(2)+' м; глубина '+Number(gate.nominalDepth).toFixed(2)+' → '+Number(gate.conservativeDepth).toFixed(2)+' м; центр ±'+Number(gate.positionUncertaintyPerAxis).toFixed(2)+' м по X/Y; курс ±'+Number(gate.headingUncertaintyDeg).toFixed(2)+'°.':
   '';
  const perObstacleCount=Math.max(0,Number(geometry.perObstaclePoseEnvelopeCount)||0);
  const perObstacleNote=perObstacleCount?
@@ -1904,7 +1904,7 @@ if(result.reason==='uncertainty-sensitive-start'){
 const geometrySensitivity=result.geometrySensitivity||{};
 const gateUncertainty=geometrySensitivity.gateGeometryUncertainty;
 const gateGeometryNote=gateUncertainty&&gateUncertainty.enabled?
- ' Геометрия ворот проверена совместной ограниченной оболочкой: чистая ширина '+Number(gateUncertainty.nominalClearWidth).toFixed(2)+' → '+Number(gateUncertainty.conservativeClearWidth).toFixed(2)+' м; центр ±'+Number(gateUncertainty.positionUncertaintyPerAxis).toFixed(2)+' м по X/Y; курс ±'+Number(gateUncertainty.headingUncertaintyDeg).toFixed(2)+'°. Это сравнение номинального проёма с консервативно расширенными косяками, а не перебор всех независимых реализаций ошибок.':'';
+ ' Геометрия ворот проверена совместной ограниченной оболочкой: чистая ширина '+Number(gateUncertainty.nominalClearWidth).toFixed(2)+' → '+Number(gateUncertainty.conservativeClearWidth).toFixed(2)+' м; толщина косяка '+Number(gateUncertainty.nominalPostWidth).toFixed(2)+' → '+Number(gateUncertainty.conservativePostWidth).toFixed(2)+' м; глубина '+Number(gateUncertainty.nominalDepth).toFixed(2)+' → '+Number(gateUncertainty.conservativeDepth).toFixed(2)+' м; центр ±'+Number(gateUncertainty.positionUncertaintyPerAxis).toFixed(2)+' м по X/Y; курс ±'+Number(gateUncertainty.headingUncertaintyDeg).toFixed(2)+'°. Это сравнение номинального проёма с консервативно расширенными косяками, а не перебор всех независимых реализаций ошибок.':'';
 const geometryNote=geometrySensitivity.status==='stable-within-bounded-envelope'?
  ' Дополнительно проверена расширенная геометрия: положение препятствий ±'+geometrySensitivity.obstaclePositionUncertainty.toFixed(2)+' м по каждой оси, ошибка полного размера ±'+geometrySensitivity.obstacleSizeUncertainty.toFixed(2)+' м, внешний контур автопоезда расширен на '+geometrySensitivity.vehicleFootprintUncertainty.toFixed(2)+' м с каждой грани. Параметры wheelbase, hitchOffset и kingpinAxles не варьировались; это ограниченная проверка оболочки, не полный анализ неопределённости.'+gateGeometryNote:
  geometrySensitivity.status==='zero-geometry-bounds'?' Геометрические границы неопределённости заданы нулевыми; расширенная проверка не выполнялась.'+gateGeometryNote:'';
