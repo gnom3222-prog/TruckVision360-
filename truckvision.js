@@ -1333,10 +1333,18 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   reasons.push('повышенный пиковый угол сочленения '+maxBeta.toFixed(1)+'° на '+
    articulationPeak.distanceAlongRoute.toFixed(1)+' м пути');
  }
+ const sampledAngleGradientText=Number.isFinite(articulationPeak.maxSampledAngleChangePerMeterDegrees)?
+  'максимальное выборочное изменение угла на метр пути '+
+   articulationPeak.maxSampledAngleChangePerMeterDegrees.toFixed(2)+'°/м на сегменте '+
+   (articulationPeak.maxSampledAngleChangePerMeterSegmentIndex+1):
+  'выборочное изменение угла на метр не оценено из-за отсутствия ненулевых интервалов';
  reasons.push('пиковый угол сочленения — дискретная оценка по '+
   articulationPeak.sampleCount+' точкам; максимальный шаг '+
   articulationPeak.maxSampleSpacing.toFixed(3)+' м; максимальное изменение угла между соседними точками '+
-  articulationPeak.maxAdjacentAngleChangeDegrees.toFixed(1)+'°; непрерывный максимум между точками не подтверждён');
+  articulationPeak.maxAdjacentAngleChangeDegrees.toFixed(1)+'°; '+sampledAngleGradientText+
+  (articulationPeak.zeroDistanceAngleChangeCount>0?
+   '; обнаружено изменений угла без перемещения: '+articulationPeak.zeroDistanceAngleChangeCount:'')+
+  '; непрерывный максимум между точками не подтверждён');
  if(clearanceInsufficient)reasons.push('недостаточный зазор после резерва погрешности');
  if(wheelClearanceIncomplete)reasons.push('промежуточная кинематическая проверка колёс не завершена для '+wheelClearance.segmentsWithoutIntermediateKinematicSamples+' сегментов; виртуальный автопроезд заблокирован');
  if(wheelClearanceError)reasons.push('индивидуальная проверка колёс не подтверждена: '+wheelClearanceError);
@@ -1347,7 +1355,13 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
    limitingWheelClearance.minimumClearanceLowerBound.toFixed(2)+' м; препятствие «'+wheelObstacle+'»');
  }
  if(scrubExposure.maxAbsLateralVelocity>1e-3){
-  reasons.push('геометрический индикатор бокового перемещения крайних осей: до '+scrubExposure.maxAbsLateralVelocity.toFixed(3)+' м/с; интегральный proxy '+scrubExposure.totalAbsoluteLateralTravel.toFixed(2)+' м, не модель шин');
+  const axleScrubDetails=scrubExposure.maxAbsLateralVelocityByAxle.map((velocity,index)=>
+   (index+1)+'-я ось: '+velocity.toFixed(3)+' м/с, интегральный proxy '+
+   scrubExposure.cumulativeAbsoluteLateralTravelByAxle[index].toFixed(2)+' м'
+  ).join('; ');
+  reasons.push('геометрический индикатор бокового перемещения трёхосной тележки: '+axleScrubDetails+
+   '; общий интегральный proxy '+scrubExposure.totalAbsoluteLateralTravel.toFixed(2)+
+   ' м. Это кинематическая несовместимость жёстких осей, не модель скольжения, сил или износа шин');
  }
  if(cfg.mirrorOutboard<=0)reasons.push('геометрия зеркал не задана; зеркала не входят в проверку зазоров');
  if(!reasons.length)reasons.push('в проверенной модели препятствия не пересечены');
@@ -1369,6 +1383,10 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
    sampleCount:articulationPeak.sampleCount,
    maxSampleSpacing:articulationPeak.maxSampleSpacing,
    maxAdjacentAngleChangeDegrees:articulationPeak.maxAdjacentAngleChangeDegrees,
+   maxSampledAngleChangePerMeterDegrees:articulationPeak.maxSampledAngleChangePerMeterDegrees,
+   maxSampledAngleChangePerMeterSegmentIndex:articulationPeak.maxSampledAngleChangePerMeterSegmentIndex,
+   maxSampledAngleChangePerMeterDistanceAlongRoute:articulationPeak.maxSampledAngleChangePerMeterDistanceAlongRoute,
+   zeroDistanceAngleChangeCount:articulationPeak.zeroDistanceAngleChangeCount,
    continuousPeakVerified:articulationPeak.continuousPeakVerified
   },
   clearance:minClearance,clearanceDetail:minClearanceDetail,
@@ -1522,7 +1540,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261127-9');
+   worker=new Worker('./planner-worker.js?v=20261127-10');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
@@ -1936,12 +1954,19 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
  ' Устойчивость к диапазонам физических размеров не подтверждена.';
 
   const peakGearText=m.articulationPeak.gear<0?'задним ходом':'вперёд';
+  const sampledAngleGradientText=Number.isFinite(m.articulationPeak.maxSampledAngleChangePerMeterDegrees)?
+   'максимальное выборочное изменение на метр пути '+
+    m.articulationPeak.maxSampledAngleChangePerMeterDegrees.toFixed(2)+'°/м':
+   'изменение на метр не оценено';
+  const zeroDistanceAngleText=m.articulationPeak.zeroDistanceAngleChangeCount>0?
+   '; изменения угла без перемещения: '+m.articulationPeak.zeroDistanceAngleChangeCount:'';
   const articulationPeakText='пик угла сочленения '+m.articulationPeak.maxAngleDegrees.toFixed(1)+
    '° на '+m.articulationPeak.distanceAlongRoute.toFixed(1)+' м пути (X '+
    m.articulationPeak.state.x.toFixed(1)+' м, Y '+m.articulationPeak.state.y.toFixed(1)+' м), '+peakGearText+
    '; дискретная оценка по '+m.articulationPeak.sampleCount+' точкам, максимальный шаг '+
    m.articulationPeak.maxSampleSpacing.toFixed(3)+' м; максимальное изменение угла между соседними точками '+
-   m.articulationPeak.maxAdjacentAngleChangeDegrees.toFixed(1)+'°; непрерывный максимум между точками не подтверждён';
+   m.articulationPeak.maxAdjacentAngleChangeDegrees.toFixed(1)+'°; '+sampledAngleGradientText+
+   zeroDistanceAngleText+'; непрерывный максимум между точками не подтверждён';
   $('routeAdvice').textContent=
    'Начало манёвра: '+gearText+'; первое рулевое действие: '+firstTurnText+
    '. Сторона определяется по первому значимому управляющему углу планировщика (порог 0,08 рад), а не по одному лишь направлению на цель.'+recommendationNote+sensitivityNote+parameterNote+' Маршрут до точки ('+
