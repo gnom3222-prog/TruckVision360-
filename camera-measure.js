@@ -47,6 +47,43 @@ function readGateMapPose(){
   postWidthUncertainty:Number(postWidthUncertaintyText),
   depthUncertainty:Number(depthUncertaintyText)
  };
+ const lintelEnabled=!!($('gateLintelEnabled')&&$('gateLintelEnabled').checked);
+ const lintelAlignmentConfirmed=!!($('gateLintelAlignmentConfirmed')&&$('gateLintelAlignmentConfirmed').checked);
+ const lintelGeometry={enabled:lintelEnabled};
+ if(lintelEnabled){
+  const readLintel=id=>{
+   const input=$(id);
+   return input&&String(input.value).trim()!==''?Number(input.value):NaN;
+  };
+  Object.assign(lintelGeometry,{
+   alignmentConfirmed:lintelAlignmentConfirmed,
+   floorDatumUncertainty:readLintel('gateLintelFloorUncertainty'),
+   thickness:readLintel('gateLintelThickness'),
+   thicknessUncertainty:readLintel('gateLintelThicknessUncertainty'),
+   span:readLintel('gateLintelSpan'),
+   spanUncertainty:readLintel('gateLintelSpanUncertainty'),
+   depth:readLintel('gateLintelDepth'),
+   depthUncertainty:readLintel('gateLintelDepthUncertainty')
+  });
+  if(!lintelAlignmentConfirmed)throw new Error('Для измерения ворот с включённой перемычкой подтвердите её центрирование, параллельность и горизонтальность.');
+  if(![
+   lintelGeometry.floorDatumUncertainty,lintelGeometry.thickness,
+   lintelGeometry.thicknessUncertainty,lintelGeometry.span,
+   lintelGeometry.spanUncertainty,lintelGeometry.depth,
+   lintelGeometry.depthUncertainty
+  ].every(Number.isFinite)||
+     lintelGeometry.floorDatumUncertainty<0.001||lintelGeometry.floorDatumUncertainty>1||
+     lintelGeometry.thickness<=0.02||lintelGeometry.thickness>2||
+     lintelGeometry.thicknessUncertainty<0.001||lintelGeometry.thicknessUncertainty>1||
+     lintelGeometry.span<=0||lintelGeometry.span>30||
+     lintelGeometry.spanUncertainty<0.001||lintelGeometry.spanUncertainty>2||
+     lintelGeometry.depth<=0.05||lintelGeometry.depth>10||
+     lintelGeometry.depthUncertainty<0.001||lintelGeometry.depthUncertainty>2||
+     lintelGeometry.depth-lintelGeometry.depthUncertainty<=0.05||
+     lintelGeometry.depth+lintelGeometry.depthUncertainty>10){
+   throw new Error('Для включённой перемычки задайте измеренные толщину, пролёт и глубину, а также положительные допуски datum, толщины, пролёта и глубины.');
+  }
+ }
  if(![anchor.x,anchor.y,headingDeg].every(Number.isFinite)||
     Math.abs(anchor.x)>10000||Math.abs(anchor.y)>10000||headingDeg< -180||headingDeg>180){
   throw new Error('Проверьте координаты центра ворот и направление линии ворот.');
@@ -63,7 +100,7 @@ function readGateMapPose(){
     jambGeometry.depth+jambGeometry.depthUncertainty>12){
   throw new Error('Толщина косяка должна быть 0,05–2 м, глубина — 0,05–10 м; допуски толщины — 0,001–1 м, глубины — 0,001–2 м. Ноль не считается точностью.');
  }
- return {anchor,headingDeg,poseUncertainty,jambGeometry};
+ return {anchor,headingDeg,poseUncertainty,jambGeometry,lintelGeometry};
 }
 function readObstacleRepeatabilityTolerance(){
  const widthText=$('cameraObstacleRepeatabilityWidthTolerance').value.trim();
@@ -331,6 +368,15 @@ say('Основание добавлено после трёх отдельны�
   throw Error('Допуски повторяемости изменились внутри серии. Очистите серию и начните заново.');
  }
  const mapPose=readGateMapPose();
+ const lintelGeometryChanged=!!gateRepeatabilityPose&&(
+  Object.keys(mapPose.lintelGeometry).length!==Object.keys(gateRepeatabilityPose.lintelGeometry).length||
+  Object.entries(mapPose.lintelGeometry).some(([key,value])=>{
+   const previous=gateRepeatabilityPose.lintelGeometry[key];
+   return typeof value==='number'?
+    !Number.isFinite(previous)||Math.abs(value-previous)>1e-12:
+    value!==previous;
+  })
+ );
  if(gateRepeatabilityPose&&(
     Math.abs(mapPose.anchor.x-gateRepeatabilityPose.anchor.x)>1e-9||
     Math.abs(mapPose.anchor.y-gateRepeatabilityPose.anchor.y)>1e-9||
@@ -340,8 +386,9 @@ say('Основание добавлено после трёх отдельны�
     Math.abs(mapPose.jambGeometry.postWidth-gateRepeatabilityPose.jambGeometry.postWidth)>1e-12||
     Math.abs(mapPose.jambGeometry.depth-gateRepeatabilityPose.jambGeometry.depth)>1e-12||
     Math.abs(mapPose.jambGeometry.postWidthUncertainty-gateRepeatabilityPose.jambGeometry.postWidthUncertainty)>1e-12||
-    Math.abs(mapPose.jambGeometry.depthUncertainty-gateRepeatabilityPose.jambGeometry.depthUncertainty)>1e-12)){
-  throw Error('Координаты, направление или геометрия/допуски косяков ворот изменились внутри серии. Очистите серию и начните заново.');
+    Math.abs(mapPose.jambGeometry.depthUncertainty-gateRepeatabilityPose.jambGeometry.depthUncertainty)>1e-12||
+    lintelGeometryChanged)){
+  throw Error('Координаты, геометрия косяков или настройки верхней перемычки изменились внутри серии. Очистите серию и начните заново.');
  }
  const measurementConfig={referenceWidth,referenceHeight,sigmaPixels,sigmaReference};
  if(gateRepeatabilityMeasurementConfig&&(
