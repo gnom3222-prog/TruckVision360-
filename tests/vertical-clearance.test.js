@@ -12,6 +12,11 @@ const params={
  tractorFrontTrack:2.05,tractorSteeringTrack:2.05,tractorRearTrack:2.05,
  trailerTrack:2.74,tireLength:0.72,tireWidth:0.32
 };
+const flatRoadSurface={
+ originX:0,originY:0,originZ:0,gradeX:0,gradeY:0,
+ originZUncertainty:0.01,gradeXUncertainty:0.001,gradeYUncertainty:0.001,
+ surfaceResidualUncertainty:0.01
+};
 const pose={x:0,y:0,psi:0,psiT:0};
 const allProfiles={
  'tractor-body':{zMin:0.2,zMax:3.0,uncertaintyMargin:0.05},
@@ -40,14 +45,23 @@ test('vertical obstacle validation requires a complete finite height interval',(
 });
 
 test('missing vehicle height profile keeps only the horizontal lower bound and reports it unverified',()=>{
- const result=planner.clearance(pose,[overheadAtCab],params);
+ const result=planner.clearance(pose,[overheadAtCab],{...params,roadSurface:flatRoadSurface});
  assert.equal(result.distance,0);
  assert.equal(result.verticalStatus,'vehicle-height-unverified');
  assert.ok(result.verticalUnverifiedCount>0);
 });
 
-test('measured vertical profiles allow a separated overhead obstacle to use 3D prism distance',()=>{
+
+test('vertical profiles do not enable vertical separation while road surface remains uncalibrated',()=>{
  const result=planner.clearance(pose,[overheadAtCab],{...params,vehicleVerticalProfiles:allProfiles});
+ assert.equal(result.distance,0);
+ assert.equal(result.verticalStatus,'road-surface-unverified');
+ assert.equal(result.roadSurfaceStatus,'road-surface-unverified-horizontal-only');
+ assert.equal(result.verticalEvaluatedCount,0);
+ assert.ok(result.verticalUnverifiedCount>0);
+});
+test('measured vertical profiles allow a separated overhead obstacle to use 3D prism distance',()=>{
+ const result=planner.clearance(pose,[overheadAtCab],{...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:allProfiles});
  assert.ok(result.distance>=0.89,JSON.stringify(result));
  assert.equal(result.verticalStatus,'vertical-separated');
  assert.equal(result.verticalUnverifiedCount,0);
@@ -56,7 +70,7 @@ test('measured vertical profiles allow a separated overhead obstacle to use 3D p
 
 test('overlapping vertical intervals remain a zero-clearance contact',()=>{
  const obstacle={...overheadAtCab,zMin:3.3,zMax:3.6,zUncertainty:0};
- const result=planner.clearance(pose,[obstacle],{...params,vehicleVerticalProfiles:allProfiles});
+ const result=planner.clearance(pose,[obstacle],{...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:allProfiles});
  assert.equal(result.distance,0);
  assert.equal(result.verticalStatus,'vertical-overlap');
 });
@@ -75,7 +89,7 @@ test('auxiliary axle hardware can carry its own measured vertical interval',()=>
 });
 
 test('per-wheel swept diagnostics apply measured tire height intervals',()=>{
- const p={...params,vehicleVerticalProfiles:allProfiles};
+ const p={...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:allProfiles};
  const wheel=physics.wheelFootprints(pose,p,0)[0];
  const obstacle={name:'Балка над передним колесом',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:2.5,zMax:2.8};
  const result=planner.analyzeWheelTrajectoryClearance([pose],[obstacle],p);
@@ -89,7 +103,7 @@ test('per-wheel swept diagnostics apply measured tire height intervals',()=>{
 test('per-wheel vertical clearance remains conservative when tire height is unknown',()=>{
  const wheel=physics.wheelFootprints(pose,params,0)[0];
  const obstacle={name:'Неизвестная балка',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:2.5,zMax:2.8};
- const result=planner.analyzeWheelTrajectoryClearance([pose],[obstacle],params);
+ const result=planner.analyzeWheelTrajectoryClearance([pose],[obstacle],{...params,roadSurface:flatRoadSurface});
  const record=result.wheels.find(item=>item.name===wheel.name);
  assert.equal(record.minimumSampledEnvelopeClearance,0);
  assert.equal(record.minimumSampledEnvelopeDetail.verticalStatus,'vehicle-height-unverified');
@@ -97,7 +111,7 @@ test('per-wheel vertical clearance remains conservative when tire height is unkn
 });
 
 test('route clearance reports unverified vertical component profiles',()=>{
- const result=planner.analyzeTrajectoryClearance([pose],[overheadAtCab],params);
+ const result=planner.analyzeTrajectoryClearance([pose],[overheadAtCab],{...params,roadSurface:flatRoadSurface});
  assert.ok(result.verticalUnverifiedChecks>0);
  assert.equal(result.verticalEvaluatedChecks,0);
 });
@@ -107,7 +121,7 @@ test('measured wheel height is checked even when the wheel footprint lies inside
   'tractor-body':{zMin:0.5,zMax:3.0},
   'tractor-cab':{zMin:0.5,zMax:3.5}
  };
- const p={...params,vehicleVerticalProfiles:profiles};
+ const p={...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:profiles};
  const wheel=physics.wheelFootprints(pose,p,0)[0];
  const obstacle={name:'Низкая балка у колеса',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:0.1,zMax:0.2};
  const parts=physics.vehicleCollisionParts(pose,p);
@@ -119,7 +133,7 @@ test('measured wheel height is checked even when the wheel footprint lies inside
 });
 
 test('measured auxiliary height remains a separate component even inside the body footprint',()=>{
- const p={...params,vehicleVerticalProfiles:{
+ const p={...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:{
   ...allProfiles,'trailer-body':{zMin:1.0,zMax:3.0}
  },auxiliaryEnvelopes:[{
   name:'Верхний кронштейн внутри контура',anchor:'trailer-axle-1',
@@ -138,7 +152,7 @@ test('measured auxiliary height remains a separate component even inside the bod
 });
 
 test('unknown internal wheel height cannot be hidden by a measured body height profile',()=>{
- const p={...params,vehicleVerticalProfiles:{
+ const p={...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:{
   'tractor-body':{zMin:0.5,zMax:3.0},
   'tractor-cab':{zMin:0.5,zMax:3.5}
  }};
@@ -171,7 +185,7 @@ test('measured mirror height is propagated as its own cab collision component',(
 });
 
 test('unknown mirror height is not inferred from the cab height profile',()=>{
- const p={...params,mirrorOutboard:0.45,vehicleVerticalProfiles:{
+ const p={...params,roadSurface:flatRoadSurface,mirrorOutboard:0.45,vehicleVerticalProfiles:{
   'tractor-body':{zMin:0.2,zMax:3.0},
   'tractor-cab':{zMin:0.3,zMax:3.5}
  }};
@@ -219,7 +233,7 @@ test('tractor front and rear wheel height profiles can be calibrated independent
 });
 
 test('per-wheel vertical clearance uses the selected axle-specific profile',()=>{
- const p={...params,vehicleVerticalProfiles:{
+ const p={...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:{
   'trailer-wheel':{zMin:0,zMax:1.1},
   'trailer-axle-1-wheel':{zMin:1.4,zMax:1.9}
  }};
