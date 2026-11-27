@@ -10,7 +10,7 @@ function makeHarness(options={}){
   const el={id,value:'',textContent:'',style:{},listeners:{},addEventListener(type,fn){this.listeners[type]=fn;},fire(type,event={}){return this.listeners[type]?.(event);}};
   elements[id]=el;return el;
  };
- const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','cameraCalibrate','cameraMeasureGate','cameraMeasureObstacle','cameraReset','cameraObstacleName','cameraObstacleHeading','cameraObstacleX','cameraObstacleY','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg','gateCenterX','gateCenterY','gateHeadingDeg','gatePositionUncertainty','gateHeadingUncertaintyDeg','gatePostWidthUncertainty','gateDepthUncertainty','gateResult','cameraRepeatabilityWidthTolerance','cameraRepeatabilityHeightTolerance','cameraRepeatabilityStatus','cameraClearGateRepeats'];
+ const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','cameraCalibrate','cameraMeasureGate','cameraMeasureObstacle','cameraReset','cameraObstacleName','cameraObstacleHeading','cameraObstacleX','cameraObstacleY','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg','gateCenterX','gateCenterY','gateHeadingDeg','gatePostWidth','gateDepth','gatePositionUncertainty','gateHeadingUncertaintyDeg','gatePostWidthUncertainty','gateDepthUncertainty','gateResult','cameraRepeatabilityWidthTolerance','cameraRepeatabilityHeightTolerance','cameraRepeatabilityStatus','cameraClearGateRepeats'];
  ids.forEach(makeElement);
  const video=elements.measureVideo;
  Object.assign(video,{videoWidth:640,videoHeight:480,clientWidth:640,clientHeight:480,offsetLeft:0,offsetTop:0,readyState:4,currentTime:0.1,paused:true,srcObject:null,playCalls:0,pauseCalls:0,play(){this.playCalls++;this.currentTime+=0.1;this.paused=false;return Promise.resolve();},pause(){this.pauseCalls++;this.paused=true;}});
@@ -26,6 +26,8 @@ function makeHarness(options={}){
  Object.assign(elements.gateCenterX,{value:'12'});
  Object.assign(elements.gateCenterY,{value:'0'});
  Object.assign(elements.gateHeadingDeg,{value:'90'});
+ Object.assign(elements.gatePostWidth,{value:'0.25'});
+ Object.assign(elements.gateDepth,{value:'0.6'});
  Object.assign(elements.gatePositionUncertainty,{value:'0.05'});
  Object.assign(elements.gateHeadingUncertaintyDeg,{value:'1'});
  Object.assign(elements.gatePostWidthUncertainty,{value:'0.02'});
