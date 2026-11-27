@@ -27,13 +27,24 @@ function readGateRepeatabilityTolerance(){
 }
 function readGateMapPose(){
  const xText=$('gateCenterX').value.trim(),yText=$('gateCenterY').value.trim(),headingText=$('gateHeadingDeg').value.trim();
+ const positionUncertaintyText=$('gatePositionUncertainty').value.trim();
+ const headingUncertaintyText=$('gateHeadingUncertaintyDeg').value.trim();
  if(!xText||!yText||!headingText)throw new Error('Введите центр ворот X/Y и направление линии ворот до начала серии повторов.');
+ if(!positionUncertaintyText||!headingUncertaintyText)throw new Error('Введите положительные допуски ручного положения и направления ворот. Камера не определяет привязку к карте.');
  const anchor={x:Number(xText),y:Number(yText)},headingDeg=Number(headingText);
+ const poseUncertainty={
+  position:Number(positionUncertaintyText),
+  headingDeg:Number(headingUncertaintyText)
+ };
  if(![anchor.x,anchor.y,headingDeg].every(Number.isFinite)||
     Math.abs(anchor.x)>10000||Math.abs(anchor.y)>10000||headingDeg< -180||headingDeg>180){
   throw new Error('Проверьте координаты центра ворот и направление линии ворот.');
  }
- return {anchor,headingDeg};
+ if(!Number.isFinite(poseUncertainty.position)||poseUncertainty.position<0.001||poseUncertainty.position>2||
+    !Number.isFinite(poseUncertainty.headingDeg)||poseUncertainty.headingDeg<0.001||poseUncertainty.headingDeg>45){
+  throw new Error('Допуски привязки ворот должны быть положительными: 0,001–2 м по X/Y и 0,001–45° по направлению. Ноль не считается точностью.');
+ }
+ return {anchor,headingDeg,poseUncertainty};
 }
 function readObstacleRepeatabilityTolerance(){
  const widthText=$('cameraObstacleRepeatabilityWidthTolerance').value.trim();
@@ -66,10 +77,10 @@ function readObstacleMapPose(){
   throw new Error('Проверьте координаты центра и направление препятствия на карте.');
  }
  if(![poseUncertainty.positionX,poseUncertainty.positionY,poseUncertainty.headingDeg].every(Number.isFinite)||
-    poseUncertainty.positionX<0||poseUncertainty.positionX>2||
-    poseUncertainty.positionY<0||poseUncertainty.positionY>2||
-    poseUncertainty.headingDeg<0||poseUncertainty.headingDeg>45){
-  throw new Error('Допуски привязки должны быть 0–2 м по X/Y и 0–45° по направлению.');
+    poseUncertainty.positionX<0.001||poseUncertainty.positionX>2||
+    poseUncertainty.positionY<0.001||poseUncertainty.positionY>2||
+    poseUncertainty.headingDeg<0.001||poseUncertainty.headingDeg>45){
+  throw new Error('Допуски привязки препятствия должны быть положительными: 0,001–2 м по X/Y и 0,001–45° по направлению.');
  }
  return {anchor,headingDeg,name,poseUncertainty};
 }
@@ -304,8 +315,10 @@ say('Основание добавлено после трёх отдельны�
  if(gateRepeatabilityPose&&(
     Math.abs(mapPose.anchor.x-gateRepeatabilityPose.anchor.x)>1e-9||
     Math.abs(mapPose.anchor.y-gateRepeatabilityPose.anchor.y)>1e-9||
-    Math.abs(mapPose.headingDeg-gateRepeatabilityPose.headingDeg)>1e-9)){
-  throw Error('Координаты центра или направление ворот изменились внутри серии. Очистите серию и начните заново.');
+    Math.abs(mapPose.headingDeg-gateRepeatabilityPose.headingDeg)>1e-9||
+    Math.abs(mapPose.poseUncertainty.position-gateRepeatabilityPose.poseUncertainty.position)>1e-12||
+    Math.abs(mapPose.poseUncertainty.headingDeg-gateRepeatabilityPose.poseUncertainty.headingDeg)>1e-12)){
+  throw Error('Координаты, направление или допуски привязки ворот изменились внутри серии. Очистите серию и начните заново.');
  }
  const measurementConfig={referenceWidth,referenceHeight,sigmaPixels,sigmaReference};
  if(gateRepeatabilityMeasurementConfig&&(

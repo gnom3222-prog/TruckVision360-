@@ -107,13 +107,13 @@
   if(!anchor||![anchor.x,anchor.y].every(Number.isFinite)||Math.abs(anchor.x)>10000||Math.abs(anchor.y)>10000){
    throw new Error('Опорная точка препятствия должна иметь конечные координаты.');
   }
-  const positionX=uncertainty.positionX??0;
-  const positionY=uncertainty.positionY??0;
-  const headingDeg=uncertainty.headingDeg??0;
+  const positionX=uncertainty.positionX;
+  const positionY=uncertainty.positionY;
+  const headingDeg=uncertainty.headingDeg;
   if(![positionX,positionY,headingDeg].every(Number.isFinite)||
-     positionX<0||positionX>2||positionY<0||positionY>2||
-     headingDeg<0||headingDeg>45){
-   throw new Error('Допуски положения препятствия должны быть в диапазоне 0–2 м по X/Y и 0–45° по курсу.');
+     positionX<0.001||positionX>2||positionY<0.001||positionY>2||
+     headingDeg<0.001||headingDeg>45){
+   throw new Error('Допуски положения препятствия должны быть положительными: 0,001–2 м по X/Y и 0,001–45° по курсу.');
   }
   const maxRadius=Math.max(...poly.map(point=>Math.hypot(point.x-anchor.x,point.y-anchor.y)));
   const positionInflation=Math.hypot(positionX,positionY);
@@ -128,20 +128,27 @@
  }
 
  function createGateObstacles(gate){
+  return createGateObstaclesInternal(gate,false);
+}
+
+// Internal nominal-only reference geometry may use zero bounds because it is
+// never accepted as the conservative obstacle set for a real route.
+function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
   if(!gate||typeof gate!=='object')throw new Error('Параметры ворот отсутствуют.');
   const {centerX,centerY,clearWidth,postWidth,depth,heading}=gate;
-  const widthUncertainty=gate.widthUncertainty??0;
-  const positionUncertainty=gate.positionUncertainty??0;
-  const headingUncertaintyDeg=gate.headingUncertaintyDeg??0;
+  const widthUncertainty=gate.widthUncertainty;
+  const positionUncertainty=gate.positionUncertainty;
+  const headingUncertaintyDeg=gate.headingUncertaintyDeg;
+  const minimumUncertainty=allowNominalZeroUncertainty?0:0.001;
   if(![centerX,centerY,clearWidth,postWidth,depth,heading,
        widthUncertainty,positionUncertainty,headingUncertaintyDeg].every(Number.isFinite)||
      Math.abs(centerX)>10000||Math.abs(centerY)>10000||
      clearWidth<=0||clearWidth>50||postWidth<=0||postWidth>5||
      depth<=0||depth>10||
-     widthUncertainty<0||widthUncertainty>2||widthUncertainty>=clearWidth||
-     positionUncertainty<0||positionUncertainty>2||
-     headingUncertaintyDeg<0||headingUncertaintyDeg>45){
-   throw new Error('Ворота и их границы неопределённости должны быть конечными и находиться в допустимых диапазонах.');
+     widthUncertainty<minimumUncertainty||widthUncertainty>2||widthUncertainty>=clearWidth||
+     positionUncertainty<minimumUncertainty||positionUncertainty>2||
+     headingUncertaintyDeg<minimumUncertainty||headingUncertaintyDeg>45){
+   throw new Error('Ворота требуют явных положительных границ неопределённости: ширина и положение 0,001–2 м, направление 0,001–45°; ноль и отсутствие отклоняются.');
   }
   const lintel=gate.lintel===undefined||gate.lintel===null?null:gate.lintel;
   let lintelObstacle=null;
@@ -159,13 +166,13 @@
     thickness,thicknessUncertainty,span,spanUncertainty,lintelDepth,depthUncertainty
    ].every(Number.isFinite)||
       clearHeight<=0.5||clearHeight>15||
-      clearHeightUncertainty<=0||clearHeightUncertainty>2||
-      floorDatumUncertainty<0||floorDatumUncertainty>1||
+      clearHeightUncertainty<0.001||clearHeightUncertainty>2||
+      floorDatumUncertainty<0.001||floorDatumUncertainty>1||
       thickness<=0.02||thickness>2||
-      thicknessUncertainty<0||thicknessUncertainty>1||
-      span<=0||span>30||spanUncertainty<0||spanUncertainty>2||
-      lintelDepth<=0.05||lintelDepth>10||depthUncertainty<0||depthUncertainty>2){
-    throw new Error('Для верхней перемычки нужны измеренные высота проёма, толщина, глубина и конечные неотрицательные допуски.');
+      thicknessUncertainty<0.001||thicknessUncertainty>1||
+      span<=0||span>30||spanUncertainty<0.001||spanUncertainty>2||
+      lintelDepth<=0.05||lintelDepth>10||depthUncertainty<0.001||depthUncertainty>2){
+    throw new Error('Для верхней перемычки нужны измеренные размеры и явные положительные допуски высоты, datum, толщины, пролёта и глубины (не менее 0,001 м).');
    }
    const verticalUncertainty=clearHeightUncertainty+floorDatumUncertainty+thicknessUncertainty;
    const beamBottom=clearHeight;
@@ -2042,9 +2049,9 @@ function planAlternativesWithGeometryUncertainty(options={}){
    return {ok:false,reason:'invalid-input',errors:['gateGeometry должен быть объектом геометрии ворот.'],expanded:0};
   }
   try{
-   const nominalGatePosts=createGateObstacles({
+   const nominalGatePosts=createGateObstaclesInternal({
     ...gateGeometry,widthUncertainty:0,positionUncertainty:0,headingUncertaintyDeg:0
-   });
+   },true);
    const boundedGatePosts=createGateObstacles(gateGeometry);
    const nominalStaticObstacles=nominalizedObstacles.filter(obstacle=>obstacle?.kind!=='gate-jamb');
    const boundedStaticObstacles=options.obstacles.filter(obstacle=>obstacle?.kind!=='gate-jamb');

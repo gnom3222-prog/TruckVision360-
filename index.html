@@ -318,23 +318,23 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <div><label for="gateHeadingDeg">Направление линии ворот от оси +X, °</label><input id="gateHeadingDeg" type="number" min="-180" max="180" value="90" step="1"></div>
 <div><label for="gatePostWidth">Толщина каждого косяка вдоль проёма, м</label><input id="gatePostWidth" type="number" min="0.05" max="2" value="0.25" step="0.05"></div>
 <div><label for="gateDepth">Глубина косяка поперёк проёма, м</label><input id="gateDepth" type="number" min="0.05" max="10" value="0.6" step="0.05"></div>
-<div><label for="gateWidthUncertainty">Погрешность полной ширины проёма ±, м (камера: приблизительно 2σ)</label><input id="gateWidthUncertainty" type="number" min="0" max="2" value="0" step="0.01"></div>
-<div><label for="gatePositionUncertainty">Доп. погрешность ручного центра ворот ± по X/Y, м</label><input id="gatePositionUncertainty" type="number" min="0" max="2" value="0" step="0.01"></div>
-<div><label for="gateHeadingUncertaintyDeg">Погрешность ручного направления ворот ±, °</label><input id="gateHeadingUncertaintyDeg" type="number" min="0" max="45" value="0" step="0.1"></div>
+<div><label for="gateWidthUncertainty">Погрешность полной ширины проёма ±, м (камера: приблизительно 2σ)</label><input id="gateWidthUncertainty" type="number" min="0.001" max="2" value="0" step="0.01"></div>
+<div><label for="gatePositionUncertainty">Доп. погрешность ручного центра ворот ± по X/Y, м</label><input id="gatePositionUncertainty" type="number" min="0.001" max="2" value="0" step="0.01"></div>
+<div><label for="gateHeadingUncertaintyDeg">Погрешность ручного направления ворот ±, °</label><input id="gateHeadingUncertaintyDeg" type="number" min="0.001" max="45" value="0" step="0.1"></div>
 </div>
-<p class="small">Курс задаёт направление линии между косяками, а глубина направлена перпендикулярно ей. После успешной серии камера переносит среднюю ширину и её screening-оболочку неопределённости в геометрию косяков. Это не жёсткая граница ошибки. Центр и направление остаются ручными; их допуски задаются отдельно. Нулевой допуск означает «не задан», а не отсутствие реальной ошибки.</p>
+<p class="small">Курс задаёт направление линии между косяками, а глубина направлена перпендикулярно ей. После успешной серии камера переносит среднюю ширину и её screening-оболочку неопределённости в геометрию косяков. Это не жёсткая граница ошибки. Центр и направление остаются ручными; их допуски задаются отдельно. Нулевой допуск означает «не задан», а не отсутствие реальной ошибки. При включённых воротах маршрут блокируется, пока положительные границы ширины, положения и курса не введены. Верхняя перемычка дополнительно требует положительных допусков datum, толщины, пролёта и глубины.</p>
 <label for="gateLintelEnabled"><input id="gateLintelEnabled" type="checkbox"> Учитывать измеренную верхнюю перемычку как отдельное вертикальное препятствие</label>
 <label for="gateLintelAlignmentConfirmed"><input id="gateLintelAlignmentConfirmed" type="checkbox"> Я независимо подтвердил: перемычка центрирована над проёмом, параллельна линии косяков и горизонтальна</label>
 <div class="grid">
  <div><label for="gateLintelClearHeight">Высота чистого проёма до низа перемычки, м · камера</label><input id="gateLintelClearHeight" type="number" min="0" max="15" value="0" step="0.001" readonly></div>
- <div><label for="gateLintelCameraHeightUncertainty">Screening-оболочка высоты от камеры, м</label><input id="gateLintelCameraHeightUncertainty" type="number" min="0" max="2" value="0" step="0.001" readonly></div>
- <div><label for="gateLintelFloorUncertainty">Доп. неопределённость datum пола/высоты, ± м</label><input id="gateLintelFloorUncertainty" type="number" min="0" max="1" value="0" step="0.001"></div>
+ <div><label for="gateLintelCameraHeightUncertainty">Screening-оболочка высоты от камеры, м</label><input id="gateLintelCameraHeightUncertainty" type="number" min="0.001" max="2" value="0" step="0.001" readonly></div>
+ <div><label for="gateLintelFloorUncertainty">Доп. неопределённость datum пола/высоты, ± м</label><input id="gateLintelFloorUncertainty" type="number" min="0.001" max="1" value="0" step="0.001"></div>
  <div><label for="gateLintelThickness">Измеренная толщина перемычки по высоте, м</label><input id="gateLintelThickness" type="number" min="0" max="2" value="0" step="0.01"></div>
- <div><label for="gateLintelThicknessUncertainty">Неопределённость толщины перемычки, ± м</label><input id="gateLintelThicknessUncertainty" type="number" min="0" max="1" value="0" step="0.001"></div>
+ <div><label for="gateLintelThicknessUncertainty">Неопределённость толщины перемычки, ± м</label><input id="gateLintelThicknessUncertainty" type="number" min="0.001" max="1" value="0" step="0.001"></div>
  <div><label for="gateLintelSpan">Измеренный полный пролёт перемычки вдоль ворот, м</label><input id="gateLintelSpan" type="number" min="0" max="30" value="0" step="0.01"></div>
- <div><label for="gateLintelSpanUncertainty">Неопределённость полного пролёта, ± м</label><input id="gateLintelSpanUncertainty" type="number" min="0" max="2" value="0" step="0.001"></div>
+ <div><label for="gateLintelSpanUncertainty">Неопределённость полного пролёта, ± м</label><input id="gateLintelSpanUncertainty" type="number" min="0.001" max="2" value="0" step="0.001"></div>
  <div><label for="gateLintelDepth">Измеренная глубина перемычки поперёк ворот, м</label><input id="gateLintelDepth" type="number" min="0" max="10" value="0" step="0.01"></div>
- <div><label for="gateLintelDepthUncertainty">Неопределённость глубины перемычки, ± м</label><input id="gateLintelDepthUncertainty" type="number" min="0" max="2" value="0" step="0.001"></div>
+ <div><label for="gateLintelDepthUncertainty">Неопределённость глубины перемычки, ± м</label><input id="gateLintelDepthUncertainty" type="number" min="0.001" max="2" value="0" step="0.001"></div>
 </div>
 <p class="small camera-warning">Перемычка включается только после успешного измерения ворот камерой, ввода измеренных толщины, полного пролёта и глубины, а также явного подтверждения геометрии. Высота задаётся от той же местной поверхности дороги до нижней грани; оператор должен независимо подтвердить вертикальный datum и плоскость ворот, а также центрирование, параллельность и горизонтальность перемычки. Если это условие не выполняется, не включайте модель. Планировщик строит ограниченную вертикальную призму от измеренной высоты до высоты плюс измеренная толщина, расширенную введёнными неопределённостями. Горизонтальный пролёт берётся из отдельно измеренной полной длины перемычки, а не выводится из ширины проёма; его нижняя граница должна перекрывать консервативную чистую ширину. Допуски полного пролёта и глубины расширяют соответствующие размеры на указанную абсолютную границу один раз. Погрешности положения/курса также расширяют горизонтальный контур. Для доказательства вертикального разделения нужны измеренные zMin/zMax профили всех пересекающих компонентов автопоезда. Если профиль отсутствует, используется только горизонтальная нижняя оценка и маршрут не получает ложного подтверждения высоты. После заполнения включите переключатель и нажмите «Применить параметры». Нулевые допуски допустимы только при независимом подтверждении. Камера не измеряет толщину/глубину перемычки, datum пола, вертикальность плоскости или мировую позу ворот.</p>
 <div class="section">Границы геометрической неопределённости</div>
@@ -507,11 +507,11 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
  <div><label for="cameraObstacleY">Центр основания Y на карте, м</label><input id="cameraObstacleY" type="number" step="0.1" placeholder="Введите Y"></div>
 </div>
 <div class="section">Неопределённость ручной привязки препятствия</div>
-<p class="small">Укажите абсолютные максимальные допуски положения центра и направления на карте. Это отдельные границы привязки, не 1σ и не оценка, автоматически полученная камерой. Не оставляйте поля пустыми; ноль допустим только при независимом подтверждении точной привязки.</p>
+<p class="small">Укажите абсолютные максимальные допуски положения центра и направления на карте. Это отдельные границы привязки, не 1σ и не оценка, автоматически полученная камерой. Не оставляйте поля пустыми. Ноль и значения меньше 0,001 отклоняются: камера не определяет погрешность ручной привязки к карте.</p>
 <div class="grid">
- <div><label for="cameraObstaclePositionUncertaintyX">Допуск положения X, ± м</label><input id="cameraObstaclePositionUncertaintyX" type="number" min="0" max="2" step="0.01" placeholder="Введите допуск" required></div>
- <div><label for="cameraObstaclePositionUncertaintyY">Допуск положения Y, ± м</label><input id="cameraObstaclePositionUncertaintyY" type="number" min="0" max="2" step="0.01" placeholder="Введите допуск" required></div>
- <div><label for="cameraObstacleHeadingUncertaintyDeg">Допуск направления, ± °</label><input id="cameraObstacleHeadingUncertaintyDeg" type="number" min="0" max="45" step="0.1" placeholder="Введите допуск" required></div>
+ <div><label for="cameraObstaclePositionUncertaintyX">Допуск положения X, ± м</label><input id="cameraObstaclePositionUncertaintyX" type="number" min="0.001" max="2" step="0.01" placeholder="Введите допуск" required></div>
+ <div><label for="cameraObstaclePositionUncertaintyY">Допуск положения Y, ± м</label><input id="cameraObstaclePositionUncertaintyY" type="number" min="0.001" max="2" step="0.01" placeholder="Введите допуск" required></div>
+ <div><label for="cameraObstacleHeadingUncertaintyDeg">Допуск направления, ± °</label><input id="cameraObstacleHeadingUncertaintyDeg" type="number" min="0.001" max="45" step="0.1" placeholder="Введите допуск" required></div>
 </div>
 <div class="section">Высота препятствия · независимое ручное измерение</div>
 <p class="small camera-warning">Камера измеряет только основание в плоскости пола и не определяет высоту. Для отдельно стоящего объекта, опирающегося на местную поверхность, измерьте высоту рулеткой или лазерным дальномером от поверхности у основания до верхней точки. Не используйте эту форму для нависающих балок, труб или объектов с несколькими уровнями основания. Допуски ниже — абсолютные максимальные границы, не 1σ.</p>
@@ -546,12 +546,12 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 </main>
 
 <script src="vehicle-physics.js?v=20261127-8"></script>
-<script src="articulated-planner.js?v=20261127-4"></script>
+<script src="articulated-planner.js?v=20261127-5"></script>
 <script src="sensor-perception.js?v=20261126-2"></script>
-<script src="truckvision.js?v=20261127-10"></script>
+<script src="truckvision.js?v=20261127-11"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261126-5"></script>
-<script src="camera-measure.js?v=20261126-10"></script>
+<script src="camera-measure.js?v=20261127-11"></script>
 
 <script>
 // App-style section navigation. Existing controls remain in the DOM with their IDs.
