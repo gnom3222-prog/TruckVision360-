@@ -620,7 +620,6 @@
   }
   return {
    status:missingBounds.length?'preliminary':'positive-bounds-present',
-   requiredBounds:missingBounds.length+1,
    missingBounds,
    positiveBoundsPresent:missingBounds.length===0,
    measurementProvenanceVerified:false,
