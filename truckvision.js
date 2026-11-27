@@ -1171,7 +1171,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   const currentSteer=Number.isFinite(q.steer)?q.steer:0;
   if(i>0){
    const prev=path[i-1];
-   const segmentLength=Math.hypot(q.x-prev.x,q.y-prev.y);
+   const segmentLength=planner.routeSegmentDistance(prev,q,i,'route metrics').distance;
    length+=segmentLength;
    const reversing=currentGear<0;
    if(reversing){
@@ -1382,6 +1382,10 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   articulationSampling:{
    sampleCount:articulationPeak.sampleCount,
    maxSampleSpacing:articulationPeak.maxSampleSpacing,
+   maxSampleChordSpacing:articulationPeak.maxSampleChordSpacing,
+   distanceSource:articulationPeak.distanceSource,
+   stepDistanceSegmentCount:articulationPeak.stepDistanceSegmentCount,
+   chordFallbackSegmentCount:articulationPeak.chordFallbackSegmentCount,
    maxAdjacentAngleChangeDegrees:articulationPeak.maxAdjacentAngleChangeDegrees,
    maxSampledAngleChangePerMeterDegrees:articulationPeak.maxSampledAngleChangePerMeterDegrees,
    maxSampledAngleChangePerMeterSegmentIndex:articulationPeak.maxSampledAngleChangePerMeterSegmentIndex,
@@ -1963,8 +1967,9 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
   const articulationPeakText='пик угла сочленения '+m.articulationPeak.maxAngleDegrees.toFixed(1)+
    '° на '+m.articulationPeak.distanceAlongRoute.toFixed(1)+' м пути (X '+
    m.articulationPeak.state.x.toFixed(1)+' м, Y '+m.articulationPeak.state.y.toFixed(1)+' м), '+peakGearText+
-   '; дискретная оценка по '+m.articulationPeak.sampleCount+' точкам, максимальный шаг '+
-   m.articulationPeak.maxSampleSpacing.toFixed(3)+' м; максимальное изменение угла между соседними точками '+
+   '; дискретная оценка по '+m.articulationPeak.sampleCount+' точкам, максимальная длина сегмента '+
+   m.articulationPeak.maxSampleSpacing.toFixed(3)+' м (источник: '+m.articulationPeak.distanceSource+'); максимальная хорда '+
+   m.articulationPeak.maxSampleChordSpacing.toFixed(3)+' м; максимальное изменение угла между соседними точками '+
    m.articulationPeak.maxAdjacentAngleChangeDegrees.toFixed(1)+'°; '+sampledAngleGradientText+
    zeroDistanceAngleText+'; непрерывный максимум между точками не подтверждён';
   $('routeAdvice').textContent=
