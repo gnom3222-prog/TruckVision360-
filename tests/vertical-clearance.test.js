@@ -14,8 +14,8 @@ const params={
 };
 const flatRoadSurface={
  originX:0,originY:0,originZ:0,gradeX:0,gradeY:0,
- originZUncertainty:0.01,gradeXUncertainty:0.001,gradeYUncertainty:0.001,
- surfaceResidualUncertainty:0.01
+ originZUncertainty:0,gradeXUncertainty:0,gradeYUncertainty:0,
+ surfaceResidualUncertainty:0
 };
 const pose={x:0,y:0,psi:0,psiT:0};
 const allProfiles={
