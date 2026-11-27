@@ -572,10 +572,10 @@
   check('trailerWidth','trailerWidthUncertainty','ширина полуприцепа');
   const spacing12=(params&&params.trailerAxleSpacing12)>0;
   const spacing23=(params&&params.trailerAxleSpacing23)>0;
-  check('trailerAxleSpacing12',spacing12?'trailerAxleSpacing12Uncertainty':'trailerAxleSpacingUncertainty',
-   'шаг осей 1–2',spacing12||Number.isFinite(params&&params.trailerAxleSpacing));
-  check('trailerAxleSpacing23',spacing23?'trailerAxleSpacing23Uncertainty':'trailerAxleSpacingUncertainty',
-   'шаг осей 2–3',spacing23||Number.isFinite(params&&params.trailerAxleSpacing));
+  check(spacing12?'trailerAxleSpacing12':'trailerAxleSpacing',
+   spacing12?'trailerAxleSpacing12Uncertainty':'trailerAxleSpacingUncertainty','шаг осей 1–2');
+  check(spacing23?'trailerAxleSpacing23':'trailerAxleSpacing',
+   spacing23?'trailerAxleSpacing23Uncertainty':'trailerAxleSpacingUncertainty','шаг осей 2–3');
   check('tractorSteeringTrack','tractorSteeringTrackUncertainty','колея управляемой оси тягача');
   check('tractorFrontTrack','tractorFrontTrackUncertainty','колея передней оси тягача');
   check('tractorRearTrack','tractorRearTrackUncertainty','колея задней оси тягача');
