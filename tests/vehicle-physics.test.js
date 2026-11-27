@@ -1382,6 +1382,13 @@ test('vehicle geometry calibration status accepts explicit bounds and checks ena
  params.auxiliaryEnvelopes=[{...measuredEnvelope,zMin:0.5,zMax:1.0,verticalUncertaintyMargin:0.02}];
  status=physics.vehicleGeometryCalibrationStatus(params);
  assert.equal(status.status,'positive-bounds-present');
+
+ const invalidIndividualSpacing={...params,trailerAxleSpacing12:0.1};
+ status=physics.vehicleGeometryCalibrationStatus(invalidIndividualSpacing);
+ assert.equal(status.status,'preliminary');
+ assert.ok(status.missingBounds.some(item=>
+  item.parameter==='trailerAxleSpacing12/23'
+ ));
 });
 
 
