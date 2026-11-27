@@ -171,10 +171,16 @@ test('camera gate registration rejects zero jamb dimension or pose uncertainty a
  const before=[elements.gateWidth.value,elements.gateWidthUncertainty.value,elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value,elements.gatePostWidthUncertainty.value,elements.gateDepthUncertainty.value];
  for(const field of fields){
   elements[field].value='0';
-  assert.equal(windowObject.TruckVisionApplyGateRegistration({centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08}),false,field+' must reject registration');
+  assert.equal(windowObject.TruckVisionApplyGateRegistration({centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08,clearHeight:3.8,heightUncertaintyBound:0.05}),false,field+' must reject registration');
   assert.deepEqual([elements.gateWidth.value,elements.gateWidthUncertainty.value,elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value,elements.gatePostWidthUncertainty.value,elements.gateDepthUncertainty.value],before);
   elements[field].value=field==='gatePostWidthUncertainty'?'0.02':field==='gateDepthUncertainty'?'0.03':field==='gatePositionUncertainty'?'0.05':'1';
  }
+ assert.equal(windowObject.TruckVisionApplyGateRegistration({
+  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,
+  widthUncertaintyBound:0.08,clearHeight:3.8,heightUncertaintyBound:0.05
+ }),true,'registration should succeed after all positive bounds are restored');
+ assert.equal(elements.gatePostWidthUncertainty.value,'0.02');
+ assert.equal(elements.gateDepthUncertainty.value,'0.03');
 });
 
 test('route planning is blocked when an enabled gate lintel lacks alignment confirmation',()=>{
