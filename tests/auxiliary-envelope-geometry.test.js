@@ -38,7 +38,7 @@ test('measured external hub or suspension envelope joins trailer collision compo
  const p={...params,auxiliaryEnvelopes:[{
   name:'Наружный корпус ступицы',anchor:'trailer-axle-1',
   longitudinalOffset:0,lateralOffset:1.7,
-  length:0.9,width:0.5,uncertaintyMargin:0.05
+  length:0.9,width:0.5,headingOffsetDeg:0,uncertaintyMargin:0.05
  }]};
  const parts=physics.vehicleCollisionParts(pose,p);
  const trailer=parts.find(part=>part.vehiclePart==='полуприцеп');
@@ -49,8 +49,8 @@ test('measured external hub or suspension envelope joins trailer collision compo
 
 test('measured tractor front and rear axle hardware envelopes map to tractor collision part',()=>{
  const p={...params,auxiliaryEnvelopes:[
-  {name:'Передний поворотный кулак',anchor:'tractor-front-axle',length:0.8,width:3.0},
-  {name:'Задний корпус моста',anchor:'tractor-rear-axle',length:0.9,width:3.2}
+  {name:'Передний поворотный кулак',anchor:'tractor-front-axle',longitudinalOffset:0,lateralOffset:0,length:0.8,width:3.0,headingOffsetDeg:0,uncertaintyMargin:0.05},
+  {name:'Задний корпус моста',anchor:'tractor-rear-axle',longitudinalOffset:0,lateralOffset:0,length:0.9,width:3.2,headingOffsetDeg:0,uncertaintyMargin:0.05}
  ]};
  assert.deepEqual(physics.validateVehicleParams(p),[]);
  const envelopes=physics.auxiliaryEnvelopePolygons(pose,p);
@@ -71,10 +71,10 @@ test('auxiliary envelope validation rejects unknown anchors, invalid dimensions 
 
 test('auxiliary envelope uncertainty margin expands all sides of the measured rectangle',()=>{
  const nominal=physics.auxiliaryEnvelopePolygons(pose,{...params,auxiliaryEnvelopes:[
-  {name:'Балка',anchor:'trailer-axle-2',length:1,width:0.6}
+  {name:'Балка',anchor:'trailer-axle-2',longitudinalOffset:0,lateralOffset:0,length:1,width:0.6,headingOffsetDeg:0,uncertaintyMargin:0.001}
  ]})[0].polygon;
  const expanded=physics.auxiliaryEnvelopePolygons(pose,{...params,auxiliaryEnvelopes:[
-  {name:'Балка',anchor:'trailer-axle-2',length:1,width:0.6,uncertaintyMargin:0.1}
+  {name:'Балка',anchor:'trailer-axle-2',longitudinalOffset:0,lateralOffset:0,length:1,width:0.6,headingOffsetDeg:0,uncertaintyMargin:0.1}
  ]})[0].polygon;
  const nominalBounds={
   minX:Math.min(...nominal.map(point=>point.x)),maxX:Math.max(...nominal.map(point=>point.x)),
@@ -95,7 +95,7 @@ test('swept displacement rates include protruding measured axle hardware envelop
  const p={...params,auxiliaryEnvelopes:[{
   name:'Выносной кронштейн',anchor:'trailer-axle-1',
   longitudinalOffset:5,lateralOffset:3,
-  length:5,width:5,uncertaintyMargin:1
+  length:5,width:5,headingOffsetDeg:0,uncertaintyMargin:1
  }]};
  const hardwareRates=planner.sweptDisplacementRatesPerMeter(0.24,p);
  assert.ok(hardwareRates.trailer>baseRates.trailer,
@@ -110,7 +110,7 @@ test('null auxiliary envelope configuration is rejected instead of treated as an
 test('planner clearance identifies a protruding measured hub envelope by name',()=>{
  const p={...params,auxiliaryEnvelopes:[{
   name:'Наружный корпус ступицы',anchor:'trailer-axle-1',
-  longitudinalOffset:0,lateralOffset:1.7,length:0.9,width:0.5
+  longitudinalOffset:0,lateralOffset:1.7,length:0.9,width:0.5,headingOffsetDeg:0,uncertaintyMargin:0.05
  }]};
  const axle=physics.trailerAxlePoints(pose,p)[0];
  const obstacle={x:axle.x,y:axle.y+1.7,w:0.08,h:0.08,name:'Контрольный столб'};
@@ -126,7 +126,7 @@ test('tractor auxiliary envelope corners increase the tractor swept displacement
  const baseRates=planner.sweptDisplacementRatesPerMeter(0.24,params);
  const p={...params,auxiliaryEnvelopes:[{
   name:'Выносной корпус переднего кулака',anchor:'tractor-front-axle',
-  longitudinalOffset:0.4,lateralOffset:1.8,length:1.1,width:0.7,uncertaintyMargin:0.1
+  longitudinalOffset:0.4,lateralOffset:1.8,length:1.1,width:0.7,headingOffsetDeg:0,uncertaintyMargin:0.1
  }]};
  const hardwareRates=planner.sweptDisplacementRatesPerMeter(0.24,p);
  assert.ok(hardwareRates.tractor>baseRates.tractor);
