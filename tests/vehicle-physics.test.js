@@ -1193,3 +1193,66 @@ test('suspension travel rejects derived pitch or roll slopes outside the lineari
  const errors=physics.validateSuspensionTravel(config,suspensionGeometryParams);
  assert.ok(errors.some(error=>error.includes('превышает 0,25')));
 });
+
+test('vehicle geometry calibration status treats zero uncertainty as unbounded, not exact',()=>{
+ const nominal={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,
+  trailerAxleSpacing:1.3,trailerAxleSpacing12:0,trailerAxleSpacing23:0,
+  tractorSteeringTrack:2.05,tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.79,
+  trailerAxle1Track:0,trailerAxle2Track:0,trailerAxle3Track:0,
+  tireLength:0.72,tireWidth:0.44,cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25,
+  mirrorOutboard:0,mirrorLongitudinal:3.0,mirrorLength:0.8,vehicleFootprintUncertainty:0.03,
+  wheelbaseUncertainty:0,hitchOffsetUncertainty:0,kingpinAxlesUncertainty:0,
+  trailerLengthUncertainty:0,trailerWidthUncertainty:0,trailerAxleSpacingUncertainty:0,
+  tractorSteeringTrackUncertainty:0,tractorFrontTrackUncertainty:0,tractorRearTrackUncertainty:0,
+  trailerTrackUncertainty:0,tireLengthUncertainty:0,tireWidthUncertainty:0,
+  cabOffsetUncertainty:0,cabFrontUncertainty:0,cabRearUncertainty:0,cabWidthUncertainty:0
+ };
+ const status=physics.vehicleGeometryCalibrationStatus(nominal);
+ assert.equal(status.status,'preliminary');
+ assert.equal(status.positiveBoundsPresent,false);
+ assert.equal(status.measurementProvenanceVerified,false);
+ assert.ok(status.missingBounds.some(item=>item.parameter==='wheelbase'));
+ assert.ok(status.missingBounds.some(item=>item.parameter==='hitchOffset'));
+ assert.ok(status.missingBounds.some(item=>item.uncertainty==='trailerAxleSpacingUncertainty'));
+ const missingCommonSpacing={...nominal};delete missingCommonSpacing.trailerAxleSpacing;
+ assert.ok(physics.vehicleGeometryCalibrationStatus(missingCommonSpacing).missingBounds.some(item=>item.parameter==='trailerAxleSpacing'));
+ assert.ok(status.missingBounds.some(item=>item.parameter==='trailerTrack'));
+});
+
+test('vehicle geometry calibration status accepts explicit bounds and checks enabled mirror/individual axle geometry',()=>{
+ const params={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,
+  trailerAxleSpacing:1.3,trailerAxleSpacing12:0,trailerAxleSpacing23:0,
+  tractorSteeringTrack:2.05,tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.79,
+  trailerAxle1Track:0,trailerAxle2Track:0,trailerAxle3Track:0,
+  tireLength:0.72,tireWidth:0.44,cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25,
+  mirrorOutboard:0,mirrorLongitudinal:3.0,mirrorLength:0.8,vehicleFootprintUncertainty:0.03,
+  wheelbaseUncertainty:0.02,hitchOffsetUncertainty:0.02,kingpinAxlesUncertainty:0.05,
+  trailerLengthUncertainty:0.03,trailerWidthUncertainty:0.02,trailerAxleSpacingUncertainty:0.01,
+  tractorSteeringTrackUncertainty:0.01,tractorFrontTrackUncertainty:0.01,tractorRearTrackUncertainty:0.01,
+  trailerTrackUncertainty:0.02,tireLengthUncertainty:0.01,tireWidthUncertainty:0.01,
+  cabOffsetUncertainty:0.02,cabFrontUncertainty:0.02,cabRearUncertainty:0.02,cabWidthUncertainty:0.02
+ };
+ let status=physics.vehicleGeometryCalibrationStatus(params);
+ assert.equal(status.status,'positive-bounds-present');
+ assert.equal(status.missingBounds.length,0);
+ params.trailerAxleSpacing12=1.25;
+ status=physics.vehicleGeometryCalibrationStatus(params);
+ assert.ok(status.missingBounds.some(item=>item.uncertainty==='trailerAxleSpacing12Uncertainty'));
+ params.trailerAxleSpacing12Uncertainty=0.01;
+ params.trailerAxle1Track=2.8;
+ status=physics.vehicleGeometryCalibrationStatus(params);
+ assert.ok(status.missingBounds.some(item=>item.uncertainty==='trailerAxle1TrackUncertainty'));
+ params.trailerAxle1TrackUncertainty=0.02;
+ params.mirrorOutboard=0.4;
+ status=physics.vehicleGeometryCalibrationStatus(params);
+ assert.ok(status.missingBounds.some(item=>item.uncertainty==='mirrorOutboardUncertainty'));
+ assert.ok(status.missingBounds.some(item=>item.uncertainty==='mirrorLongitudinalUncertainty'));
+ assert.ok(status.missingBounds.some(item=>item.uncertainty==='mirrorLengthUncertainty'));
+ params.mirrorOutboardUncertainty=0.02;
+ params.mirrorLongitudinalUncertainty=0.02;
+ params.mirrorLengthUncertainty=0.02;
+ status=physics.vehicleGeometryCalibrationStatus(params);
+ assert.equal(status.status,'positive-bounds-present');
+});

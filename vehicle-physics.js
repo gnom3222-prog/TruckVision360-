@@ -555,6 +555,78 @@
   };
  }
 
+ function vehicleGeometryCalibrationStatus(params){
+  const missingBounds=[];
+  const check=(parameterKey,uncertaintyKey,label,active=true)=>{
+   if(!active)return;
+   const nominal=params&&params[parameterKey];
+   const bound=params&&params[uncertaintyKey];
+   if(!Number.isFinite(nominal)||!Number.isFinite(bound)||bound<=0){
+    missingBounds.push({parameter:parameterKey,uncertainty:uncertaintyKey,label});
+   }
+  };
+  check('wheelbase','wheelbaseUncertainty','колёсная база тягача');
+  check('hitchOffset','hitchOffsetUncertainty','положение седла относительно задней оси');
+  check('kingpinAxles','kingpinAxlesUncertainty','шкворень — эквивалентный центр тележки');
+  check('trailerLength','trailerLengthUncertainty','длина полуприцепа');
+  check('trailerWidth','trailerWidthUncertainty','ширина полуприцепа');
+  const spacing12=(params&&params.trailerAxleSpacing12)>0;
+  const spacing23=(params&&params.trailerAxleSpacing23)>0;
+  check(spacing12?'trailerAxleSpacing12':'trailerAxleSpacing',
+   spacing12?'trailerAxleSpacing12Uncertainty':'trailerAxleSpacingUncertainty','шаг осей 1–2');
+  check(spacing23?'trailerAxleSpacing23':'trailerAxleSpacing',
+   spacing23?'trailerAxleSpacing23Uncertainty':'trailerAxleSpacingUncertainty','шаг осей 2–3');
+  check('tractorSteeringTrack','tractorSteeringTrackUncertainty','колея управляемой оси тягача');
+  check('tractorFrontTrack','tractorFrontTrackUncertainty','колея передней оси тягача');
+  check('tractorRearTrack','tractorRearTrackUncertainty','колея задней оси тягача');
+  for(let index=1;index<=3;index++){
+   const individualTrack=(params&&params['trailerAxle'+index+'Track'])>0;
+   check(individualTrack?'trailerAxle'+index+'Track':'trailerTrack',
+    individualTrack?'trailerAxle'+index+'TrackUncertainty':'trailerTrackUncertainty',
+    'колея '+index+'-й оси полуприцепа');
+  }
+  check('tireLength','tireLengthUncertainty','длина оболочки шины');
+  check('tireWidth','tireWidthUncertainty','ширина одной шины');
+  check('cabOffset','cabOffsetUncertainty','продольное положение кабины');
+  check('cabFront','cabFrontUncertainty','передний вылет кабины');
+  check('cabRear','cabRearUncertainty','задний вылет кабины');
+  check('cabWidth','cabWidthUncertainty','ширина кабины');
+  const footprint=params&&(Number.isFinite(params.vehicleFootprintUncertainty)?
+   params.vehicleFootprintUncertainty:params.footprintUncertainty);
+  if(!Number.isFinite(footprint)||footprint<=0){
+   missingBounds.push({parameter:'vehicleFootprintUncertainty',uncertainty:'vehicleFootprintUncertainty',label:'общая оболочка габаритов автопоезда'});
+  }
+  if(params&&params.mirrorOutboard>0){
+   check('mirrorOutboard','mirrorOutboardUncertainty','вынос зеркал');
+   check('mirrorLongitudinal','mirrorLongitudinalUncertainty','продольное положение зеркал');
+   check('mirrorLength','mirrorLengthUncertainty','длина оболочки зеркал');
+  }
+  if(params&&params.tractorRearTireCenterSpacing>0){
+   check('tractorRearTireCenterSpacing','tractorRearTireCenterSpacingUncertainty','расстояние между центрами сдвоенных шин тягача');
+  }else if(params&&params.tractorRearTireGroupWidth>0){
+   check('tractorRearTireGroupWidth','tractorRearTireGroupWidthUncertainty','ширина группы задних шин тягача');
+  }
+  if(params&&params.trailerTireGroupWidth>0){
+   check('trailerTireGroupWidth','trailerTireGroupWidthUncertainty','ширина группы шин полуприцепа');
+  }
+  for(let index=1;index<=3;index++){
+   const spacingKey='trailerAxle'+index+'TireCenterSpacing';
+   const widthKey='trailerAxle'+index+'TireGroupWidth';
+   if(params&&params[spacingKey]>0){
+    check(spacingKey,spacingKey+'Uncertainty','расстояние между центрами шин '+index+'-й оси');
+   }else if(params&&params[widthKey]>0){
+    check(widthKey,widthKey+'Uncertainty','ширина группы шин '+index+'-й оси');
+   }
+  }
+  return {
+   status:missingBounds.length?'preliminary':'positive-bounds-present',
+   missingBounds,
+   positiveBoundsPresent:missingBounds.length===0,
+   measurementProvenanceVerified:false,
+   note:'Положительные границы — ввод оператора; функция не подтверждает источник, методику или фактическую точность измерений.'
+  };
+ }
+
  function validateVehicleParams(params){
   const errors=[];
   if(!params||typeof params!=='object'){
@@ -1658,5 +1730,5 @@
   };
  }
 
- return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,VEHICLE_VERTICAL_PROFILE_KEYS,validateRoadSurface,roadSurfaceElevationRange,verticalRangeOnRoadSurface,validateSuspensionTravel,suspensionTravelStatus,suspensionTravelDisplacementRange,validateVehicleParams,validateTireGroupWidthUncertainty,validateAuxiliaryEnvelopes,validateVehicleVerticalProfiles,verticalRangeFromProfile,vehicleVerticalRange,auxiliaryEnvelopePolygons,trailerAxleTireGroupWidths,trailerAxleTireCenterSpacings,trailerAxleSpacings,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,wheelTireTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
+ return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,VEHICLE_VERTICAL_PROFILE_KEYS,vehicleGeometryCalibrationStatus,validateRoadSurface,roadSurfaceElevationRange,verticalRangeOnRoadSurface,validateSuspensionTravel,suspensionTravelStatus,suspensionTravelDisplacementRange,validateVehicleParams,validateTireGroupWidthUncertainty,validateAuxiliaryEnvelopes,validateVehicleVerticalProfiles,verticalRangeFromProfile,vehicleVerticalRange,auxiliaryEnvelopePolygons,trailerAxleTireGroupWidths,trailerAxleTireCenterSpacings,trailerAxleSpacings,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,wheelTireTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
 });

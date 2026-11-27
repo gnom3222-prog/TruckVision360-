@@ -1183,6 +1183,20 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
  const score=gearChanges*1.2+(steeringChanges+initialSteeringActions)*0.4+(reverseDistance>0?1.5:0)+(articulationWarning?3:maxBeta>30?1.5:0)+
   (effectiveClearance<0.35?4:effectiveClearance<0.75?2:effectiveClearance<1.5?1:0)+(!reached?3:0)+(collision?8:0);
  const reasons=[];
+ const vehicleGeometryCalibration=typeof physics.vehicleGeometryCalibrationStatus==='function'?
+  physics.vehicleGeometryCalibrationStatus(cfg):
+  {status:'diagnostic-unavailable',missingBounds:[],positiveBoundsPresent:false,measurementProvenanceVerified:false};
+ if(vehicleGeometryCalibration.missingBounds.length){
+  const missingNames=vehicleGeometryCalibration.missingBounds.map(item=>item.label).filter(Boolean);
+  const missingSummary=missingNames.slice(0,8).join(', ')+
+   (missingNames.length>8?' и ещё '+(missingNames.length-8)+' параметров':'');
+  reasons.push('геометрия модели Volvo FH 4×2 и трёхосного полуприцепа предварительная: нет положительных измерительных допусков для '+missingSummary+
+   '. Нулевой допуск означает «не задан», а не точность; рекомендация стороны и направления начала манёвра не подтверждена для реального автопоезда.');
+ }else if(vehicleGeometryCalibration.status==='positive-bounds-present'){
+  reasons.push('положительные границы неопределённости ключевой геометрии введены оператором, но источник и методика измерений приложением не проверяются');
+ }else{
+  reasons.push('диагностика калибровки геометрии недоступна; рекомендация остаётся предварительной');
+ }
  if(Array.isArray(cfg.auxiliaryEnvelopes)&&cfg.auxiliaryEnvelopes.length){
   reasons.push('дополнительные измеренные оболочки осевых узлов: '+cfg.auxiliaryEnvelopes.length+'; их размеры и опорные точки заданы вручную');
  }else{
@@ -1256,6 +1270,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   clearanceLowerBound:clearanceForAssessment,effectiveClearance,
   clearanceByPart,limitingPartClearance,trajectoryClearance,sweptClearanceDetail,
   wheelClearance,limitingWheelClearance,wheelClearanceError,intermediateWheelContact,wheelClearanceIncomplete,
+  vehicleGeometryCalibration,
   gearTransitionEvents:Array.isArray(wheelClearance?.temporalEvents)?wheelClearance.temporalEvents:[],
   timeModelComplete:false,totalDurationSeconds:null,
   collision,reached,finalHeadingErrorDeg,finalArticulationDeg,clearanceInsufficient,articulationBlocked,reasons};
