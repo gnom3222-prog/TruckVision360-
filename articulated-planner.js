@@ -128,19 +128,26 @@
  }
 
  function createGateObstacles(gate){
+  return createGateObstaclesInternal(gate,false);
+}
+
+// Internal nominal-only reference geometry may use zero bounds because it is
+// never accepted as the conservative obstacle set for a real route.
+function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
   if(!gate||typeof gate!=='object')throw new Error('Параметры ворот отсутствуют.');
   const {centerX,centerY,clearWidth,postWidth,depth,heading}=gate;
   const widthUncertainty=gate.widthUncertainty;
   const positionUncertainty=gate.positionUncertainty;
   const headingUncertaintyDeg=gate.headingUncertaintyDeg;
+  const minimumUncertainty=allowNominalZeroUncertainty?0:0.001;
   if(![centerX,centerY,clearWidth,postWidth,depth,heading,
        widthUncertainty,positionUncertainty,headingUncertaintyDeg].every(Number.isFinite)||
      Math.abs(centerX)>10000||Math.abs(centerY)>10000||
      clearWidth<=0||clearWidth>50||postWidth<=0||postWidth>5||
      depth<=0||depth>10||
-     widthUncertainty<0.001||widthUncertainty>2||widthUncertainty>=clearWidth||
-     positionUncertainty<0.001||positionUncertainty>2||
-     headingUncertaintyDeg<0.001||headingUncertaintyDeg>45){
+     widthUncertainty<minimumUncertainty||widthUncertainty>2||widthUncertainty>=clearWidth||
+     positionUncertainty<minimumUncertainty||positionUncertainty>2||
+     headingUncertaintyDeg<minimumUncertainty||headingUncertaintyDeg>45){
    throw new Error('Ворота требуют явных положительных границ неопределённости: ширина и положение 0,001–2 м, направление 0,001–45°; ноль и отсутствие отклоняются.');
   }
   const lintel=gate.lintel===undefined||gate.lintel===null?null:gate.lintel;
@@ -2042,9 +2049,9 @@ function planAlternativesWithGeometryUncertainty(options={}){
    return {ok:false,reason:'invalid-input',errors:['gateGeometry должен быть объектом геометрии ворот.'],expanded:0};
   }
   try{
-   const nominalGatePosts=createGateObstacles({
+   const nominalGatePosts=createGateObstaclesInternal({
     ...gateGeometry,widthUncertainty:0,positionUncertainty:0,headingUncertaintyDeg:0
-   });
+   },true);
    const boundedGatePosts=createGateObstacles(gateGeometry);
    const nominalStaticObstacles=nominalizedObstacles.filter(obstacle=>obstacle?.kind!=='gate-jamb');
    const boundedStaticObstacles=options.obstacles.filter(obstacle=>obstacle?.kind!=='gate-jamb');
