@@ -285,6 +285,32 @@ function readSettings(){
     }
    }
   }
+  try{
+   const gateCandidate={
+    centerX:candidate.gateCenterX,centerY:candidate.gateCenterY,
+    clearWidth:candidate.gateWidth,postWidth:candidate.gatePostWidth,
+    depth:candidate.gateDepth,heading:candidate.gateHeadingDeg*Math.PI/180,
+    widthUncertainty:candidate.gateWidthUncertainty,
+    positionUncertainty:candidate.gatePositionUncertainty,
+    headingUncertaintyDeg:candidate.gateHeadingUncertaintyDeg
+   };
+   if(candidate.gateLintelEnabled){
+    gateCandidate.lintel={
+     clearHeight:candidate.gateLintelClearHeight,
+     clearHeightUncertainty:candidate.gateLintelCameraHeightUncertainty,
+     floorDatumUncertainty:candidate.gateLintelFloorUncertainty,
+     thickness:candidate.gateLintelThickness,
+     thicknessUncertainty:candidate.gateLintelThicknessUncertainty,
+     span:candidate.gateLintelSpan,
+     spanUncertainty:candidate.gateLintelSpanUncertainty,
+     depth:candidate.gateLintelDepth,
+     depthUncertainty:candidate.gateLintelDepthUncertainty
+    };
+   }
+   planner.createGateObstacles(gateCandidate);
+  }catch(error){
+   errors.push('gate: '+(error&&error.message?error.message:String(error)));
+  }
  }
  if(!Array.isArray(candidate.verticalObstacles)){
   errors.push('verticalObstacles: ожидается JSON-массив вертикальных препятствий.');
