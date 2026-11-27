@@ -1219,12 +1219,14 @@ test('vehicle geometry calibration status treats zero uncertainty as unbounded, 
   tractorSteeringTrack:2.05,tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.79,
   trailerAxle1Track:0,trailerAxle2Track:0,trailerAxle3Track:0,
   tireLength:0.72,tireWidth:0.44,cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25,
+  tractorFrontOverhang:5,tractorRearOverhang:1.2,tractorBodyWidth:2.55,
   mirrorOutboard:0,mirrorLongitudinal:3.0,mirrorLength:0.8,vehicleFootprintUncertainty:0.03,
   wheelbaseUncertainty:0,hitchOffsetUncertainty:0,kingpinAxlesUncertainty:0,
   trailerLengthUncertainty:0,trailerKingpinToFrontUncertainty:0,trailerWidthUncertainty:0,trailerAxleSpacingUncertainty:0,
   tractorSteeringTrackUncertainty:0,tractorFrontTrackUncertainty:0,tractorRearTrackUncertainty:0,
   trailerTrackUncertainty:0,tireLengthUncertainty:0,tireWidthUncertainty:0,
-  cabOffsetUncertainty:0,cabFrontUncertainty:0,cabRearUncertainty:0,cabWidthUncertainty:0
+  cabOffsetUncertainty:0,cabFrontUncertainty:0,cabRearUncertainty:0,cabWidthUncertainty:0,
+  tractorFrontOverhangUncertainty:0,tractorRearOverhangUncertainty:0,tractorBodyWidthUncertainty:0
  };
  const status=physics.vehicleGeometryCalibrationStatus(nominal);
  assert.equal(status.status,'preliminary');
@@ -1232,6 +1234,9 @@ test('vehicle geometry calibration status treats zero uncertainty as unbounded, 
  assert.equal(status.measurementProvenanceVerified,false);
  assert.ok(status.missingBounds.some(item=>item.parameter==='wheelbase'));
  assert.ok(status.missingBounds.some(item=>item.parameter==='hitchOffset'));
+ assert.ok(status.missingBounds.some(item=>item.parameter==='tractorFrontOverhang'));
+ assert.ok(status.missingBounds.some(item=>item.parameter==='tractorRearOverhang'));
+ assert.ok(status.missingBounds.some(item=>item.parameter==='tractorBodyWidth'));
  assert.ok(status.missingBounds.some(item=>item.uncertainty==='trailerAxleSpacingUncertainty'));
  const missingCommonSpacing={...nominal};delete missingCommonSpacing.trailerAxleSpacing;
  assert.ok(physics.vehicleGeometryCalibrationStatus(missingCommonSpacing).missingBounds.some(item=>item.parameter==='trailerAxleSpacing'));
@@ -1250,7 +1255,8 @@ test('vehicle geometry calibration status accepts explicit bounds and checks ena
   trailerLengthUncertainty:0.03,trailerKingpinToFrontUncertainty:0.02,trailerWidthUncertainty:0.02,trailerAxleSpacingUncertainty:0.01,
   tractorSteeringTrackUncertainty:0.01,tractorFrontTrackUncertainty:0.01,tractorRearTrackUncertainty:0.01,
   trailerTrackUncertainty:0.02,tireLengthUncertainty:0.01,tireWidthUncertainty:0.01,
-  cabOffsetUncertainty:0.02,cabFrontUncertainty:0.02,cabRearUncertainty:0.02,cabWidthUncertainty:0.02
+  cabOffsetUncertainty:0.02,cabFrontUncertainty:0.02,cabRearUncertainty:0.02,cabWidthUncertainty:0.02,
+  tractorFrontOverhangUncertainty:0.02,tractorRearOverhangUncertainty:0.02,tractorBodyWidthUncertainty:0.02
  };
  let status=physics.vehicleGeometryCalibrationStatus(params);
  assert.equal(status.status,'positive-bounds-present');
@@ -1273,4 +1279,54 @@ test('vehicle geometry calibration status accepts explicit bounds and checks ena
  params.mirrorLengthUncertainty=0.02;
  status=physics.vehicleGeometryCalibrationStatus(params);
  assert.equal(status.status,'positive-bounds-present');
+});
+
+
+test('tractor outer envelope uses configurable measured front, rear, and width dimensions',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,
+  tractorFrontOverhang:6.1,tractorRearOverhang:1.6,tractorBodyWidth:2.8,
+  footprintUncertainty:0.1
+ };
+ const polygon=physics.vehiclePolygons(q,p)[0];
+ const xs=polygon.map(point=>point.x),ys=polygon.map(point=>point.y);
+ near(Math.max(...xs),6.2);
+ near(Math.min(...xs),-1.7);
+ near(Math.max(...ys)-Math.min(...ys),3.0);
+});
+
+test('cab and mirror packaging validation follows the configured tractor outer envelope',()=>{
+ const base={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,
+  tractorFrontOverhang:6.0,tractorRearOverhang:1.5,tractorBodyWidth:2.8,
+  cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25
+ };
+ const validMirror=physics.validateVehicleParams({
+  ...base,mirrorOutboard:0.45,mirrorLongitudinal:5.5,mirrorLength:0.8
+ });
+ assert.deepEqual(validMirror,[]);
+ const mirrorOutside=physics.validateVehicleParams({
+  ...base,mirrorOutboard:0.45,mirrorLongitudinal:6.0,mirrorLength:0.8
+ });
+ assert.ok(mirrorOutside.some(message=>message.includes('mirrorLongitudinal/mirrorLength')));
+ const cabOutside=physics.validateVehicleParams({...base,tractorFrontOverhang:3.0});
+ assert.ok(cabOutside.some(message=>message.includes('Геометрия кабины выходит')));
+ const cabTooWide=physics.validateVehicleParams({...base,tractorBodyWidth:2.2});
+ assert.ok(cabTooWide.some(message=>message.includes('Геометрия кабины выходит')));
+});
+
+test('tractor outer envelope is used to classify wheels and auxiliary parts outside the chassis body',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,
+  tractorFrontOverhang:4.0,tractorRearOverhang:1.0,tractorBodyWidth:2.3,
+  cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25
+ };
+ const parts=physics.vehicleCollisionParts(q,p);
+ const tractor=parts.find(part=>part.vehiclePart==='тягач');
+ assert.ok(tractor.components.some(component=>component.name==='левое переднее колесо тягача'));
 });
