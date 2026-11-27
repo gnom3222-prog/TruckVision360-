@@ -855,9 +855,10 @@ test('articulation exposure locates the peak angle and cumulative route distance
  assert.equal(result.sampleCount,4);
  assert.ok(Math.abs(result.maxSampleSpacing-2)<1e-12);
  assert.ok(result.maxAdjacentAngleChangeDegrees>50);
- assert.ok(Math.abs(result.maxSampledAngleChangePerMeterDegrees-(Math.abs(Math.atan2(Math.sin(0.1-0.2),Math.cos(0.1-0.2)))*180/Math.PI))<1e-9);
- assert.equal(result.maxSampledAngleChangePerMeterSegmentIndex,0);
- assert.ok(Math.abs(result.maxSampledAngleChangePerMeterDistanceAlongRoute-0.5)<1e-12);
+ const expectedPerMeter=Math.abs(Math.atan2(Math.sin(0.1-Math.PI/3),Math.cos(0.1-Math.PI/3)))*180/Math.PI;
+ assert.ok(Math.abs(result.maxSampledAngleChangePerMeterDegrees-expectedPerMeter)<1e-9);
+ assert.equal(result.maxSampledAngleChangePerMeterSegmentIndex,2);
+ assert.ok(Math.abs(result.maxSampledAngleChangePerMeterDistanceAlongRoute-3.5)<1e-12);
  assert.equal(result.zeroDistanceAngleChangeCount,0);
  assert.equal(result.samplingMethod,'discrete-route-states');
  assert.equal(result.continuousPeakVerified,false);
