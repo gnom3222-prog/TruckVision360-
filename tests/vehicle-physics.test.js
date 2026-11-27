@@ -957,6 +957,27 @@ test('zero per-axle values inherit common spacing and track settings',()=>{
  assert.deepEqual(physics.trailerAxleTracks(p),[2.85,2.85,2.85]);
 });
 
+test('trailer axle spacing helpers reject an implicit nominal fallback',()=>{
+ assert.throws(
+  ()=>physics.trailerAxleSpacings({trailerAxleSpacing12:1.1}),
+  /Невозможно определить шаги трёхосной тележки/
+ );
+ assert.throws(
+  ()=>physics.trailerAxleOffsets({trailerAxleSpacing12:1.1}),
+  /Невозможно определить шаги трёхосной тележки/
+ );
+ assert.deepEqual(physics.trailerAxleSpacings({trailerAxleSpacing:1.3}),[1.3,1.3]);
+ assert.deepEqual(physics.trailerAxleSpacings({
+  trailerAxleSpacing12:0.8,trailerAxleSpacing23:1.6
+ }),[0.8,1.6]);
+ assert.throws(
+  ()=>physics.trailerAxleSpacings({
+   trailerAxleSpacing:0,trailerAxleSpacing12:1.1,trailerAxleSpacing23:1.6
+  }),
+  /Невозможно определить шаги трёхосной тележки/
+ );
+});
+
 
 test('asymmetric axle spacings produce asymmetric rigid-group scrub diagnostics',()=>{
  const p={
@@ -1163,6 +1184,15 @@ test('suspension travel requires every axle side and explicit compression, rebou
  const zeroGeometry={...suspensionGeometryParams,wheelbaseUncertainty:0};
  assert.ok(physics.validateSuspensionTravel(makeSuspensionTravelConfig(),zeroGeometry)
   .some(error=>error.includes('wheelbaseUncertainty')));
+});
+
+test('suspension travel reports missing axle spacing fallback without throwing',()=>{
+ const incomplete={...suspensionGeometryParams};
+ delete incomplete.trailerAxleSpacing;
+ const errors=physics.validateSuspensionTravel(makeSuspensionTravelConfig(),incomplete);
+ assert.ok(errors.some(error=>
+  error.includes('suspensionTravel.trailer')&&error.includes('общий резервный шаг')
+ ));
 });
 
 test('bounded rigid-plane suspension envelope includes heave pitch and roll over tractor body corners',()=>{
