@@ -1335,7 +1335,8 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
  }
  reasons.push('пиковый угол сочленения — дискретная оценка по '+
   articulationPeak.sampleCount+' точкам; максимальный шаг '+
-  articulationPeak.maxSampleSpacing.toFixed(3)+' м; непрерывный максимум между точками не подтверждён');
+  articulationPeak.maxSampleSpacing.toFixed(3)+' м; максимальное изменение угла между соседними точками '+
+  articulationPeak.maxAdjacentAngleChangeDegrees.toFixed(1)+'°; непрерывный максимум между точками не подтверждён');
  if(clearanceInsufficient)reasons.push('недостаточный зазор после резерва погрешности');
  if(wheelClearanceIncomplete)reasons.push('промежуточная кинематическая проверка колёс не завершена для '+wheelClearance.segmentsWithoutIntermediateKinematicSamples+' сегментов; виртуальный автопроезд заблокирован');
  if(wheelClearanceError)reasons.push('индивидуальная проверка колёс не подтверждена: '+wheelClearanceError);
@@ -1939,7 +1940,8 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
    '° на '+m.articulationPeak.distanceAlongRoute.toFixed(1)+' м пути (X '+
    m.articulationPeak.state.x.toFixed(1)+' м, Y '+m.articulationPeak.state.y.toFixed(1)+' м), '+peakGearText+
    '; дискретная оценка по '+m.articulationPeak.sampleCount+' точкам, максимальный шаг '+
-   m.articulationPeak.maxSampleSpacing.toFixed(3)+' м; непрерывный максимум между точками не подтверждён';
+   m.articulationPeak.maxSampleSpacing.toFixed(3)+' м; максимальное изменение угла между соседними точками '+
+   m.articulationPeak.maxAdjacentAngleChangeDegrees.toFixed(1)+'°; непрерывный максимум между точками не подтверждён';
   $('routeAdvice').textContent=
    'Начало манёвра: '+gearText+'; первое рулевое действие: '+firstTurnText+
    '. Сторона определяется по первому значимому управляющему углу планировщика (порог 0,08 рад), а не по одному лишь направлению на цель.'+recommendationNote+sensitivityNote+parameterNote+' Маршрут до точки ('+
