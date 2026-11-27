@@ -2986,8 +2986,8 @@ test('start recommendation mirrors steering and tractor yaw while preserving gea
   const states=[
    {x:0,y:0,psi:0,psiT:0,gear,steer:0,stepDistance:0},
    {x:gear*0.2,y:0,psi:0,psiT:0,gear,steer:0,stepDistance:0.2},
-   {x:gear*0.4,y:0.01,psi:gear*0.04,psiT:gear*0.02,gear,steer:0.12,stepDistance:0.2},
-   {x:gear*0.6,y:0.05,psi:gear*0.08,psiT:gear*0.04,gear,steer:0.12,stepDistance:0.2}
+   {x:gear*0.4,y:0.01,psi:gear*0.04,psiT:gear*0.02,gear,steer:0.12,stepDistance:0.21},
+   {x:gear*0.6,y:0.05,psi:gear*0.08,psiT:gear*0.04,gear,steer:0.12,stepDistance:0.21}
   ];
   const mirrored=states.map(state=>({...state,y:-state.y,psi:-state.psi,psiT:-state.psiT,steer:-state.steer}));
   const originalAdvice=planner.recommendStart(states);
