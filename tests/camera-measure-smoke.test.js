@@ -476,6 +476,12 @@ test('camera obstacle registration requires explicit bounded map-pose uncertaint
  assert.equal(camera.obstacleRegistrations.length,0);
  assert.match(camera.elements.cameraStatus.textContent,/Допуски привязки препятствия должны быть положительными/);
  camera.elements.cameraObstaclePositionUncertaintyX.value='0.1';
+ camera.elements.cameraObstaclePositionUncertaintyY.value='0';
+ camera.elements.cameraObstacleHeadingUncertaintyDeg.value='2';
+ await camera.fire('cameraMeasureObstacle','click');
+ await camera.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
+ assert.equal(camera.obstacleRegistrations.length,0);
+ assert.match(camera.elements.cameraStatus.textContent,/Допуски привязки препятствия должны быть положительными/);
  camera.elements.cameraObstaclePositionUncertaintyY.value='0.1';
  camera.elements.cameraObstacleHeadingUncertaintyDeg.value='0';
  await camera.fire('cameraMeasureObstacle','click');
@@ -805,6 +811,17 @@ test('camera gate registration requires positive manual position and heading unc
  assert.match(missing.elements.cameraStatus.textContent,/Введите положительные допуски ручного положения и направления ворот/);
  missing.fire('cameraStop','click');
 
+ const zeroPosition=bootCamera();
+ zeroPosition.elements.gatePositionUncertainty.value='0';
+ await zeroPosition.fire('cameraStart','click');
+ await zeroPosition.fire('cameraCalibrate','click');
+ await zeroPosition.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
+ await zeroPosition.fire('cameraMeasureGate','click');
+ await zeroPosition.tap([{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}]);
+ assert.equal(zeroPosition.appliedRegistrations.length,0);
+ assert.match(zeroPosition.elements.cameraStatus.textContent,/Допуски привязки ворот должны быть положительными/);
+ zeroPosition.fire('cameraStop','click');
+
  const zero=bootCamera();
  zero.elements.gateHeadingUncertaintyDeg.value='0';
  await zero.fire('cameraStart','click');
@@ -836,6 +853,15 @@ test('camera gate repeatability series cannot mix manually entered pose uncertai
  assert.equal(camera.appliedRegistrations.length,0);
  assert.match(camera.elements.cameraStatus.textContent,/допуски привязки ворот изменились внутри серии/);
  camera.fire('cameraStop','click');
+});
+
+test('camera measurement UI declares positive minimum map-pose uncertainty',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
+ for(const id of ['gateWidthUncertainty','gatePositionUncertainty','gateHeadingUncertaintyDeg','gateLintelCameraHeightUncertainty','gateLintelFloorUncertainty','gateLintelThicknessUncertainty','gateLintelSpanUncertainty','gateLintelDepthUncertainty','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg']){
+  const input=html.match(new RegExp('<input[^>]*id="'+id+'"[^>]*>'));
+  assert.ok(input,'missing input '+id);
+  assert.match(input[0],/min="0\.001"/,'input '+id+' must reject zero uncertainty');
+ }
 });
 
 test('camera gate repeatability series cannot mix manually entered map poses',async()=>{
