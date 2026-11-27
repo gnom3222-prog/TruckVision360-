@@ -2880,12 +2880,14 @@ test('swept displacement bounds include measured auxiliary envelopes on tractor 
 
 test('increasing auxiliary-envelope uncertainty expands the corresponding swept-displacement bound',()=>{
  const q={psi:0,psiT:0};
+ // This measured trailer-mounted extension is deliberately outside the base
+ // trailer rear/side contour, so its corner radius is the active sweep bound.
  const envelope={
-  name:'measured side step',
-  anchor:'tractor-rear-axle',
-  longitudinalOffset:-1.8,lateralOffset:1.5,
-  length:1.4,width:0.7,headingOffsetDeg:20,
-  uncertaintyMargin:0.01
+  name:'measured trailer rear-side extension',
+  anchor:'trailer-axle-3',
+  longitudinalOffset:-4.8,lateralOffset:2.8,
+  length:4.0,width:2.0,headingOffsetDeg:0,
+  uncertaintyMargin:0.1
  };
  const small=planner.sweptDisplacementRatesPerMeter(0.3,{
   ...params,auxiliaryEnvelopes:[envelope]
@@ -2893,7 +2895,7 @@ test('increasing auxiliary-envelope uncertainty expands the corresponding swept-
  const large=planner.sweptDisplacementRatesPerMeter(0.3,{
   ...params,auxiliaryEnvelopes:[{...envelope,uncertaintyMargin:0.45}]
  },q);
- assert.ok(large.tractor>small.tractor,
-  'the uncertainty margin must be included in the auxiliary component corner radius');
+ assert.ok(large.trailer>small.trailer,
+  'increasing uncertainty on a bound-dominating trailer component must increase the trailer sweep-rate bound');
 });
 
