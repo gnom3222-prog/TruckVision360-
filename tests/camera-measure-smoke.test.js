@@ -31,6 +31,7 @@ function bootCamera(options={}){
   };
  }
  let permissionRequests=0,trackStops=0,clearCalls=0;
+ const requestedConstraints=[];
  const mediaTracks=[];
  const createStream=()=>{
   const listeners={};
@@ -53,8 +54,9 @@ function bootCamera(options={}){
  const sandbox={
   window:win,
   document:{visibilityState:'visible',getElementById:id=>elements[id],addEventListener(type,fn){(documentListeners[type]??=[]).push(fn);}},
-  navigator:{mediaDevices:{getUserMedia:async()=>{
+  navigator:{mediaDevices:{getSupportedConstraints:()=>options.facingModeSupported===false?{}:{facingMode:true},getUserMedia:async constraints=>{
    permissionRequests++;
+   requestedConstraints.push(constraints);
    if(options.permissionError){const error=new Error('camera permission error');error.name=options.permissionError;throw error;}
    if(options.getUserMedia)return options.getUserMedia({createStream});
    return createStream();
@@ -75,6 +77,7 @@ function bootCamera(options={}){
   endTrack(index=mediaTracks.length-1){mediaTracks[index]?.emit('ended');},
   get clearCalls(){return clearCalls;},
   get permissionRequests(){return permissionRequests;},
+  get requestedConstraints(){return requestedConstraints;},
   get trackStops(){return trackStops;}
  };
 }
@@ -92,11 +95,30 @@ async function measureObstacleFrame(camera,time,points=defaultObstaclePoints){
  await camera.tap(points);
 }
 
+test('camera measurement fails closed before permission when facingMode support is not declared',async()=>{
+ const camera=bootCamera({facingModeSupported:false});
+ await camera.fire('cameraStart','click');
+ assert.equal(camera.permissionRequests,0,'unsupported camera direction must be rejected before requesting a stream');
+ assert.match(camera.elements.cameraStatus.textContent,/поддержку выбора задней камеры/);
+ assert.equal(camera.trackStops,0);
+});
+
+test('camera measurement refuses a browser fallback when the rear-facing camera is unavailable',async()=>{
+ const camera=bootCamera({permissionError:'OverconstrainedError'});
+ await camera.fire('cameraStart','click');
+ assert.equal(camera.permissionRequests,1);
+ assert.equal(camera.requestedConstraints[0].video.facingMode.exact,'environment');
+ assert.match(camera.elements.cameraStatus.textContent,/заднюю камеру/);
+ assert.equal(camera.trackStops,0,'no stream should be retained when the rear-facing constraint fails');
+});
+
 test('camera permission is requested only on tap; measurement reports uncertainty and orientation invalidates calibration',async()=>{
  const camera=bootCamera();
  assert.equal(camera.permissionRequests,0,'loading the camera module must not request permission');
  await camera.fire('cameraStart','click');
  assert.equal(camera.permissionRequests,1,'the explicit camera button should request permission');
+ assert.equal(camera.requestedConstraints[0].video.facingMode.exact,'environment','measurements must explicitly request the rear-facing camera');
+ assert.equal(camera.requestedConstraints[0].video.facingMode.ideal,undefined,'the browser must not silently fall back to the front camera');
  await camera.fire('cameraCalibrate','click');
  await camera.tap([{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}]);
  assert.match(camera.elements.cameraStatus.textContent,/Плоскость откалибрована/);

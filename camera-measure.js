@@ -211,11 +211,20 @@ async function start(){
  if(document.visibilityState==='hidden'){say('Страница находится в фоне. Вернитесь в приложение и нажмите «Включить камеру».');return;}
  if(!geometry){say('Модуль геометрии камеры не загрузился. Обновите страницу и повторите попытку.');return;}
  if(!isSecureContext||!navigator.mediaDevices?.getUserMedia){say('Камера доступна только на защищённой HTTPS-странице в Safari.');return;}
+ let facingModeSupported=false;
+ try{
+  facingModeSupported=typeof navigator.mediaDevices.getSupportedConstraints==='function'&&
+   navigator.mediaDevices.getSupportedConstraints()?.facingMode===true;
+ }catch(_){}
+ if(!facingModeSupported){
+  say('Браузер не подтверждает поддержку выбора задней камеры. Обновите Safari или используйте совместимый браузер; измерение не запускается.');
+  return;
+ }
  const requestId=++streamRequestId;
  startPending=true;
  let acquiredStream=null;
  try{
-  acquiredStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});
+  acquiredStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{exact:'environment'},width:{ideal:1920},height:{ideal:1080}}});
   if(requestId!==streamRequestId||document.visibilityState==='hidden'){
    acquiredStream.getTracks().forEach(t=>t.stop());
    if(document.visibilityState==='hidden')say('Страница перешла в фон. Запрошенный поток остановлен; вернитесь и нажмите «Включить камеру».');
@@ -254,9 +263,9 @@ async function start(){
   const failedStream=stream;stream=null;failedStream?.getTracks().forEach(t=>t.stop());v.srcObject=null;
   const messages={
    NotAllowedError:'Доступ к камере запрещён. Разрешите камеру для этого сайта в настройках Safari и нажмите «Включить камеру» ещё раз.',
-   NotFoundError:'Камера не найдена. Проверьте, что устройство имеет доступную камеру.',
+   NotFoundError:'Задняя камера не найдена. Проверьте доступность задней камеры iPhone и повторите запуск.',
    NotReadableError:'Камера занята другим приложением или недоступна. Закройте другие приложения, использующие камеру.',
-   OverconstrainedError:'Камера не поддерживает запрошенное разрешение. Повторите запуск.',
+   OverconstrainedError:'Браузер не смог выбрать заднюю камеру. Проверьте, что задняя камера доступна, и повторите запуск; фронтальная камера для измерений не используется.',
    SecurityError:'Браузер заблокировал камеру. Откройте приложение по HTTPS и проверьте разрешения сайта.'
   };
   say(messages[e.name]||('Не удалось включить камеру: '+(e.message||e.name)));
