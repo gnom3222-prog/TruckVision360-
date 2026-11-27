@@ -1743,11 +1743,16 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
     candidatesCompared:candidates.length,firstTurnDistanceTolerance
    };
   }
+  const selectedComponentSum=keys.reduce((sum,key)=>sum+selectedComponents[key],0);
+  const alternativeComponentSum=keys.reduce((sum,key)=>sum+alternativeComponents[key],0);
   const componentDeltas=Object.fromEntries(keys.map(key=>[key,alternativeComponents[key]-selectedComponents[key]]));
   const componentDeltaSum=keys.reduce((sum,key)=>sum+componentDeltas[key],0);
   const scoreDelta=alternative.candidate.cost-selected.cost;
-  if(Math.abs(componentDeltaSum-scoreDelta)>1e-7)return {
+  if(Math.abs(selectedComponentSum-selected.cost)>1e-7||
+     Math.abs(alternativeComponentSum-alternative.candidate.cost)>1e-7||
+     Math.abs(componentDeltaSum-scoreDelta)>1e-7)return {
    ok:false,reason:'score-breakdown-mismatch',scoreDelta,componentDeltaSum,
+   selectedComponentSum,alternativeComponentSum,
    selectedIndex,alternativeIndex:alternative.index
   };
   const dominantComponent=keys.slice().sort((a,b)=>Math.abs(componentDeltas[b])-Math.abs(componentDeltas[a]))[0];
