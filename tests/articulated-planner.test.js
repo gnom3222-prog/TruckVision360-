@@ -223,7 +223,7 @@ test('gate post thickness and depth bounds expand conservative jambs',()=>{
   const rightInside=Math.min(...posts[1].polygon.map(p=>p.x));
   return rightInside-leftInside;
  };
- assert.ok(Math.abs(opening(wide)-opening(narrow)<0.001,'larger dimension bounds should expand outward while retaining the measured opening');
+ assert.ok(Math.abs(opening(wide)-opening(narrow))<0.001,'larger dimension bounds should expand outward while retaining the measured opening');
 });
 
 test('gate width uncertainty narrows the opening and map pose uncertainty expands both jambs',()=>{
