@@ -671,15 +671,17 @@
   if(!params||typeof params!=='object'){
    return ['Параметры автопоезда отсутствуют.'];
   }
-  // A common axle spacing is only a fallback. When both adjacent spacings
-  // are explicitly measured, the common fallback is not required.
+  // The common spacing is optional only when both adjacent axle spacings
+  // are independently supplied. Otherwise a missing fallback must be explicit.
   const hasBothIndependentTrailerAxleSpacings=
    Number.isFinite(params.trailerAxleSpacing12)&&params.trailerAxleSpacing12>0&&
    Number.isFinite(params.trailerAxleSpacing23)&&params.trailerAxleSpacing23>0;
+  if(!hasBothIndependentTrailerAxleSpacings&&
+     (params.trailerAxleSpacing===undefined||params.trailerAxleSpacing===null)){
+   errors.push('trailerAxleSpacing: задайте общий шаг как резервное значение, если не заданы оба индивидуальных шага осей 1–2 и 2–3.');
+  }
   for(const [key,limits] of Object.entries(VEHICLE_PARAMETER_LIMITS)){
    const value=params[key];
-   if(key==='trailerAxleSpacing'&&hasBothIndependentTrailerAxleSpacings&&
-      (value===undefined||value===null))continue;
    if(limits.optional&&(value===undefined||value===null))continue;
    if(!Number.isFinite(value)){
     errors.push(key+': значение должно быть конечным числом.');
