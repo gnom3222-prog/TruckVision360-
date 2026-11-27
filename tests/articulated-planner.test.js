@@ -2634,3 +2634,14 @@ test('bounded planner accepts uncertainty intervals for all configurable tractor
   assert.equal(result.parameterSensitivity.coverage,'full-endpoint-combinations',key);
  }
 });
+
+
+test('three active vehicle geometry parameters enumerate all eight joint endpoint combinations',()=>{
+ const rows=planner.parameterEndpointVectors(3);
+ const combinations=rows.map(row=>row.join(''));
+ assert.equal(rows.length,8);
+ assert.equal(new Set(combinations).size,8);
+ assert.deepEqual(combinations.slice().sort(),[
+  '000','001','010','011','100','101','110','111'
+ ]);
+});
