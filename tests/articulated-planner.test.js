@@ -2848,3 +2848,79 @@ test('three active vehicle geometry parameters enumerate all eight joint endpoin
   '000','001','010','011','100','101','110','111'
  ]);
 });
+
+test('swept displacement bounds include measured auxiliary envelopes on tractor and trailer',()=>{
+ const q={psi:0,psiT:0};
+ const base=planner.sweptDisplacementRatesPerMeter(0.25,params,q);
+ const tractorEnvelope={
+  name:'measured front bumper extension',
+  anchor:'tractor-front-axle',
+  longitudinalOffset:4.5,lateralOffset:0,
+  length:1.0,width:0.6,headingOffsetDeg:0,
+  uncertaintyMargin:0.05
+ };
+ const tractor=planner.sweptDisplacementRatesPerMeter(0.25,{
+  ...params,auxiliaryEnvelopes:[tractorEnvelope]
+ },q);
+ assert.ok(tractor.tractor>base.tractor,
+  'a measured component beyond the tractor front envelope must increase the tractor sweep-rate bound');
+ const trailerEnvelope={
+  name:'measured rear underrun-guard extension',
+  anchor:'trailer-axle-3',
+  longitudinalOffset:-4.8,lateralOffset:2.8,
+  length:4.0,width:2.0,headingOffsetDeg:0,
+  uncertaintyMargin:0.1
+ };
+ const trailer=planner.sweptDisplacementRatesPerMeter(0.25,{
+  ...params,auxiliaryEnvelopes:[trailerEnvelope]
+ },q);
+ assert.ok(trailer.trailer>base.trailer,
+  'a measured component beyond the trailer rear envelope must increase the trailer sweep-rate bound');
+});
+
+test('increasing auxiliary-envelope uncertainty expands the corresponding swept-displacement bound',()=>{
+ const q={psi:0,psiT:0};
+ // This measured trailer-mounted extension is deliberately outside the base
+ // trailer rear/side contour, so its corner radius is the active sweep bound.
+ const envelope={
+  name:'measured trailer rear-side extension',
+  anchor:'trailer-axle-3',
+  longitudinalOffset:-4.8,lateralOffset:2.8,
+  length:4.0,width:2.0,headingOffsetDeg:0,
+  uncertaintyMargin:0.1
+ };
+ const small=planner.sweptDisplacementRatesPerMeter(0.3,{
+  ...params,auxiliaryEnvelopes:[envelope]
+ },q);
+ const large=planner.sweptDisplacementRatesPerMeter(0.3,{
+  ...params,auxiliaryEnvelopes:[{...envelope,uncertaintyMargin:0.45}]
+ },q);
+ assert.ok(large.trailer>small.trailer,
+  'increasing uncertainty on a bound-dominating trailer component must increase the trailer sweep-rate bound');
+});
+
+
+
+test('measured auxiliary envelope participates in obstacle clearance and its uncertainty expands the collision footprint',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const obstacle=[{x:2.0,y:2.47,w:0.1,h:0.1,name:'post beside measured side step'}];
+ const envelope={
+  name:'measured side step',
+  anchor:'tractor-rear-axle',
+  longitudinalOffset:2.0,lateralOffset:2.0,
+  length:1.2,width:0.8,headingOffsetDeg:0,
+  uncertaintyMargin:0.01
+ };
+ const small=planner.clearance(q,obstacle,{
+  ...params,auxiliaryEnvelopes:[envelope]
+ });
+ const large=planner.clearance(q,obstacle,{
+  ...params,auxiliaryEnvelopes:[{...envelope,uncertaintyMargin:0.1}]
+ });
+ assert.ok(small.distance>0,
+  'the smaller measured uncertainty should leave the post just outside the auxiliary envelope');
+ assert.ok(large.distance<=0,
+  'the larger measured uncertainty should make the post intersect the expanded auxiliary envelope');
+ assert.equal(large.component,'measured side step');
+ assert.equal(large.obstacle,'post beside measured side step');
+});
