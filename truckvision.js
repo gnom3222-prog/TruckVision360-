@@ -171,6 +171,13 @@ function gateGeometryForPlanner(){
    depthUncertainty:cfg.gateLintelDepthUncertainty
   };
  }
+ try{
+  planner.createGateObstacles(geometry);
+ }catch(error){
+  const status=$('gateResult');
+  if(status)status.textContent='Ворота не включены в карту: '+(error&&error.message?error.message:String(error))+' Исправьте положительные допуски и повторите проверку.';
+  return null;
+ }
  return geometry;
 }
 function sceneObstacles(){
@@ -249,6 +256,33 @@ function readSettings(){
   }
  }
  const errors=physics.validateVehicleParams(candidate);
+ const gateEnabled=!!($('gateEnabled')&&$('gateEnabled').checked);
+ if(gateEnabled){
+  const requiredGateBounds=[
+   ['gateWidthUncertainty',candidate.gateWidthUncertainty,0.001,2],
+   ['gatePositionUncertainty',candidate.gatePositionUncertainty,0.001,2],
+   ['gateHeadingUncertaintyDeg',candidate.gateHeadingUncertaintyDeg,0.001,45]
+  ];
+  for(const [key,value,min,max] of requiredGateBounds){
+   if(!Number.isFinite(value)||value<min||value>max){
+    errors.push(key+': при включённых воротах задайте положительную границу неопределённости от '+min+' до '+max+'. Ноль означает «не задано».');
+   }
+  }
+  if(candidate.gateLintelEnabled){
+   const lintelBounds=[
+    ['gateLintelCameraHeightUncertainty',candidate.gateLintelCameraHeightUncertainty,0.001,2],
+    ['gateLintelFloorUncertainty',candidate.gateLintelFloorUncertainty,0.001,1],
+    ['gateLintelThicknessUncertainty',candidate.gateLintelThicknessUncertainty,0.001,1],
+    ['gateLintelSpanUncertainty',candidate.gateLintelSpanUncertainty,0.001,2],
+    ['gateLintelDepthUncertainty',candidate.gateLintelDepthUncertainty,0.001,2]
+   ];
+   for(const [key,value,min,max] of lintelBounds){
+    if(!Number.isFinite(value)||value<min||value>max){
+     errors.push(key+': для верхней перемычки задайте положительную границу неопределённости от '+min+' до '+max+' м.');
+    }
+   }
+  }
+ }
  if(!Array.isArray(candidate.verticalObstacles)){
   errors.push('verticalObstacles: ожидается JSON-массив вертикальных препятствий.');
  }else{
@@ -1437,7 +1471,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261127-6');
+   worker=new Worker('./planner-worker.js?v=20261127-7');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
@@ -2497,11 +2531,11 @@ function applyCameraGateRegistration(registration){
       postWidth,depth,positionUncertainty,headingUncertaintyDeg].every(Number.isFinite)||
     Math.abs(centerX)>100||Math.abs(centerY)>100||
     clearWidth<1||clearWidth>20||headingDeg<-180||headingDeg>180||
-    widthUncertaintyBound<0||widthUncertaintyBound>2||
+    widthUncertaintyBound<0.001||widthUncertaintyBound>2||
     widthUncertaintyBound>=clearWidth-0.05||
     postWidth<0.05||postWidth>2||depth<0.05||depth>10||
-    positionUncertainty<0||positionUncertainty>2||
-    headingUncertaintyDeg<0||headingUncertaintyDeg>45||
+    positionUncertainty<0.001||positionUncertainty>2||
+    headingUncertaintyDeg<0.001||headingUncertaintyDeg>45||
     !Number.isFinite(clearHeight)||clearHeight<=0.5||clearHeight>15||
     !Number.isFinite(heightUncertaintyBound)||heightUncertaintyBound<=0||heightUncertaintyBound>2){
   return false;
@@ -2614,9 +2648,9 @@ function applyCameraObstacleRegistration(measurement,anchor,headingRadians,name,
     Math.abs(anchor.x)>100||Math.abs(anchor.y)>100||
     Math.abs(headingRadians)>Math.PI+1e-9||
     ![mapPoseUncertainty.positionX,mapPoseUncertainty.positionY,mapPoseUncertainty.headingDeg].every(Number.isFinite)||
-    mapPoseUncertainty.positionX<0||mapPoseUncertainty.positionX>2||
-    mapPoseUncertainty.positionY<0||mapPoseUncertainty.positionY>2||
-    mapPoseUncertainty.headingDeg<0||mapPoseUncertainty.headingDeg>45||
+    mapPoseUncertainty.positionX<0.001||mapPoseUncertainty.positionX>2||
+    mapPoseUncertainty.positionY<0.001||mapPoseUncertainty.positionY>2||
+    mapPoseUncertainty.headingDeg<0.001||mapPoseUncertainty.headingDeg>45||
     !verticalMeasurement||verticalMeasurement.confirmed!==true||
     verticalMeasurement.datum!=='local-road-surface'||
     verticalMeasurement.source!=='manual-independent-measurement'||
