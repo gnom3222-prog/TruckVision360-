@@ -881,6 +881,6 @@ test('camera gate repeatability series cannot mix manually entered map poses',as
  await camera.fire('cameraMeasureGate','click');
  await camera.tap(gatePoints);
  assert.equal(camera.appliedRegistrations.length,0);
- assert.match(camera.elements.cameraStatus.textContent,/Координаты центра или направление ворот изменились/);
+ assert.match(camera.elements.cameraStatus.textContent,/Координаты, направление или допуски привязки ворот изменились/);
  camera.fire('cameraStop','click');
 });
