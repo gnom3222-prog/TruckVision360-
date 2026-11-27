@@ -1205,8 +1205,6 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   }
   if(wheelClearance?.roadSurfaceStatus==='road-surface-unverified-horizontal-only'){
    reasons.push('вертикальное разделение отключено: нет откалиброванной плоскости дороги; препятствия остаются горизонтальными 2D-оболочками');
-  }else if(wheelClearance?.roadSurfaceStatus==='flat-reference-assumed'){
-   reasons.push('уклон дороги не откалиброван: вертикальные интервалы сопоставлены при допущении плоской поверхности');
   }else if(wheelClearance?.roadSurfaceStatus==='configured-planar-surface-with-bounds'){
    reasons.push('учтена заданная плоскость дороги с указанными границами неопределённости; локальные неровности вне этого диапазона не моделируются');
   }
@@ -1282,10 +1280,8 @@ function wheelClearanceSummaryText(metrics){
   ' сегментах; виртуальный автопроезд заблокирован.':'';
  const surfaceReference=wheelClearance?.roadSurfaceStatus==='road-surface-unverified-horizontal-only'?
   ' Плоскость дороги не откалибрована: вертикальное разделение отключено, все вертикальные препятствия учитываются как горизонтальные 2D-оболочки.':
-  wheelClearance?.roadSurfaceStatus==='flat-reference-assumed'?
-   ' Вертикальные интервалы сопоставлены при допущении плоской поверхности; уклон не откалиброван.':
-   wheelClearance?.roadSurfaceStatus==='configured-planar-surface-with-bounds'?
-    ' Учтена заданная плоскость дороги с границами неопределённости; это не 3D-карта рельефа.':'';
+  wheelClearance?.roadSurfaceStatus==='configured-planar-surface-with-bounds'?
+   ' Учтена заданная плоскость дороги с границами неопределённости; это не 3D-карта рельефа.':'';
  const controlTransitions=wheelClearance?[
   wheelClearance.segmentsWithInitialGearSelection>0?
    ' Исходная передача не измерялась; первое направление рассматривается как выбранное действие планировщика.':'',
