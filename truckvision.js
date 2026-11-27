@@ -1142,7 +1142,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
    const wheelObstacles=routeObstacles.map(obstacle=>({
     name:obstacle.name||'препятствие',polygon:obstacleEnvelopePolygon(obstacle),
     ...(Number.isFinite(obstacle.zMin)&&Number.isFinite(obstacle.zMax)?{
-     zMin:obstacle.zMin,zMax:obstacle.zMax,zUncertainty:obstacle.zUncertainty??0
+     zMin:obstacle.zMin,zMax:obstacle.zMax,zUncertainty:obstacle.zUncertainty
     }: {})
    }));
    wheelClearance=planner.analyzeWheelTrajectoryClearance(path,wheelObstacles,{
