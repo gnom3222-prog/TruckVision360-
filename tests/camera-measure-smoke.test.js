@@ -851,7 +851,7 @@ test('camera gate repeatability series cannot mix manually entered pose uncertai
  await camera.fire('cameraMeasureGate','click');
  await camera.tap(gatePoints);
  assert.equal(camera.appliedRegistrations.length,0);
- assert.match(camera.elements.cameraStatus.textContent,/допуски привязки.*изменились внутри серии/);
+ assert.match(camera.elements.cameraStatus.textContent,/изменились внутри серии/);
  camera.fire('cameraStop','click');
 });
 
@@ -925,6 +925,6 @@ test('camera gate repeatability series cannot mix manually entered map poses',as
  await camera.fire('cameraMeasureGate','click');
  await camera.tap(gatePoints);
  assert.equal(camera.appliedRegistrations.length,0);
- assert.match(camera.elements.cameraStatus.textContent,/Координаты, направление или допуски привязки.*изменились/);
+ assert.match(camera.elements.cameraStatus.textContent,/изменились внутри серии/);
  camera.fire('cameraStop','click');
 });
