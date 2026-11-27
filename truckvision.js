@@ -1927,6 +1927,42 @@ if(result.reason==='uncertainty-sensitive-start'){
    recommendationComparison.status==='preferred'?
    ' Выбран меньший эвристический балл среди '+(result.candidatesFound||1)+' найденных стартовых вариантов из '+(result.candidatesAttempted||1)+'; это ограниченное сравнение, не доказательство глобального оптимума.':
    ' Показано начальное действие найденного маршрута без подтверждённого сравнения альтернатив.';
+  const selectionEvidence=result.recommendationEvidence||null;
+  const describeEvidenceAction=action=>{
+   if(!action)return 'действие не определено';
+   const gear=action.initialGear<0?'назад':'вперёд';
+   const steering=action.steeringWheelDirection??action.firstTurn;
+   const turn=steering==='left'?'руль влево':steering==='right'?'руль вправо':'без значимого поворота руля';
+   const yaw=action.tractorYawDirection==='left'?'курс тягача влево':
+    action.tractorYawDirection==='right'?'курс тягача вправо':'курс тягача не определён';
+   const distance=Number.isFinite(action.firstTurnDistance)?' через '+action.firstTurnDistance.toFixed(2)+' м':'';
+   return gear+', '+turn+distance+'; '+yaw;
+  };
+  const scoreComponentLabels={
+   pathLength:'длина маршрута',
+   gearChangePenalty:'штраф за переключения',
+   articulationPenalty:'штраф за пиковый угол',
+   clearancePenalty:'штраф за малый запас зазора'
+  };
+  const selectionEvidenceText=selectionEvidence?.status==='compared-different-action'?
+   (()=>{
+    const deltas=Object.entries(selectionEvidence.componentDeltas||{}).map(([key,delta])=>{
+     const amount=Math.abs(delta).toFixed(2)+(key==='pathLength'?' м':' балла');
+     return (scoreComponentLabels[key]||key)+': '+(delta>1e-9?
+      'в пользу выбранного варианта на '+amount:
+      delta< -1e-9?'в пользу альтернативы на '+amount:'разницы нет');
+    }).join('; ');
+    return ' Ближайшая найденная альтернатива с другим первым действием ('+
+     describeEvidenceAction(selectionEvidence.alternative.action)+') получила '+
+     selectionEvidence.alternative.cost.toFixed(2)+' условных балла против '+
+     selectionEvidence.selected.cost.toFixed(2)+' у выбранного варианта; разница '+
+     selectionEvidence.scoreDelta.toFixed(2)+' балла. Разложение: '+deltas+
+     '. Это объяснение эвристического балла, а не причинное доказательство или вероятность безопасности.';
+   })():
+   selectionEvidence?.status==='no-different-action-alternative'?
+    ' Среди найденных вариантов нет альтернативы с другим первым действием; преимущество стороны отдельно не сравнивалось.':
+   selectionEvidence?.status==='score-breakdown-unavailable'?
+    ' Найдена альтернатива с другим первым действием, но разложение её эвристического балла недоступно.':'';
   const sensitivity=result.sensitivity||{};
   const sensitivityNote=sensitivity.status==='stable-start-action'?
    ' При повторном поиске с дополнительным резервом '+sensitivity.measurementUncertainty.toFixed(2)+
@@ -1974,7 +2010,7 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
    zeroDistanceAngleText+'; непрерывный максимум между точками не подтверждён';
   $('routeAdvice').textContent=
    'Начало манёвра: '+gearText+'; первое рулевое действие: '+firstTurnText+
-   '. Сторона определяется по первому значимому управляющему углу планировщика (порог 0,08 рад), а не по одному лишь направлению на цель.'+recommendationNote+sensitivityNote+parameterNote+' Маршрут до точки ('+
+   '. Сторона определяется по первому значимому управляющему углу планировщика (порог 0,08 рад), а не по одному лишь направлению на цель.'+recommendationNote+selectionEvidenceText+sensitivityNote+parameterNote+' Маршрут до точки ('+
    gx.toFixed(1)+', '+gy.toFixed(1)+') м; длина '+m.length.toFixed(1)+
    ' м; переключений передачи: '+m.gearChanges+'; изменений руля: '+m.steeringChanges+
    '; задний ход: '+m.reverseDistance.toFixed(1)+' м. Заданный конечный курс '+headingDegrees.toFixed(0)+
@@ -2027,7 +2063,7 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
    level:m.level,
    start:startActionText,
    turn:firstTurnText,
-   reasons:m.reasons.slice(0,4).join('; ')+'. Пиковый угол сочленения '+m.maxBeta.toFixed(1)+'°. '+clearanceText,
+   reasons:m.reasons.slice(0,4).join('; ')+'. Пиковый угол сочленения '+m.maxBeta.toFixed(1)+'°. '+clearanceText+selectionEvidenceText,
    check:confidenceText+' Это учебный расчёт виртуальной модели, не гарантия безопасности.'
   });
   $('difficultyAdvice').textContent=
