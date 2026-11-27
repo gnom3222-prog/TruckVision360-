@@ -169,6 +169,8 @@ test('route assessment preserves vertical intervals while retaining the explicit
  assert.match(app,/const routeObstacles=showObstacles\?sceneObstacles\(\):\[\]/);
  assert.match(app,/Автопроезд заблокирован: сначала включите отображение и проверку препятствий/);
  assert.match(app,/zMin:obstacle\.zMin,zMax:obstacle\.zMax,zUncertainty:obstacle\.zUncertainty\?\?0/);
+ assert.match(app,/road-surface-unverified-horizontal-only/);
+ assert.match(app,/вертикальное разделение отключено/);
 });
 
 
