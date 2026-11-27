@@ -864,6 +864,23 @@ test('camera measurement UI declares positive minimum map-pose uncertainty',()=>
  }
 });
 
+test('camera gate measurement requires positive jamb thickness and depth bounds',async()=>{
+ for(const field of ['gatePostWidthUncertainty','gateDepthUncertainty']){
+  const camera=bootCamera();
+  camera.elements[field].value='0';
+  await camera.fire('cameraStart','click');
+  const referencePoints=[{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}];
+  const gatePoints=[{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}];
+  await camera.fire('cameraCalibrate','click');
+  await camera.tap(referencePoints);
+  await camera.fire('cameraMeasureGate','click');
+  await camera.tap(gatePoints);
+  assert.equal(camera.appliedRegistrations.length,0,field+' must block camera gate registration');
+  assert.match(camera.elements.cameraStatus.textContent,/Допуски толщины косяка должны быть/);
+  camera.fire('cameraStop','click');
+ }
+});
+
 test('camera gate repeatability series cannot mix manually entered jamb dimension bounds',async()=>{
  const camera=bootCamera();
  await camera.fire('cameraStart','click');
