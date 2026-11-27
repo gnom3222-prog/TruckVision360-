@@ -193,6 +193,27 @@ test('route planning is blocked when an enabled lintel has any zero uncertainty 
  }
 });
 
+test('route planning is blocked for physically invalid lintel geometry even with positive bounds',()=>{
+ const {elements}=bootSimulator();
+ elements.gateEnabled.checked=true;
+ elements.gateWidthUncertainty.value='0.08';
+ elements.gatePositionUncertainty.value='0.05';
+ elements.gateHeadingUncertaintyDeg.value='1';
+ elements.gateLintelEnabled.checked=true;
+ elements.gateLintelAlignmentConfirmed.checked=true;
+ elements.gateLintelClearHeight.value='0.4';
+ elements.gateLintelCameraHeightUncertainty.value='0.02';
+ elements.gateLintelFloorUncertainty.value='0.02';
+ elements.gateLintelThickness.value='0.25';
+ elements.gateLintelThicknessUncertainty.value='0.01';
+ elements.gateLintelSpan.value='4.6';
+ elements.gateLintelSpanUncertainty.value='0.1';
+ elements.gateLintelDepth.value='0.45';
+ elements.gateLintelDepthUncertainty.value='0.02';
+ elements.planRoute.onclick();
+ assert.match(elements.routeAdvice.textContent,/gate: Для верхней перемычки нужны измеренные размеры/);
+});
+
 test('automatic route remains blocked when obstacle checks are disabled',()=>{
  const {elements}=bootSimulator();
  elements.obstaclesToggle.onclick();
