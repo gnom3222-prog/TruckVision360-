@@ -657,6 +657,10 @@
    }
   });
   const trailerKingpinToFront=params.trailerKingpinToFront??1.5;
+  if(Number.isFinite(params.trailerLength)&&Number.isFinite(trailerKingpinToFront)&&
+     trailerKingpinToFront>params.trailerLength-0.5){
+   errors.push('trailerKingpinToFront: задний вылет кузова за шкворнем должен оставаться не меньше 0,50 м.');
+  }
   const validAxleEnvelope=Number.isFinite(params.kingpinAxles)&&
    params.kingpinAxles>=VEHICLE_PARAMETER_LIMITS.kingpinAxles.min&&
    params.kingpinAxles<=VEHICLE_PARAMETER_LIMITS.kingpinAxles.max&&
