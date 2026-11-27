@@ -7,8 +7,8 @@ const params={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,
 const integrate=(q,v,steer,dt,p)=>physics.rk4(q,v,steer,dt,p);
 const flatRoadSurface={
  originX:0,originY:0,originZ:0,gradeX:0,gradeY:0,
- originZUncertainty:0.01,gradeXUncertainty:0.001,gradeYUncertainty:0.001,
- surfaceResidualUncertainty:0.01
+ originZUncertainty:0,gradeXUncertainty:0,gradeYUncertainty:0,
+ surfaceResidualUncertainty:0
 };
 test('articulated planner reaches a clear goal in open space',()=>{
  const result=planner.plan({start:{x:0,y:0,psi:0,psiT:0},goal:{x:7,y:0},params,obstacles:[],integrate,maxExpansions:5000});
