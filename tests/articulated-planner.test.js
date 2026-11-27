@@ -268,33 +268,29 @@ test('gate jamb thickness and depth bounds expand the obstacle envelope conserva
  assert.equal(expanded[0].gateUncertainty.depthUncertainty,0.2);
 });
 
-test('gate obstacle uncertainty rejects invalid bounds and a collapsed conservative opening',()=>{
- const base={centerX:0,centerY:0,clearWidth:3,postWidth:0.2,depth:0.6,heading:0,widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,
-  postWidthUncertainty:0.01,
-  depthUncertainty:0.02};
- assert.throws(()=>planner.createGateObstacles({centerX:0,centerY:0,clearWidth:3,postWidth:0.2,depth:0.6,heading:0}),/положительных границ неопределённости/);
- assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
-  postWidthUncertainty:0.01,
-  depthUncertainty:0.02,...base,widthUncertainty:0}));
- assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
-  postWidthUncertainty:0.01,
-  depthUncertainty:0.02,...base,positionUncertainty:0}));
- assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
-  postWidthUncertainty:0.01,
-  depthUncertainty:0.02,...base,headingUncertaintyDeg:0,
-  postWidthUncertainty:0.01,
-  depthUncertainty:0.02}));
- assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
-  postWidthUncertainty:0.01,
-  depthUncertainty:0.02,...base,widthUncertainty:3}));
- assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
-  postWidthUncertainty:0.01,
-  depthUncertainty:0.02,...base,positionUncertainty:-0.01}));
- assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
-  postWidthUncertainty:0.01,
-  depthUncertainty:0.02,...base,headingUncertaintyDeg:46,
-  postWidthUncertainty:0.01,
-  depthUncertainty:0.02}));
+test('gate obstacle uncertainty rejects missing, zero and excessive jamb dimension bounds',()=>{
+ const base={
+  centerX:0,centerY:0,clearWidth:3,postWidth:0.2,depth:0.6,heading:0,
+  widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,
+  postWidthUncertainty:0.01,depthUncertainty:0.02
+ };
+ const {postWidthUncertainty,...withoutPostWidth}=base;
+ const {depthUncertainty,...withoutDepth}=base;
+ assert.throws(()=>planner.createGateObstacles(withoutPostWidth));
+ assert.throws(()=>planner.createGateObstacles(withoutDepth));
+ assert.throws(()=>planner.createGateObstacles({...base,postWidthUncertainty:0}));
+ assert.throws(()=>planner.createGateObstacles({...base,depthUncertainty:0}));
+ assert.throws(()=>planner.createGateObstacles({...base,postWidthUncertainty:0.0005}));
+ assert.throws(()=>planner.createGateObstacles({...base,postWidthUncertainty:1.01}));
+ assert.throws(()=>planner.createGateObstacles({...base,depthUncertainty:2.01}));
+ assert.throws(()=>planner.createGateObstacles({...base,widthUncertainty:0}));
+ assert.throws(()=>planner.createGateObstacles({...base,positionUncertainty:0}));
+ assert.throws(()=>planner.createGateObstacles({...base,headingUncertaintyDeg:0}));
+ assert.throws(()=>planner.createGateObstacles({...base,widthUncertainty:3}));
+ assert.throws(()=>planner.createGateObstacles({...base,positionUncertainty:-0.01}));
+ assert.throws(()=>planner.createGateObstacles({...base,headingUncertaintyDeg:46}));
+ assert.throws(()=>planner.createGateObstacles({...base,postWidth:5.5,postWidthUncertainty:1}));
+ assert.throws(()=>planner.createGateObstacles({...base,depth:10.5,depthUncertainty:2}));
 });
 
 test('gate helper adds an oriented vertical lintel prism with measured dimensions and uncertainty',()=>{
