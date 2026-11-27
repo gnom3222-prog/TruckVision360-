@@ -2593,7 +2593,7 @@ test('ground-supported obstacle height is compared only in a calibrated road dat
 
 test('swept tractor rate uses configurable front overhang, rear overhang, and body width',()=>{
  const base={
-  ...params,tractorFrontOverhang:4.0,tractorRearOverhang:1.2,tractorBodyWidth:2.0,
+  ...params,tractorFrontOverhang:4.3,tractorRearOverhang:1.2,tractorBodyWidth:2.0,
   cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:1.9
  };
  const nominal=planner.sweptDisplacementRatesPerMeter(0.2,base).tractor;
