@@ -591,6 +591,8 @@
 
  function vehicleGeometryCalibrationStatus(params){
   const missingBounds=[];
+  const axleSpacingResolution=params&&typeof params==='object'?
+   resolveTrailerAxleSpacings(params):null;
   const check=(parameterKey,uncertaintyKey,label,active=true)=>{
    if(!active)return;
    const nominal=params&&params[parameterKey];
@@ -611,6 +613,14 @@
    spacing12?'trailerAxleSpacing12Uncertainty':'trailerAxleSpacingUncertainty','шаг осей 1–2');
   check(spacing23?'trailerAxleSpacing23':'trailerAxleSpacing',
    spacing23?'trailerAxleSpacing23Uncertainty':'trailerAxleSpacingUncertainty','шаг осей 2–3');
+  if(axleSpacingResolution&&!axleSpacingResolution.valid&&
+     !missingBounds.some(item=>item.parameter==='trailerAxleSpacing')){
+   missingBounds.push({
+    parameter:'trailerAxleSpacing12/23',
+    uncertainty:'trailerAxleSpacing12Uncertainty/trailerAxleSpacing23Uncertainty',
+    label:axleSpacingResolution.reason
+   });
+  }
   check('tractorSteeringTrack','tractorSteeringTrackUncertainty','колея управляемой оси тягача');
   check('tractorFrontTrack','tractorFrontTrackUncertainty','колея передней оси тягача');
   check('tractorRearTrack','tractorRearTrackUncertainty','колея задней оси тягача');
