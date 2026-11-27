@@ -67,7 +67,7 @@ function makeHarness(options={}){
  const window={TruckVisionCameraGeometry:geometry,TruckVisionApplyGateRegistration(){registrationCalls++;return true;},TruckVisionAddCameraObstacle(){obstacleCalls++;return true;},addEventListener(){}};
  const documentListeners={};
  const document={visibilityState:'visible',getElementById(id){return elements[id]||null;},addEventListener(type,fn){(documentListeners[type]||(documentListeners[type]=[])).push(fn);}};
- const navigator={mediaDevices:{async getUserMedia(){
+ const navigator={mediaDevices:{getSupportedConstraints(){return options.facingModeSupported===false?{}:{facingMode:true};},async getUserMedia(){
   permissionCalls++;
   if(options.getUserMedia)return options.getUserMedia({createStream});
   return createStream();
