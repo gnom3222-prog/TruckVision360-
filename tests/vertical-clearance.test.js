@@ -33,7 +33,7 @@ test('vertical vehicle profiles are optional but strictly validated when supplie
  assert.deepEqual(physics.validateVehicleVerticalProfiles({}),[]);
  assert.deepEqual(physics.validateVehicleVerticalProfiles(allProfiles),[]);
  assert.ok(physics.validateVehicleVerticalProfiles({'unknown-part':{zMin:0,zMax:1}}).length>0);
- assert.ok(physics.validateVehicleVerticalProfiles({'tractor-cab':{zMin:2,zMax:1},uncertaintyMargin:0.02}).length>0);
+ assert.ok(physics.validateVehicleVerticalProfiles({'tractor-cab':{zMin:2,zMax:1,uncertaintyMargin:0.02}}).length>0);
  assert.ok(physics.validateVehicleParams({...params,vehicleVerticalProfiles:allProfiles}).length===0);
 });
 
