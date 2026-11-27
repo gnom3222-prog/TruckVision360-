@@ -1441,11 +1441,12 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
  }
  function articulationExposure(states){
   if(!Array.isArray(states)||states.length===0)throw new Error('Route states are required for articulation exposure.');
-  let distance=0,peak=null,maxSampleSpacing=0,maxAdjacentAngleChangeDegrees=0;
+  let distance=0,peak=null,maxSampleSpacing=0,maxSampleChordSpacing=0,maxAdjacentAngleChangeDegrees=0;
   let maxSampledAngleChangePerMeterDegrees=null;
   let maxSampledAngleChangePerMeterSegmentIndex=null;
   let maxSampledAngleChangePerMeterDistanceAlongRoute=null;
-  let zeroDistanceAngleChangeCount=0,previousSignedAngle=null;
+  let zeroDistanceAngleChangeCount=0,stepDistanceSegmentCount=0,chordFallbackSegmentCount=0;
+  let previousSignedAngle=null;
   for(let i=0;i<states.length;i++){
    const current=states[i];
    if(!current||![current.x,current.y,current.psi,current.psiT].every(Number.isFinite)){
@@ -1454,7 +1455,23 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    let sampleSpacing=0;
    if(i>0){
     const previous=states[i-1];
-    sampleSpacing=Math.hypot(current.x-previous.x,current.y-previous.y);
+    const chordSpacing=Math.hypot(current.x-previous.x,current.y-previous.y);
+    maxSampleChordSpacing=Math.max(maxSampleChordSpacing,chordSpacing);
+    if(current.stepDistance!==undefined){
+     if(!Number.isFinite(current.stepDistance)||current.stepDistance<0){
+      throw new Error('Route state '+i+' has invalid integration stepDistance for articulation exposure.');
+     }
+     if(current.stepDistance+1e-8<chordSpacing){
+      throw new Error('Route state '+i+' moves farther than its integration stepDistance.');
+     }
+     sampleSpacing=current.stepDistance;
+     stepDistanceSegmentCount++;
+    }else{
+     // External routes without the planner's spatial integration distance use
+     // the coordinate chord as a conservative fallback denominator.
+     sampleSpacing=chordSpacing;
+     chordFallbackSegmentCount++;
+    }
     distance+=sampleSpacing;
     maxSampleSpacing=Math.max(maxSampleSpacing,sampleSpacing);
    }
@@ -1493,10 +1510,17 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
     };
    }
   }
+  const distanceSource=stepDistanceSegmentCount&&chordFallbackSegmentCount?
+   'mixed-stepDistance-and-chord-fallback':
+   stepDistanceSegmentCount?'integration-stepDistance':'coordinate-chord-fallback';
   return {
    ...peak,
    sampleCount:states.length,
    maxSampleSpacing,
+   maxSampleChordSpacing,
+   stepDistanceSegmentCount,
+   chordFallbackSegmentCount,
+   distanceSource,
    maxAdjacentAngleChangeDegrees,
    maxSampledAngleChangePerMeterDegrees,
    maxSampledAngleChangePerMeterSegmentIndex,
