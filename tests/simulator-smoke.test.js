@@ -158,6 +158,18 @@ test('camera gate registration rejects zero manual position or heading uncertain
  assert.deepEqual([elements.gateWidth.value,elements.gateWidthUncertainty.value,elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value],before);
 });
 
+test('route planning is blocked when an enabled gate lintel lacks alignment confirmation',()=>{
+ const {elements}=bootSimulator();
+ elements.gateEnabled.checked=true;
+ elements.gateWidthUncertainty.value='0.08';
+ elements.gatePositionUncertainty.value='0.05';
+ elements.gateHeadingUncertaintyDeg.value='1';
+ elements.gateLintelEnabled.checked=true;
+ elements.gateLintelAlignmentConfirmed.checked=false;
+ elements.planRoute.onclick();
+ assert.match(elements.routeAdvice.textContent,/gateLintelAlignmentConfirmed: независимо подтвердите центрирование, параллельность и горизонтальность/);
+});
+
 test('automatic route remains blocked when obstacle checks are disabled',()=>{
  const {elements}=bootSimulator();
  elements.obstaclesToggle.onclick();
