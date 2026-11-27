@@ -2135,7 +2135,7 @@ function draw(){
   .forEach(poly=>drawEnvelopePolygon(poly,'#ffd18b'));
  const trailerKingpinToFront=cfg.trailerKingpinToFront??1.5;
  drawBody(h,state.psiT,trailerKingpinToFront,-(cfg.trailerLength-trailerKingpinToFront),cfg.trailerWidth,'#315b78');
- drawBody(state,state.psi,5,-1.2,2.55,'#087fa5');
+ drawBody(state,state.psi,cfg.tractorFrontOverhang,-cfg.tractorRearOverhang,cfg.tractorBodyWidth,'#087fa5');
  drawBody(localPoint(state,state.psi,cfg.cabOffset),state.psi,cfg.cabFront,-cfg.cabRear,cfg.cabWidth,'#35c8ef');
  drawVehicleDetails();
 
