@@ -1570,6 +1570,19 @@ test('swept displacement bound grows to include configured mirror corners',()=>{
 });
 
 
+test('trailer swept displacement bound follows the measured kingpin-to-front offset',()=>{
+ const base=planner.sweptDisplacementRatesPerMeter(0.25,{
+  ...params,trailerLength:13.6,trailerKingpinToFront:1.5
+ });
+ const longerFront=planner.sweptDisplacementRatesPerMeter(0.25,{
+  ...params,trailerLength:13.6,trailerKingpinToFront:2.5
+ });
+ assert.ok(longerFront.trailer>base.trailer,
+  'a longer measured front overhang must enlarge the trailer swept envelope');
+ assert.equal(longerFront.tractor,base.tractor);
+ assert.equal(longerFront.cab,base.cab);
+});
+
 test('trailer swept displacement bound includes the outboard tire track',()=>{
  const narrow=planner.sweptDisplacementRatesPerMeter(0.25,{
   ...params,trailerTrack:2.0,tireWidth:0.3
