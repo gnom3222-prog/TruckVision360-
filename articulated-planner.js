@@ -359,9 +359,13 @@
    else if(hasZMin&&(!Number.isFinite(o.zMin)||!Number.isFinite(o.zMax)||o.zMin< -2||o.zMax>30||o.zMax<=o.zMin)){
     errors.push('Препятствие '+(index+1)+': zMin/zMax должны задавать конечный интервал от −2 до 30 м.');
    }
-   const zUncertainty=o.zUncertainty??0;
-   if(!Number.isFinite(zUncertainty)||zUncertainty<0||zUncertainty>2)errors.push('Препятствие '+(index+1)+': zUncertainty должен находиться в диапазоне 0–2 м.');
-   if(!hasZMin&&zUncertainty>0)errors.push('Препятствие '+(index+1)+': zUncertainty можно задавать только вместе с zMin/zMax.');
+   const hasZUncertainty=o.zUncertainty!==undefined;
+   if(hasZMin&&(!Number.isFinite(o.zUncertainty)||o.zUncertainty<0.001||o.zUncertainty>2)){
+    errors.push('Препятствие '+(index+1)+': для вертикального интервала требуется явно заданная положительная zUncertainty от 0,001 до 2 м; отсутствие или ноль не считаются точным измерением.');
+   }else if(hasZUncertainty&&(!Number.isFinite(o.zUncertainty)||o.zUncertainty<0||o.zUncertainty>2)){
+    errors.push('Препятствие '+(index+1)+': zUncertainty должна находиться в диапазоне 0–2 м.');
+   }
+   if(!hasZMin&&hasZUncertainty&&Number.isFinite(o.zUncertainty)&&o.zUncertainty>0)errors.push('Препятствие '+(index+1)+': zUncertainty можно задавать только вместе с zMin/zMax.');
   });
   return errors;
  }
@@ -427,7 +431,7 @@
   const obstacleErrors=validateObstacles(obstacles);
   if(obstacleErrors.length)throw new Error('Некорректные препятствия: '+obstacleErrors.join(' '));
   const prepared=obstacles.map(o=>{
-   const poly=obstaclePoly(o),zUncertainty=o.zUncertainty??0;
+   const poly=obstaclePoly(o),zUncertainty=o.zUncertainty;
    const baseVerticalRange=Number.isFinite(o.zMin)&&Number.isFinite(o.zMax)?
     {min:o.zMin-zUncertainty,max:o.zMax+zUncertainty}:null;
    const hasVerticalDefinition=!!baseVerticalRange;
@@ -767,7 +771,7 @@
   const obstacleErrors=validateObstacles(obstacles);
   if(obstacleErrors.length)throw new Error('Invalid obstacles for per-wheel clearance analysis: '+obstacleErrors.join(' '));
   const prepared=obstacles.map(obstacle=>{
-   const poly=obstaclePoly(obstacle),zUncertainty=obstacle.zUncertainty??0;
+   const poly=obstaclePoly(obstacle),zUncertainty=obstacle.zUncertainty;
    const baseVerticalRange=Number.isFinite(obstacle.zMin)&&Number.isFinite(obstacle.zMax)?
     {min:obstacle.zMin-zUncertainty,max:obstacle.zMax+zUncertainty}:null;
    const hasVerticalDefinition=!!baseVerticalRange;
