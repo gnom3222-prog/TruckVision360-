@@ -3047,3 +3047,16 @@ test('start-action evidence rejects an inconsistent score decomposition',()=>{
  assert.equal(result.ok,false);
  assert.equal(result.reason,'score-breakdown-mismatch');
 });
+
+
+test('start-action evidence rejects score components that share an unreported common offset',()=>{
+ const candidates=[
+  {label:'forward left',cost:5,initialGear:1,firstTurn:'left',firstTurnGear:1,tractorYawDirection:'left',firstTurnDistance:1,
+   scoreComponents:{pathLength:3,gearChangePenalty:0,articulationPenalty:0.5,clearancePenalty:0.5}},
+  {label:'reverse right',cost:6,initialGear:-1,firstTurn:'right',firstTurnGear:-1,tractorYawDirection:'left',firstTurnDistance:1,
+   scoreComponents:{pathLength:4,gearChangePenalty:0,articulationPenalty:0.5,clearancePenalty:0.5}}
+ ];
+ const result=planner.explainStartActionComparison(candidates,0);
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'score-breakdown-mismatch');
+});
