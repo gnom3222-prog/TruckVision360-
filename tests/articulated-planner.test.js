@@ -276,6 +276,14 @@ test('gate helper adds an oriented vertical lintel prism with measured dimension
 test('gate helper rejects incomplete or physically inconsistent lintel measurements',()=>{
  const base={centerX:0,centerY:0,clearWidth:4,postWidth:0.2,depth:0.6,heading:0};
  assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,...base,lintel:{clearHeight:3.8}}),/верхней перемычки/);
+ const validLintel={
+  clearHeight:3.8,clearHeightUncertainty:0.03,floorDatumUncertainty:0.02,
+  thickness:0.2,thicknessUncertainty:0.01,span:4.4,spanUncertainty:0.1,
+  depth:0.4,depthUncertainty:0.01
+ };
+ for(const field of ['clearHeightUncertainty','floorDatumUncertainty','thicknessUncertainty','spanUncertainty','depthUncertainty']){
+  assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,...base,lintel:{...validLintel,[field]:0}}),/верхней перемычки/);
+ }
  assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,...base,lintel:{
   clearHeight:3.8,clearHeightUncertainty:0,floorDatumUncertainty:0,
   thickness:0.2,thicknessUncertainty:0,span:4.4,spanUncertainty:0.1,depth:0.4,depthUncertainty:0
