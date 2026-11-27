@@ -1214,7 +1214,7 @@ test('vehicle geometry calibration status treats zero uncertainty as unbounded, 
  assert.equal(status.measurementProvenanceVerified,false);
  assert.ok(status.missingBounds.some(item=>item.parameter==='wheelbase'));
  assert.ok(status.missingBounds.some(item=>item.parameter==='hitchOffset'));
- assert.ok(status.missingBounds.some(item=>item.parameter==='trailerAxleSpacing'));
+ assert.ok(status.missingBounds.some(item=>item.uncertainty==='trailerAxleSpacingUncertainty'));
  assert.ok(status.missingBounds.some(item=>item.parameter==='trailerTrack'));
 });
 
