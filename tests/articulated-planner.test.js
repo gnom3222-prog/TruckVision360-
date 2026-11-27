@@ -2924,3 +2924,26 @@ test('measured auxiliary envelope participates in obstacle clearance and its unc
  assert.equal(large.component,'measured side step');
  assert.equal(large.obstacle,'post beside measured side step');
 });
+
+
+test('articulated planner rejects an initial collision with a measured auxiliary envelope',()=>{
+ const envelope={
+  name:'measured side step',
+  anchor:'tractor-rear-axle',
+  longitudinalOffset:2.0,lateralOffset:2.0,
+  length:1.2,width:0.8,headingOffsetDeg:0,
+  uncertaintyMargin:0.1
+ };
+ const result=planner.plan({
+  start:{x:0,y:0,psi:0,psiT:0},
+  goal:{x:8,y:0},
+  params:{...params,auxiliaryEnvelopes:[envelope]},
+  obstacles:[{x:2.0,y:2.0,w:0.2,h:0.2,name:'side-step collision post'}],
+  integrate,
+  maxExpansions:1000
+ });
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'start-collision');
+ assert.equal(result.minimumClearanceDetail.component,'measured side step');
+ assert.equal(result.minimumClearanceDetail.obstacle,'side-step collision post');
+});
