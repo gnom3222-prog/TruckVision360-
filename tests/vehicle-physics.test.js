@@ -93,6 +93,31 @@ test('vehicle geometry validation accepts the documented Volvo and trailer basel
  assert.deepEqual(errors,[]);
 });
 
+test('vehicle geometry accepts two independent trailer axle spacings without a common fallback',()=>{
+ const independent={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,
+  trailerAxleSpacing12:0.8,trailerAxleSpacing23:1.6
+ };
+ assert.deepEqual(physics.validateVehicleParams(independent),[]);
+
+ const missingOne={...independent};
+ delete missingOne.trailerAxleSpacing23;
+ assert.ok(physics.validateVehicleParams(missingOne).some(message=>
+  message.startsWith('trailerAxleSpacing:')
+ ));
+
+ const zeroOne={...independent,trailerAxleSpacing23:0};
+ assert.ok(physics.validateVehicleParams(zeroOne).some(message=>
+  message.startsWith('trailerAxleSpacing:')
+ ));
+
+ const invalidExplicitFallback={...independent,trailerAxleSpacing:0};
+ assert.ok(physics.validateVehicleParams(invalidExplicitFallback).some(message=>
+  message.startsWith('trailerAxleSpacing:')
+ ));
+});
+
 test('vehicle geometry validation rejects missing, non-finite and implausible dimensions',()=>{
  assert.ok(physics.validateVehicleParams(null).length>0);
  const errors=physics.validateVehicleParams({
