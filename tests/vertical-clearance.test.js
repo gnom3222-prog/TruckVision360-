@@ -14,8 +14,8 @@ const params={
 };
 const flatRoadSurface={
  originX:0,originY:0,originZ:0,gradeX:0,gradeY:0,
- originZUncertainty:0,gradeXUncertainty:0,gradeYUncertainty:0,
- surfaceResidualUncertainty:0
+ originZUncertainty:0.001,gradeXUncertainty:0.0001,gradeYUncertainty:0.0001,
+ surfaceResidualUncertainty:0.001
 };
 const pose={x:0,y:0,psi:0,psiT:0};
 const allProfiles={
@@ -33,8 +33,30 @@ test('vertical vehicle profiles are optional but strictly validated when supplie
  assert.deepEqual(physics.validateVehicleVerticalProfiles({}),[]);
  assert.deepEqual(physics.validateVehicleVerticalProfiles(allProfiles),[]);
  assert.ok(physics.validateVehicleVerticalProfiles({'unknown-part':{zMin:0,zMax:1}}).length>0);
- assert.ok(physics.validateVehicleVerticalProfiles({'tractor-cab':{zMin:2,zMax:1}}).length>0);
+ assert.ok(physics.validateVehicleVerticalProfiles({'tractor-cab':{zMin:2,zMax:1},uncertaintyMargin:0.02}).length>0);
  assert.ok(physics.validateVehicleParams({...params,vehicleVerticalProfiles:allProfiles}).length===0);
+});
+
+
+test('vehicle vertical profiles require an explicit positive uncertainty margin',()=>{
+ const missing={'tractor-cab':{zMin:0.3,zMax:3.5}};
+ assert.ok(physics.validateVehicleVerticalProfiles(missing).some(error=>error.includes('uncertaintyMargin')));
+ assert.ok(physics.validateVehicleVerticalProfiles({'tractor-cab':{zMin:0.3,zMax:3.5,uncertaintyMargin:0}}).length>0);
+ assert.ok(physics.validateVehicleVerticalProfiles({'tractor-cab':{zMin:0.3,zMax:3.5,uncertaintyMargin:0.0005}}).length>0);
+ assert.deepEqual(physics.validateVehicleVerticalProfiles({'tractor-cab':{zMin:0.3,zMax:3.5,uncertaintyMargin:0.001}}),[]);
+ const p={...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:missing};
+ const cab=physics.vehicleCollisionParts(pose,p,0,true).find(part=>part.vehiclePart==='кабина');
+ assert.ok(cab);
+ assert.equal(cab.components.find(component=>component.name==='кабина').verticalRange,null);
+ const result=planner.clearance(pose,[overheadAtCab],p);
+ assert.equal(result.verticalStatus,'vehicle-height-unverified');
+});
+
+test('auxiliary vertical envelopes require an explicit positive vertical uncertainty',()=>{
+ const base={name:'Measured bracket',anchor:'tractor-front-axle',length:0.4,width:0.2,zMin:1,zMax:1.5};
+ assert.ok(physics.validateVehicleParams({...params,auxiliaryEnvelopes:[base]}).some(error=>error.includes('verticalUncertaintyMargin')));
+ assert.ok(physics.validateVehicleParams({...params,auxiliaryEnvelopes:[{...base,verticalUncertaintyMargin:0}]}).some(error=>error.includes('verticalUncertaintyMargin')));
+ assert.deepEqual(physics.validateVehicleParams({...params,auxiliaryEnvelopes:[{...base,verticalUncertaintyMargin:0.001}]}),[]);
 });
 
 test('vertical obstacle validation requires a complete height interval and explicit positive uncertainty',()=>{
@@ -122,8 +144,8 @@ test('route clearance reports unverified vertical component profiles',()=>{
 
 test('measured wheel height is checked even when the wheel footprint lies inside the 2D body outline',()=>{
  const profiles={...allProfiles,
-  'tractor-body':{zMin:0.5,zMax:3.0},
-  'tractor-cab':{zMin:0.5,zMax:3.5}
+  'tractor-body':{zMin:0.5,zMax:3.0,uncertaintyMargin:0.02},
+  'tractor-cab':{zMin:0.5,zMax:3.5,uncertaintyMargin:0.02}
  };
  const p={...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:profiles};
  const wheel=physics.wheelFootprints(pose,p,0)[0];
@@ -138,11 +160,11 @@ test('measured wheel height is checked even when the wheel footprint lies inside
 
 test('measured auxiliary height remains a separate component even inside the body footprint',()=>{
  const p={...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:{
-  ...allProfiles,'trailer-body':{zMin:1.0,zMax:3.0}
+  ...allProfiles,'trailer-body':{zMin:1.0,zMax:3.0,uncertaintyMargin:0.02}
  },auxiliaryEnvelopes:[{
   name:'Верхний кронштейн внутри контура',anchor:'trailer-axle-1',
   longitudinalOffset:0,lateralOffset:0,length:0.4,width:0.4,
-  zMin:3.4,zMax:3.8,verticalUncertaintyMargin:0
+  zMin:3.4,zMax:3.8,verticalUncertaintyMargin:0.02
  }]};
  const envelope=physics.auxiliaryEnvelopePolygons(pose,p)[0];
  const center=envelope.polygon.reduce((sum,point)=>({x:sum.x+point.x/4,y:sum.y+point.y/4}),{x:0,y:0});
@@ -157,8 +179,8 @@ test('measured auxiliary height remains a separate component even inside the bod
 
 test('unknown internal wheel height cannot be hidden by a measured body height profile',()=>{
  const p={...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:{
-  'tractor-body':{zMin:0.5,zMax:3.0},
-  'tractor-cab':{zMin:0.5,zMax:3.5}
+  'tractor-body':{zMin:0.5,zMax:3.0,uncertaintyMargin:0.02},
+  'tractor-cab':{zMin:0.5,zMax:3.5,uncertaintyMargin:0.02}
  }};
  const wheel=physics.wheelFootprints(pose,p,0)[0];
  const obstacle={name:'Низкая балка у колеса без профиля',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:0.1,zMax:0.2,zUncertainty:0.01};
@@ -192,8 +214,8 @@ test('measured mirror height is propagated as its own cab collision component',(
 
 test('unknown mirror height is not inferred from the cab height profile',()=>{
  const p={...params,roadSurface:flatRoadSurface,mirrorOutboard:0.45,vehicleVerticalProfiles:{
-  'tractor-body':{zMin:0.2,zMax:3.0},
-  'tractor-cab':{zMin:0.3,zMax:3.5}
+  'tractor-body':{zMin:0.2,zMax:3.0,uncertaintyMargin:0.02},
+  'tractor-cab':{zMin:0.3,zMax:3.5,uncertaintyMargin:0.02}
  }};
  const parts=physics.vehicleCollisionParts(pose,p,0,true);
  const cab=parts.find(part=>part.vehiclePart==='кабина');
@@ -227,7 +249,7 @@ test('individual trailer axle vertical profiles override the shared trailer-whee
 
 test('tractor front and rear wheel height profiles can be calibrated independently',()=>{
  const p={...params,vehicleVerticalProfiles:{
-  'tractor-wheel':{zMin:0,zMax:1.1},
+  'tractor-wheel':{zMin:0,zMax:1.1,uncertaintyMargin:0.02},
   'tractor-front-wheel':{zMin:0.1,zMax:0.9,uncertaintyMargin:0.02},
   'tractor-rear-wheel':{zMin:0.3,zMax:1.2,uncertaintyMargin:0.04}
  }};
@@ -240,8 +262,8 @@ test('tractor front and rear wheel height profiles can be calibrated independent
 
 test('per-wheel vertical clearance uses the selected axle-specific profile',()=>{
  const p={...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:{
-  'trailer-wheel':{zMin:0,zMax:1.1},
-  'trailer-axle-1-wheel':{zMin:1.4,zMax:1.9}
+  'trailer-wheel':{zMin:0,zMax:1.1,uncertaintyMargin:0.02},
+  'trailer-axle-1-wheel':{zMin:1.4,zMax:1.9,uncertaintyMargin:0.02}
  }};
  const wheel=physics.wheelFootprints(pose,p,0).find(w=>w.vehiclePart==='полуприцеп'&&w.axleIndex===1&&w.side==='left');
  const obstacle={name:'Балка на высоте первой оси',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:1.5,zMax:1.6,zUncertainty:0.01};
