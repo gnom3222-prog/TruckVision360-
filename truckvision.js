@@ -26,6 +26,9 @@ const cfg={
  cabFront:1.35,
  cabRear:0.9,
  cabWidth:2.25,
+ tractorFrontOverhang:5.0,
+ tractorRearOverhang:1.2,
+ tractorBodyWidth:2.55,
  mirrorOutboard:0,
  mirrorLongitudinal:3.0,
  mirrorLength:0.8,
@@ -112,6 +115,9 @@ const cfg={
  cabFrontUncertainty:0,
  cabRearUncertainty:0,
  cabWidthUncertainty:0,
+ tractorFrontOverhangUncertainty:0,
+ tractorRearOverhangUncertainty:0,
+ tractorBodyWidthUncertainty:0,
  mirrorOutboardUncertainty:0,
  mirrorLongitudinalUncertainty:0,
  mirrorLengthUncertainty:0
@@ -281,6 +287,9 @@ function readSettings(){
   trailerAxle3TireCenterSpacing:[0,1.5],
   tireLength:[0.2,1.5],
   tireWidth:[0.1,0.8],
+  tractorFrontOverhang:[1,10],
+  tractorRearOverhang:[0.2,5],
+  tractorBodyWidth:[1.8,3.2],
   gateWidth:[1,20],
   gateCenterX:[-100,100],
   gateCenterY:[-100,100],
@@ -335,6 +344,9 @@ function readSettings(){
   cabFrontUncertainty:[0,1],
   cabRearUncertainty:[0,1],
   cabWidthUncertainty:[0,0.5],
+  tractorFrontOverhangUncertainty:[0,2],
+  tractorRearOverhangUncertainty:[0,1.5],
+  tractorBodyWidthUncertainty:[0,1],
   mirrorOutboardUncertainty:[0,0.5],
   mirrorLongitudinalUncertainty:[0,1],
   mirrorLengthUncertainty:[0,0.5]
@@ -413,6 +425,9 @@ function readSettings(){
   cabFrontUncertainty:'cabFront',
   cabRearUncertainty:'cabRear',
   cabWidthUncertainty:'cabWidth',
+  tractorFrontOverhangUncertainty:'tractorFrontOverhang',
+  tractorRearOverhangUncertainty:'tractorRearOverhang',
+  tractorBodyWidthUncertainty:'tractorBodyWidth',
   mirrorOutboardUncertainty:'mirrorOutboard',
   mirrorLongitudinalUncertainty:'mirrorLongitudinal',
   mirrorLengthUncertainty:'mirrorLength'
@@ -1422,7 +1437,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261127-3');
+   worker=new Worker('./planner-worker.js?v=20261127-5');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
@@ -2120,7 +2135,7 @@ function draw(){
   .forEach(poly=>drawEnvelopePolygon(poly,'#ffd18b'));
  const trailerKingpinToFront=cfg.trailerKingpinToFront??1.5;
  drawBody(h,state.psiT,trailerKingpinToFront,-(cfg.trailerLength-trailerKingpinToFront),cfg.trailerWidth,'#315b78');
- drawBody(state,state.psi,5,-1.2,2.55,'#087fa5');
+ drawBody(state,state.psi,cfg.tractorFrontOverhang,-cfg.tractorRearOverhang,cfg.tractorBodyWidth,'#087fa5');
  drawBody(localPoint(state,state.psi,cfg.cabOffset),state.psi,cfg.cabFront,-cfg.cabRear,cfg.cabWidth,'#35c8ef');
  drawVehicleDetails();
 

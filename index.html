@@ -344,6 +344,13 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <div><label for="vehicleFootprintUncertainty">Расширение каждой грани автопоезда, м</label><input id="vehicleFootprintUncertainty" type="number" min="0" max="0.5" value="0.03" step="0.01"></div>
 </div>
 <p class="small">Это отдельные пользовательские границы, не оценка 1σ камеры: положение каждого прямоугольного препятствия расширяется по X/Y на заданную величину, его полный размер — на заданную погрешность, а все три прямоугольных контура автопоезда расширяются наружу с каждой грани. Планировщик ищет путь в этой геометрической оболочке и сравнивает начальное действие с номинальным поиском. Погрешности кинематических размеров задаются отдельно в следующем разделе; проверяются крайние значения по одному параметру за раз, а не все совместные комбинации.</p>
+<div class="section">Внешний контур Volvo FH · калибровка</div>
+<div class="grid">
+<div><label for="tractorFrontOverhang">От задней оси до передней грани общего контура, м</label><input id="tractorFrontOverhang" type="number" min="1" max="10" value="5.00" step="0.01"></div>
+<div><label for="tractorRearOverhang">От задней оси до задней грани общего контура, м</label><input id="tractorRearOverhang" type="number" min="0.2" max="5" value="1.20" step="0.01"></div>
+<div><label for="tractorBodyWidth">Ширина общего контура тягача без зеркал, м</label><input id="tractorBodyWidth" type="number" min="1.8" max="3.2" value="2.55" step="0.01"></div>
+</div>
+<p class="small camera-warning">Измерьте продольные вылеты от центра задней оси до крайних передней и задней граней основного контура тягача; ширину — между крайними боковыми гранями корпуса. Это отдельная прямоугольная оболочка, не включает зеркала и шины, которые проверяются отдельными компонентами. Значения 5,00 / 1,20 / 2,55 м сохранены только для совместимости со старой демонстрационной геометрией; это не заводские размеры Volvo FH. Введите размеры конкретного тягача и задайте положительные границы неопределённости ниже.</p>
 <div class="section">Геометрия кабины и зеркал · калибровка</div>
 <div class="grid">
 <div><label for="cabOffset">Центр кабины от задней оси, м</label><input id="cabOffset" type="number" min="0" max="6" value="2.10" step="0.01"></div>
@@ -427,6 +434,9 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <div><label for="trailerAxle1TireCenterSpacingUncertainty">Расстояние между центрами сдвоенных шин 1-й оси ±, м</label><input id="trailerAxle1TireCenterSpacingUncertainty" type="number" min="0" max="0.5" value="0" step="0.01"></div>
 <div><label for="trailerAxle2TireCenterSpacingUncertainty">Расстояние между центрами сдвоенных шин 2-й оси ±, м</label><input id="trailerAxle2TireCenterSpacingUncertainty" type="number" min="0" max="0.5" value="0" step="0.01"></div>
 <div><label for="trailerAxle3TireCenterSpacingUncertainty">Расстояние между центрами сдвоенных шин 3-й оси ±, м</label><input id="trailerAxle3TireCenterSpacingUncertainty" type="number" min="0" max="0.5" value="0" step="0.01"></div>
+<div><label for="tractorFrontOverhangUncertainty">Передний вылет общего контура тягача ±, м</label><input id="tractorFrontOverhangUncertainty" type="number" min="0" max="2" value="0" step="0.01"></div>
+<div><label for="tractorRearOverhangUncertainty">Задний вылет общего контура тягача ±, м</label><input id="tractorRearOverhangUncertainty" type="number" min="0" max="1.5" value="0" step="0.01"></div>
+<div><label for="tractorBodyWidthUncertainty">Ширина общего контура тягача ±, м</label><input id="tractorBodyWidthUncertainty" type="number" min="0" max="1" value="0" step="0.01"></div>
 <div><label for="cabOffsetUncertainty">Положение центра кабины от задней оси ±, м</label><input id="cabOffsetUncertainty" type="number" min="0" max="2" value="0" step="0.01"></div>
 <div><label for="cabFrontUncertainty">Передний вылет кабины ±, м</label><input id="cabFrontUncertainty" type="number" min="0" max="1" value="0" step="0.01"></div>
 <div><label for="cabRearUncertainty">Задний вылет кабины ±, м</label><input id="cabRearUncertainty" type="number" min="0" max="1" value="0" step="0.01"></div>
@@ -535,10 +545,10 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 </section>
 </main>
 
-<script src="vehicle-physics.js?v=20261127-6"></script>
-<script src="articulated-planner.js?v=20261127-3"></script>
+<script src="vehicle-physics.js?v=20261127-7"></script>
+<script src="articulated-planner.js?v=20261127-4"></script>
 <script src="sensor-perception.js?v=20261126-2"></script>
-<script src="truckvision.js?v=20261127-7"></script>
+<script src="truckvision.js?v=20261127-9"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261126-5"></script>
 <script src="camera-measure.js?v=20261126-10"></script>
