@@ -2006,7 +2006,7 @@ test('clearance checker forwards steering to protruding front tire collision geo
 test('clearance checker applies the requested Ackermann wheel angle before measuring a protruding front tire',()=>{
  const p={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
-  trailerLength:13.6,trailerWidth:2.55,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
   tractorFrontTrack:2.4,tractorSteeringTrack:2.4,tractorRearTrack:2.05,
   trailerTrack:2.5,tireLength:1.2,tireWidth:0.8
  };

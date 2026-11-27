@@ -28,7 +28,7 @@ test('planner worker reports ambiguous reverse starts instead of choosing one ar
   options:{
    start:{x:0,y:0,psi:0,psiT:0},
    goal:{x:-3,y:0},
-   params:{wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55},
+   params:{wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3},
    obstacles:[],
    maxExpansions:5000,
    minClearance:0.3,

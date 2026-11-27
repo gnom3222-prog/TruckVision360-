@@ -93,6 +93,33 @@ test('vehicle geometry validation accepts the documented Volvo and trailer basel
  assert.deepEqual(errors,[]);
 });
 
+test('vehicle geometry accepts two independent trailer axle spacings without a common fallback',()=>{
+ const independent={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,
+  trailerAxleSpacing12:0.8,trailerAxleSpacing23:1.6
+ };
+ assert.deepEqual(physics.validateVehicleParams(independent),[]);
+
+ const missingOne={...independent};
+ delete missingOne.trailerAxleSpacing23;
+ assert.ok(physics.validateVehicleParams(missingOne).some(message=>
+  message.startsWith('trailerAxleSpacing:')
+ ));
+ const fallbackProvided={...missingOne,trailerAxleSpacing:1.3};
+ assert.deepEqual(physics.validateVehicleParams(fallbackProvided),[]);
+
+ const zeroOne={...independent,trailerAxleSpacing23:0};
+ assert.ok(physics.validateVehicleParams(zeroOne).some(message=>
+  message.startsWith('trailerAxleSpacing:')
+ ));
+
+ const invalidExplicitFallback={...independent,trailerAxleSpacing:0};
+ assert.ok(physics.validateVehicleParams(invalidExplicitFallback).some(message=>
+  message.startsWith('trailerAxleSpacing:')
+ ));
+});
+
 test('vehicle geometry validation rejects missing, non-finite and implausible dimensions',()=>{
  assert.ok(physics.validateVehicleParams(null).length>0);
  const errors=physics.validateVehicleParams({
@@ -426,7 +453,7 @@ test('mirror collision geometry is explicitly disabled when no outward projectio
 test('vehicle geometry rejects a cab outside the tractor envelope and bounds mirrors by the outer tractor envelope',()=>{
  const base={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
-  trailerLength:13.6,trailerWidth:2.55
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3
  };
  const cabErrors=physics.validateVehicleParams({...base,cabOffset:4.8,cabFront:1.35,cabRear:0.9,cabWidth:2.25});
  assert.ok(cabErrors.some(message=>message.includes('Геометрия кабины выходит за пределы')));
@@ -774,7 +801,7 @@ test('trailer wheel trajectory diagnostics marks gear changes without hiding sam
 test('collision components use the calibrated steering angle for protruding front tires',()=>{
  const p={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
-  trailerLength:13.6,trailerWidth:2.55,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
   tractorFrontTrack:2.4,tractorRearTrack:2.05,trailerTrack:2.5,
   tireLength:1.2,tireWidth:0.8
  };
@@ -869,7 +896,7 @@ test('independent adjacent axle spacings preserve the middle axle reference',()=
 test('per-axle track overrides are used by each left and right wheel-group footprint',()=>{
  const p={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
-  trailerLength:13.6,trailerWidth:2.7,
+  trailerLength:13.6,trailerWidth:2.7,trailerAxleSpacing:1.3,
   trailerTrack:2.79,trailerAxle1Track:2.7,trailerAxle2Track:2.8,trailerAxle3Track:2.9,
   trailerAxle1TireGroupWidth:0.62,trailerAxle2TireGroupWidth:0.68,trailerAxle3TireGroupWidth:0.72
  };
@@ -889,7 +916,7 @@ test('per-axle track overrides are used by each left and right wheel-group footp
 test('wheel trajectory diagnostics use the configured track of each axle independently',()=>{
  const p={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
-  trailerLength:13.6,trailerWidth:2.55,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
   trailerTrack:2.79,trailerAxle1Track:2.7,trailerAxle2Track:2.8,trailerAxle3Track:2.9
  };
  const result=physics.trailerWheelTrajectoryDiagnostics([
@@ -1346,7 +1373,7 @@ test('tractor outer envelope uses configurable measured front, rear, and width d
 test('cab and mirror packaging validation follows the configured tractor outer envelope',()=>{
  const base={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
-  trailerLength:13.6,trailerWidth:2.55,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
   tractorFrontOverhang:6.0,tractorRearOverhang:1.5,tractorBodyWidth:2.8,
   cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25
  };
