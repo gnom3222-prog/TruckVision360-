@@ -2947,3 +2947,35 @@ test('articulated planner rejects an initial collision with a measured auxiliary
  assert.equal(result.minimumClearanceDetail.component,'measured side step');
  assert.equal(result.minimumClearanceDetail.obstacle,'side-step collision post');
 });
+
+
+test('trajectory clearance tracks an auxiliary envelope through a swept segment lower bound',()=>{
+ const envelope={
+  name:'measured side step',
+  anchor:'tractor-rear-axle',
+  longitudinalOffset:2.0,lateralOffset:2.0,
+  length:1.2,width:0.8,headingOffsetDeg:0,
+  uncertaintyMargin:0.01
+ };
+ const vehicle={...params,auxiliaryEnvelopes:[envelope]};
+ const obstacle=[{x:2.72,y:2.0,w:0.1,h:0.1,name:'post along side-step path'}];
+ const states=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
+  {x:0.1,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0.1}
+ ];
+ const startClearance=planner.clearance(states[0],obstacle,vehicle);
+ assert.ok(startClearance.distance>0,
+  'the first sampled pose should be clear of the post');
+ assert.equal(startClearance.component,'measured side step');
+ const analysis=planner.analyzeTrajectoryClearance(states,obstacle,vehicle);
+ const tractor=analysis.parts.find(part=>part.vehiclePart==='тягач');
+ assert.ok(tractor);
+ assert.ok(tractor.minimumSampledClearance<=0,
+  'the later sampled pose should detect contact with the measured side step');
+ assert.equal(tractor.minimumSampledDetail.component,'measured side step');
+ assert.ok(tractor.minimumClearanceLowerBound<=0,
+  'the swept segment lower bound must include the auxiliary component');
+ assert.equal(tractor.limitingDetail.kind,'segment-lower-bound');
+ assert.equal(tractor.limitingDetail.componentAtReference,'measured side step');
+ assert.equal(tractor.limitingDetail.obstacleAtReference,'post along side-step path');
+});
