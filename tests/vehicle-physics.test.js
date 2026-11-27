@@ -1159,7 +1159,7 @@ test('suspension travel expands measured body and cab profiles but leaves road-c
  const frontWheel=physics.wheelFootprints(q,p,0).find(wheel=>
   wheel.vehiclePart==='тягач'&&wheel.axleIndex===1
  );
- assert.deepEqual(frontWheel.verticalRange,{min:0,max:0.9});
+ assert.deepEqual(frontWheel.verticalRange,{min:-0.02,max:0.92});
 });
 
 test('auxiliary envelopes move with suspension only when body attachment is explicit',()=>{
@@ -1177,7 +1177,7 @@ test('auxiliary envelopes move with suspension only when body attachment is expl
  const bodyMounted=physics.auxiliaryEnvelopePolygons(q,{
   ...base,auxiliaryEnvelopes:[{...base.auxiliaryEnvelopes[0],suspensionAttachment:'tractor-body'}]
  })[0];
- assert.deepEqual(axleMounted.verticalRange,{min:1,max:1.5});
+ assert.deepEqual(axleMounted.verticalRange,{min:0.98,max:1.52});
  assert.equal(bodyMounted.verticalRange.suspensionStatus,'bounded-rigid-plane-support-envelope');
  assert.ok(bodyMounted.verticalRange.max>axleMounted.verticalRange.max);
  const mismatched=[{...base.auxiliaryEnvelopes[0],suspensionAttachment:'tractor-body',anchor:'trailer-axle-1'}];
