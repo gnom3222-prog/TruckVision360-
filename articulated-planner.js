@@ -2074,17 +2074,26 @@ function planAlternativesWithGeometryUncertainty(options={}){
    obstaclesForNominal=[...nominalStaticObstacles,...nominalGatePosts];
    obstaclesForEnvelope=[...boundedStaticObstacles,...boundedGatePosts];
    const widthUncertainty=gateGeometry.widthUncertainty??0;
+   const postWidthUncertainty=gateGeometry.postWidthUncertainty??0;
+   const depthUncertainty=gateGeometry.depthUncertainty??0;
    const positionUncertainty=gateGeometry.positionUncertainty??0;
    const headingUncertaintyDeg=gateGeometry.headingUncertaintyDeg??0;
-   gateBoundsActive=widthUncertainty>0||positionUncertainty>0||headingUncertaintyDeg>0;
+   gateBoundsActive=widthUncertainty>0||postWidthUncertainty>0||depthUncertainty>0||
+    positionUncertainty>0||headingUncertaintyDeg>0;
    gateGeometryUncertainty={
     enabled:true,
     nominalClearWidth:gateGeometry.clearWidth,
     conservativeClearWidth:gateGeometry.clearWidth-widthUncertainty,
     widthUncertainty,
+    nominalPostWidth:gateGeometry.postWidth,
+    conservativePostWidth:gateGeometry.postWidth+postWidthUncertainty,
+    postWidthUncertainty,
+    nominalDepth:gateGeometry.depth,
+    conservativeDepth:gateGeometry.depth+depthUncertainty,
+    depthUncertainty,
     positionUncertaintyPerAxis:positionUncertainty,
     headingUncertaintyDeg,
-    model:'joint bounded envelope: inward jamb shift for width plus radial per-jamb expansion for simultaneous centre X/Y and heading error'
+    model:'joint bounded envelope: inward opening-width reduction, outward jamb thickness/depth expansion, and radial per-jamb expansion for simultaneous centre X/Y and heading error'
    };
   }catch(error){
    return {ok:false,reason:'invalid-input',errors:[error&&error.message?error.message:'Некорректная геометрия ворот.'],expanded:0};
