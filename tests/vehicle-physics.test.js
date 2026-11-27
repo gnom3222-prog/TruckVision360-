@@ -1170,7 +1170,7 @@ test('auxiliary envelopes move with suspension only when body attachment is expl
   auxiliaryEnvelopes:[{
    name:'Frame bracket',anchor:'tractor-front-axle',
    longitudinalOffset:0,lateralOffset:0,length:0.4,width:0.2,
-   headingOffsetDeg:0,uncertaintyMargin:0,zMin:1,zMax:1.5
+   headingOffsetDeg:0,uncertaintyMargin:0,zMin:1,zMax:1.5,verticalUncertaintyMargin:0.02
   }]
  };
  const axleMounted=physics.auxiliaryEnvelopePolygons(q,base)[0];
