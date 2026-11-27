@@ -37,11 +37,15 @@ test('vertical vehicle profiles are optional but strictly validated when supplie
  assert.ok(physics.validateVehicleParams({...params,vehicleVerticalProfiles:allProfiles}).length===0);
 });
 
-test('vertical obstacle validation requires a complete finite height interval',()=>{
- assert.equal(planner.validateObstacles([{x:0,y:0,w:1,h:1,zMin:2,zMax:3}]).length,0);
+test('vertical obstacle validation requires a complete height interval and explicit positive uncertainty',()=>{
+ const base={x:0,y:0,w:1,h:1,zMin:2,zMax:3};
+ assert.ok(planner.validateObstacles([base]).some(e=>e.includes('zUncertainty')));
+ assert.ok(planner.validateObstacles([{...base,zUncertainty:0}]).some(e=>e.includes('zUncertainty')));
+ assert.ok(planner.validateObstacles([{...base,zUncertainty:0.0005}]).some(e=>e.includes('zUncertainty')));
+ assert.equal(planner.validateObstacles([{...base,zUncertainty:0.01}]).length,0);
+ assert.ok(planner.validateObstacles([{...base,zUncertainty:3}]).some(e=>e.includes('zUncertainty')));
  assert.ok(planner.validateObstacles([{x:0,y:0,w:1,h:1,zMin:2}]).some(e=>e.includes('zMin и zMax')));
- assert.ok(planner.validateObstacles([{x:0,y:0,w:1,h:1,zMin:3,zMax:2}]).some(e=>e.includes('zMin/zMax')));
- assert.ok(planner.validateObstacles([{x:0,y:0,w:1,h:1,zMin:2,zMax:3,zUncertainty:3}]).some(e=>e.includes('zUncertainty')));
+ assert.ok(planner.validateObstacles([{x:0,y:0,w:1,h:1,zMin:3,zMax:2,zUncertainty:0.01}]).some(e=>e.includes('zMin/zMax')));
 });
 
 test('missing vehicle height profile keeps only the horizontal lower bound and reports it unverified',()=>{
@@ -69,7 +73,7 @@ test('measured vertical profiles allow a separated overhead obstacle to use 3D p
 });
 
 test('overlapping vertical intervals remain a zero-clearance contact',()=>{
- const obstacle={...overheadAtCab,zMin:3.3,zMax:3.6,zUncertainty:0};
+ const obstacle={...overheadAtCab,zMin:3.3,zMax:3.6,zUncertainty:0.01};
  const result=planner.clearance(pose,[obstacle],{...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:allProfiles});
  assert.equal(result.distance,0);
  assert.equal(result.verticalStatus,'vertical-overlap');
@@ -91,7 +95,7 @@ test('auxiliary axle hardware can carry its own measured vertical interval',()=>
 test('per-wheel swept diagnostics apply measured tire height intervals',()=>{
  const p={...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:allProfiles};
  const wheel=physics.wheelFootprints(pose,p,0)[0];
- const obstacle={name:'Балка над передним колесом',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:2.5,zMax:2.8};
+ const obstacle={name:'Балка над передним колесом',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:2.5,zMax:2.8,zUncertainty:0.02};
  const result=planner.analyzeWheelTrajectoryClearance([pose],[obstacle],p);
  const record=result.wheels.find(item=>item.name===wheel.name);
  assert.ok(record);
@@ -102,7 +106,7 @@ test('per-wheel swept diagnostics apply measured tire height intervals',()=>{
 
 test('per-wheel vertical clearance remains conservative when tire height is unknown',()=>{
  const wheel=physics.wheelFootprints(pose,params,0)[0];
- const obstacle={name:'Неизвестная балка',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:2.5,zMax:2.8};
+ const obstacle={name:'Неизвестная балка',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:2.5,zMax:2.8,zUncertainty:0.02};
  const result=planner.analyzeWheelTrajectoryClearance([pose],[obstacle],{...params,roadSurface:flatRoadSurface});
  const record=result.wheels.find(item=>item.name===wheel.name);
  assert.equal(record.minimumSampledEnvelopeClearance,0);
@@ -123,7 +127,7 @@ test('measured wheel height is checked even when the wheel footprint lies inside
  };
  const p={...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:profiles};
  const wheel=physics.wheelFootprints(pose,p,0)[0];
- const obstacle={name:'Низкая балка у колеса',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:0.1,zMax:0.2};
+ const obstacle={name:'Низкая балка у колеса',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:0.1,zMax:0.2,zUncertainty:0.01};
  const parts=physics.vehicleCollisionParts(pose,p);
  const tractor=parts.find(part=>part.vehiclePart==='тягач');
  assert.ok(tractor.components.some(component=>component.name===wheel.name));
@@ -145,7 +149,7 @@ test('measured auxiliary height remains a separate component even inside the bod
  const parts=physics.vehicleCollisionParts(pose,p,0,true);
  const trailer=parts.find(part=>part.vehiclePart==='полуприцеп');
  assert.ok(trailer.components.some(component=>component.name==='Верхний кронштейн внутри контура'));
- const obstacle={name:'Низкая балка',x:center.x,y:center.y,w:0.1,h:0.1,zMin:3.5,zMax:3.6};
+ const obstacle={name:'Низкая балка',x:center.x,y:center.y,w:0.1,h:0.1,zMin:3.5,zMax:3.6,zUncertainty:0.02};
  const result=planner.clearance(pose,[obstacle],p);
  assert.equal(result.distance,0);
  assert.equal(result.verticalStatus,'vertical-overlap');
@@ -157,7 +161,7 @@ test('unknown internal wheel height cannot be hidden by a measured body height p
   'tractor-cab':{zMin:0.5,zMax:3.5}
  }};
  const wheel=physics.wheelFootprints(pose,p,0)[0];
- const obstacle={name:'Низкая балка у колеса без профиля',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:0.1,zMax:0.2};
+ const obstacle={name:'Низкая балка у колеса без профиля',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:0.1,zMax:0.2,zUncertainty:0.01};
  const result=planner.clearance(pose,[obstacle],p);
  assert.equal(result.distance,0);
  assert.equal(result.verticalStatus,'vehicle-height-unverified');
@@ -168,7 +172,7 @@ test('route assessment preserves vertical intervals while retaining the explicit
  const app=fs.readFileSync(path.resolve(__dirname,'../truckvision.js'),'utf8');
  assert.match(app,/const routeObstacles=showObstacles\?sceneObstacles\(\):\[\]/);
  assert.match(app,/Автопроезд заблокирован: сначала включите отображение и проверку препятствий/);
- assert.match(app,/zMin:obstacle\.zMin,zMax:obstacle\.zMax,zUncertainty:obstacle\.zUncertainty\?\?0/);
+ assert.match(app,/zMin:obstacle\.zMin,zMax:obstacle\.zMax,zUncertainty:obstacle\.zUncertainty/);
  assert.match(app,/road-surface-unverified-horizontal-only/);
  assert.match(app,/вертикальное разделение отключено/);
 });
@@ -197,7 +201,7 @@ test('unknown mirror height is not inferred from the cab height profile',()=>{
  assert.ok(mirror);
  assert.equal(mirror.verticalRange,null);
  const center=mirror.polygon.reduce((sum,point)=>({x:sum.x+point.x/4,y:sum.y+point.y/4}),{x:0,y:0});
- const obstacle={name:'Балка у зеркала без профиля',x:center.x,y:center.y,w:0.1,h:0.1,zMin:4.0,zMax:4.2};
+ const obstacle={name:'Балка у зеркала без профиля',x:center.x,y:center.y,w:0.1,h:0.1,zMin:4.0,zMax:4.2,zUncertainty:0.02};
  const result=planner.clearance(pose,[obstacle],p);
  assert.equal(result.distance,0);
  assert.equal(result.verticalStatus,'vehicle-height-unverified');
@@ -240,7 +244,7 @@ test('per-wheel vertical clearance uses the selected axle-specific profile',()=>
   'trailer-axle-1-wheel':{zMin:1.4,zMax:1.9}
  }};
  const wheel=physics.wheelFootprints(pose,p,0).find(w=>w.vehiclePart==='полуприцеп'&&w.axleIndex===1&&w.side==='left');
- const obstacle={name:'Балка на высоте первой оси',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:1.5,zMax:1.6};
+ const obstacle={name:'Балка на высоте первой оси',x:wheel.center.x,y:wheel.center.y,w:0.1,h:0.1,zMin:1.5,zMax:1.6,zUncertainty:0.01};
  const result=planner.analyzeWheelTrajectoryClearance([pose],[obstacle],p);
  const record=result.wheels.find(item=>item.name===wheel.name);
  assert.ok(record);
