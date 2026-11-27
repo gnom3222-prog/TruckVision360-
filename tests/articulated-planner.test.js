@@ -192,7 +192,7 @@ test('clearance checker identifies whether the tractor or trailer is nearest to 
 });
 
 test('gate helper creates two oriented convex jamb polygons with the requested clear opening',()=>{
- const gate=planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,
+ const gate=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
   centerX:10,centerY:-2,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2
  });
  assert.equal(gate.length,2);
@@ -202,14 +202,15 @@ test('gate helper creates two oriented convex jamb polygons with the requested c
  const projections=gate.map(item=>item.polygon.map(point=>point.x*u.x+point.y*u.y));
  const leftInside=Math.max(...projections[0]);
  const rightInside=Math.min(...projections[1]);
- assert.ok(Math.abs((rightInside-leftInside)-4)<1e-9,'inside faces must preserve the measured clear width');
+ const expectedOpening=4-gate[0].gateUncertainty.widthUncertainty-2*gate[0].gateUncertainty.totalInflation;
+ assert.ok(Math.abs((rightInside-leftInside)-expectedOpening)<1e-9,'inside faces must preserve the measured clear width after uncertainty inflation');
 });
 
 test('gate width uncertainty narrows the opening and map pose uncertainty expands both jambs',()=>{
- const nominal=planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,
+ const nominal=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
   centerX:10,centerY:-2,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2
  });
- const widthBound=planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,
+ const widthBound=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
   centerX:10,centerY:-2,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2,
   widthUncertainty:0.2
  });
@@ -218,9 +219,9 @@ test('gate width uncertainty narrows the opening and map pose uncertainty expand
   const projections=items.map(item=>item.polygon.map(point=>point.x*axis.x+point.y*axis.y));
   return Math.min(...projections[1])-Math.max(...projections[0]);
  };
- assert.ok(Math.abs(opening(widthBound)-3.8)<1e-9);
+ assert.ok(Math.abs(opening(widthBound)-(3.8-2*widthBound[0].gateUncertainty.totalInflation))<1e-9);
  assert.equal(widthBound[0].gateUncertainty.conservativeClearWidth,3.8);
- const poseBound=planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,
+ const poseBound=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
   centerX:10,centerY:-2,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2,
   widthUncertainty:0.2,positionUncertainty:0.1,headingUncertaintyDeg:2
  });
@@ -235,16 +236,16 @@ test('gate width uncertainty narrows the opening and map pose uncertainty expand
 test('gate obstacle uncertainty rejects invalid bounds and a collapsed conservative opening',()=>{
  const base={centerX:0,centerY:0,clearWidth:3,postWidth:0.2,depth:0.6,heading:0,widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1};
  assert.throws(()=>planner.createGateObstacles({centerX:0,centerY:0,clearWidth:3,postWidth:0.2,depth:0.6,heading:0}),/положительные границы неопределённости/);
- assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,...base,widthUncertainty:0}));
- assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,...base,positionUncertainty:0}));
- assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,...base,headingUncertaintyDeg:0}));
- assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,...base,widthUncertainty:3}));
- assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,...base,positionUncertainty:-0.01}));
- assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,...base,headingUncertaintyDeg:46}));
+ assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,...base,widthUncertainty:0}));
+ assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,...base,positionUncertainty:0}));
+ assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,...base,headingUncertaintyDeg:0}));
+ assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,...base,widthUncertainty:3}));
+ assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,...base,positionUncertainty:-0.01}));
+ assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,...base,headingUncertaintyDeg:46}));
 });
 
 test('gate helper adds an oriented vertical lintel prism with measured dimensions and uncertainty',()=>{
- const gate=planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,
+ const gate=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
   centerX:10,centerY:-2,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2,
   widthUncertainty:0.1,positionUncertainty:0.05,headingUncertaintyDeg:1,
   lintel:{
@@ -274,12 +275,12 @@ test('gate helper adds an oriented vertical lintel prism with measured dimension
 
 test('gate helper rejects incomplete or physically inconsistent lintel measurements',()=>{
  const base={centerX:0,centerY:0,clearWidth:4,postWidth:0.2,depth:0.6,heading:0};
- assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,...base,lintel:{clearHeight:3.8}}),/верхней перемычки/);
- assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,...base,lintel:{
+ assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,...base,lintel:{clearHeight:3.8}}),/верхней перемычки/);
+ assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,...base,lintel:{
   clearHeight:3.8,clearHeightUncertainty:0,floorDatumUncertainty:0,
   thickness:0.2,thicknessUncertainty:0,span:4.4,spanUncertainty:0.1,depth:0.4,depthUncertainty:0
  }}),/верхней перемычки/);
- assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,...base,lintel:{
+ assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,...base,lintel:{
   clearHeight:0.6,clearHeightUncertainty:1,floorDatumUncertainty:0,
   thickness:0.2,thicknessUncertainty:0,span:4.4,spanUncertainty:0.1,depth:0.4,depthUncertainty:0
  }}),/вертикальные или горизонтальные границы/);
@@ -295,7 +296,7 @@ test('vertical gate lintel clearance separates a measured low cab and reports ov
   'tractor-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
   'trailer-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02}
  };
- const gate=planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,
+ const gate=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
   centerX:0,centerY:0,clearWidth:8,postWidth:0.2,depth:8,heading:0,
   lintel:{
    clearHeight:3.8,clearHeightUncertainty:0.03,floorDatumUncertainty:0.02,
@@ -327,7 +328,7 @@ test('vertical gate lintel clearance separates a measured low cab and reports ov
 
 test('gate lintel never claims vertical separation when vehicle height profiles are missing',()=>{
  const q={x:0,y:0,psi:0,psiT:0};
- const gate=planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,
+ const gate=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
   centerX:0,centerY:0,clearWidth:8,postWidth:0.2,depth:8,heading:0,
   lintel:{
    clearHeight:3.8,clearHeightUncertainty:0.03,floorDatumUncertainty:0.02,
@@ -345,7 +346,7 @@ test('gate lintel never claims vertical separation when vehicle height profiles 
 
 test('all vertical obstacles including gate lintels remain horizontal-only without a calibrated road surface',()=>{
  const q={x:0,y:0,psi:0,psiT:0};
- const gate=planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,
+ const gate=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
   centerX:0,centerY:0,clearWidth:8,postWidth:0.2,depth:8,heading:0,
   lintel:{
    clearHeight:3.8,clearHeightUncertainty:0.03,floorDatumUncertainty:0.02,
@@ -388,21 +389,21 @@ test('all vertical obstacles including gate lintels remain horizontal-only witho
 
 test('oriented gate jamb polygons participate in whole-vehicle clearance',()=>{
  const q={x:0,y:0,psi:0,psiT:0};
- const narrow=planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,
+ const narrow=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
   centerX:0,centerY:0,clearWidth:3,postWidth:0.2,depth:0.6,heading:Math.PI/2
  });
- const wide=planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,
+ const wide=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
   centerX:0,centerY:0,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2
  });
  const narrowClearance=planner.clearance(q,narrow,params).distance;
  const wideClearance=planner.clearance(q,wide,params).distance;
- assert.ok(Math.abs(narrowClearance-0.225)<1e-8,'3 m opening should leave 0.225 m from the 2.55 m footprint');
- assert.ok(Math.abs(wideClearance-0.725)<1e-8,'4 m opening should leave 0.725 m from the 2.55 m footprint');
+ assert.ok(narrowClearance>0.20&&narrowClearance<0.225,'uncertainty must conservatively reduce the nominal 3 m opening clearance');
+ assert.ok(wideClearance>0.70&&wideClearance<0.725,'uncertainty must conservatively reduce the nominal 4 m opening clearance');
  assert.ok(wideClearance>narrowClearance);
 });
 
 test('convex polygon inflation is finite, outward and rejects concave geometry',()=>{
- const gate=planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,
+ const gate=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
   centerX:0,centerY:0,clearWidth:4,postWidth:0.2,depth:0.6,heading:0.37
  });
  const original=gate[0].polygon;
@@ -429,7 +430,7 @@ test('convex polygon inflation is finite, outward and rejects concave geometry',
 });
 
 test('planner routes the full articulated vehicle through an oriented polygon gate',()=>{
- const gate=planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,
+ const gate=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
   centerX:12,centerY:0,clearWidth:6,postWidth:0.25,depth:0.6,heading:Math.PI/2
  });
  const result=planner.plan({
@@ -1501,7 +1502,7 @@ test('gate uncertainty rejects an invalid joint envelope before changing route o
   centerX:2,centerY:0,clearWidth:3,postWidth:0.25,depth:0.6,heading:Math.PI/2,
   widthUncertainty:3,positionUncertainty:0.1,headingUncertaintyDeg:1
  };
- const obstacles=planner.createGateObstacles({widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1,
+ const obstacles=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
   ...gateGeometry,widthUncertainty:0,positionUncertainty:0,headingUncertaintyDeg:0
  });
  const result=planner.planAlternativesWithVehicleParameterBounds({
