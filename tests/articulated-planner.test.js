@@ -235,7 +235,7 @@ test('gate width uncertainty narrows the opening and map pose uncertainty expand
 
 test('gate obstacle uncertainty rejects invalid bounds and a collapsed conservative opening',()=>{
  const base={centerX:0,centerY:0,clearWidth:3,postWidth:0.2,depth:0.6,heading:0,widthUncertainty:0.01,positionUncertainty:0.01,headingUncertaintyDeg:0.1};
- assert.throws(()=>planner.createGateObstacles({centerX:0,centerY:0,clearWidth:3,postWidth:0.2,depth:0.6,heading:0}),/положительные границы неопределённости/);
+ assert.throws(()=>planner.createGateObstacles({centerX:0,centerY:0,clearWidth:3,postWidth:0.2,depth:0.6,heading:0}),/положительн\w+ границ неопределённости/);
  assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,...base,widthUncertainty:0}));
  assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,...base,positionUncertainty:0}));
  assert.throws(()=>planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,...base,headingUncertaintyDeg:0}));
@@ -309,7 +309,7 @@ test('vertical gate lintel clearance separates a measured low cab and reports ov
   lintel:{
    clearHeight:3.8,clearHeightUncertainty:0.03,floorDatumUncertainty:0.02,
    thickness:0.25,thicknessUncertainty:0.01,
-   span:8,spanUncertainty:0.01,depth:8,depthUncertainty:0.01
+   span:8.01,spanUncertainty:0.01,depth:8,depthUncertainty:0.01
   }
  });
  const separated=planner.createClearanceChecker([gate[2]],{
@@ -341,7 +341,7 @@ test('gate lintel never claims vertical separation when vehicle height profiles 
   lintel:{
    clearHeight:3.8,clearHeightUncertainty:0.03,floorDatumUncertainty:0.02,
    thickness:0.25,thicknessUncertainty:0.01,
-   span:8,spanUncertainty:0.01,depth:8,depthUncertainty:0.01
+   span:8.01,spanUncertainty:0.01,depth:8,depthUncertainty:0.01
   }
  });
  const result=planner.createClearanceChecker([gate[2]],{...params,roadSurface:flatRoadSurface})(q);
@@ -359,7 +359,7 @@ test('all vertical obstacles including gate lintels remain horizontal-only witho
   lintel:{
    clearHeight:3.8,clearHeightUncertainty:0.03,floorDatumUncertainty:0.02,
    thickness:0.25,thicknessUncertainty:0.01,
-   span:8,spanUncertainty:0.01,depth:8,depthUncertainty:0.01
+   span:8.01,spanUncertainty:0.01,depth:8,depthUncertainty:0.01
   }
  });
  const obstacle=[gate[2]];
@@ -1510,8 +1510,8 @@ test('gate uncertainty rejects an invalid joint envelope before changing route o
   centerX:2,centerY:0,clearWidth:3,postWidth:0.25,depth:0.6,heading:Math.PI/2,
   widthUncertainty:3,positionUncertainty:0.1,headingUncertaintyDeg:1
  };
- const obstacles=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
-  ...gateGeometry,widthUncertainty:0,positionUncertainty:0,headingUncertaintyDeg:0
+ const obstacles=planner.createGateObstacles({
+  ...gateGeometry,widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001
  });
  const result=planner.planAlternativesWithVehicleParameterBounds({
   start:{x:0,y:0,psi:0,psiT:0},goal:{x:4,y:0,heading:0},
