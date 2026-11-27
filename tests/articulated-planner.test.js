@@ -2865,11 +2865,11 @@ test('swept displacement bounds include measured auxiliary envelopes on tractor 
  assert.ok(tractor.tractor>base.tractor,
   'a measured component beyond the tractor front envelope must increase the tractor sweep-rate bound');
  const trailerEnvelope={
-  name:'measured rear chassis bracket',
+  name:'measured rear underrun-guard extension',
   anchor:'trailer-axle-3',
-  longitudinalOffset:-4.5,lateralOffset:0,
-  length:1.2,width:0.8,headingOffsetDeg:15,
-  uncertaintyMargin:0.05
+  longitudinalOffset:-4.8,lateralOffset:2.8,
+  length:4.0,width:2.0,headingOffsetDeg:0,
+  uncertaintyMargin:0.1
  };
  const trailer=planner.sweptDisplacementRatesPerMeter(0.25,{
   ...params,auxiliaryEnvelopes:[trailerEnvelope]
