@@ -294,13 +294,10 @@ test('gate obstacle uncertainty rejects missing, zero and excessive jamb dimensi
 });
 
 test('gate helper adds an oriented vertical lintel prism with measured dimensions and uncertainty',()=>{
- const gate=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
-  postWidthUncertainty:0.01,
-  depthUncertainty:0.02,
+ const gate=planner.createGateObstacles({
   centerX:10,centerY:-2,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2,
-  widthUncertainty:0.1,positionUncertainty:0.05,headingUncertaintyDeg:1,
-  postWidthUncertainty:0.01,
-  depthUncertainty:0.02,
+  widthUncertainty:0.1,postWidthUncertainty:0.01,depthUncertainty:0.02,
+  positionUncertainty:0.05,headingUncertaintyDeg:1,
   lintel:{
    clearHeight:3.8,clearHeightUncertainty:0.03,floorDatumUncertainty:0.02,
    thickness:0.25,thicknessUncertainty:0.01,
