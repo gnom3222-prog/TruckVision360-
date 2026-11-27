@@ -702,8 +702,9 @@ test('swept bound uses the exact axle-centered trailer corner radius across long
   for(const steer of steeringValues){
    const yaw=Math.abs(Math.tan(steer)/p.wheelbase);
    const a=p.hitchOffset*yaw;
-   const front=p.kingpinAxles+1.5;
-   const rear=p.kingpinAxles-(p.trailerLength-1.5);
+   const trailerKingpinToFront=p.trailerKingpinToFront??1.5;
+   const front=p.kingpinAxles+trailerKingpinToFront;
+   const rear=p.kingpinAxles-(p.trailerLength-trailerKingpinToFront);
    const trailerTrack=p.trailerTrack??(p.trailerWidth+0.24);
    const tireWidth=p.tireWidth??0.44;
    const tireHalfLength=(p.tireLength??0.72)/2;
