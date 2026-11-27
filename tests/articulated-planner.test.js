@@ -3,7 +3,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const physics=require('../vehicle-physics.js');
 const planner=require('../articulated-planner.js');
-const params={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,tractorSteeringTrack:2.05,tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.11,tireLength:0.72,tireWidth:0.44};
+const params={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerKingpinToFront:1.5,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,tractorSteeringTrack:2.05,tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.11,tireLength:0.72,tireWidth:0.44};
 const integrate=(q,v,steer,dt,p)=>physics.rk4(q,v,steer,dt,p);
 const flatRoadSurface={
  originX:0,originY:0,originZ:0,gradeX:0,gradeY:0,
@@ -1427,7 +1427,7 @@ test('vehicle parameter bounds report not-varied instead of implying zero physic
   alternativeMaxExpansions:1200,
   positionTolerance:0.05,headingTolerance:0.02,
   maxTerminalArticulation:0.5,
-  vehicleParameterBounds:{wheelbase:{min:3.8,max:3.8}}
+  vehicleParameterBounds:{wheelbase:{min:3.8,max:3.8},trailerKingpinToFront:{min:1.5,max:1.5}}
  });
  assert.equal(result.ok,true,JSON.stringify(result));
  assert.equal(result.parameterSensitivity.status,'not-varied');
