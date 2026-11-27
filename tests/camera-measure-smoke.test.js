@@ -9,12 +9,12 @@ const geometry=require('../camera-geometry.js');
 function bootCamera(options={}){
  const elements={},windowListeners={},documentListeners={};
  const context={clearRect(){},beginPath(){},moveTo(){},lineTo(){},closePath(){},stroke(){},arc(){},fill(){},fillText(){}};
- const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateWidthUncertainty','gateCenterX','gateCenterY','gateHeadingDeg','gatePositionUncertainty','gateHeadingUncertaintyDeg','gatePostWidthUncertainty','gateDepthUncertainty','gateResult','cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg','cameraObstacleRepeatabilityWidthTolerance','cameraObstacleRepeatabilityDepthTolerance','cameraObstacleRepeatabilityStatus','cameraClearObstacleRepeats','cameraObstacleHeight','cameraObstacleHeightUncertainty','cameraObstacleBaseDatumUncertainty','cameraObstacleVerticalDatumConfirmed','cameraRepeatabilityWidthTolerance','cameraRepeatabilityHeightTolerance','cameraRepeatabilityStatus','cameraClearGateRepeats'];
+ const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateWidthUncertainty','gateCenterX','gateCenterY','gateHeadingDeg','gatePostWidth','gateDepth','gatePositionUncertainty','gateHeadingUncertaintyDeg','gatePostWidthUncertainty','gateDepthUncertainty','gateResult','cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg','cameraObstacleRepeatabilityWidthTolerance','cameraObstacleRepeatabilityDepthTolerance','cameraObstacleRepeatabilityStatus','cameraClearObstacleRepeats','cameraObstacleHeight','cameraObstacleHeightUncertainty','cameraObstacleBaseDatumUncertainty','cameraObstacleVerticalDatumConfirmed','cameraRepeatabilityWidthTolerance','cameraRepeatabilityHeightTolerance','cameraRepeatabilityStatus','cameraClearGateRepeats'];
  for(const id of ids){
   elements[id]={
    id,value:({
     cameraReferenceWidth:'2.970',cameraReferenceHeight:'2.100',
-    cameraPointSigma:'2',cameraReferenceSigma:'2',cameraRepeatabilityWidthTolerance:'0.02',cameraRepeatabilityHeightTolerance:'0.02',gateWidth:'3.50',gateWidthUncertainty:'0',gateCenterX:'12',gateCenterY:'0',gateHeadingDeg:'90',gatePositionUncertainty:'0.05',gateHeadingUncertaintyDeg:'1',gatePostWidthUncertainty:'0.02',gateDepthUncertainty:'0.03',cameraObstacleName:'Опорный столб',cameraObstacleX:'3',cameraObstacleY:'4',cameraObstacleHeading:'90',cameraObstaclePositionUncertaintyX:'0.10',cameraObstaclePositionUncertaintyY:'0.15',cameraObstacleHeadingUncertaintyDeg:'2',cameraObstacleRepeatabilityWidthTolerance:'0.02',cameraObstacleRepeatabilityDepthTolerance:'0.02',cameraObstacleHeight:'2.5',cameraObstacleHeightUncertainty:'0.03',cameraObstacleBaseDatumUncertainty:'0.02'
+    cameraPointSigma:'2',cameraReferenceSigma:'2',cameraRepeatabilityWidthTolerance:'0.02',cameraRepeatabilityHeightTolerance:'0.02',gateWidth:'3.50',gateWidthUncertainty:'0',gateCenterX:'12',gateCenterY:'0',gateHeadingDeg:'90',gatePostWidth:'0.25',gateDepth:'0.6',gatePositionUncertainty:'0.05',gateHeadingUncertaintyDeg:'1',gatePostWidthUncertainty:'0.02',gateDepthUncertainty:'0.03',cameraObstacleName:'Опорный столб',cameraObstacleX:'3',cameraObstacleY:'4',cameraObstacleHeading:'90',cameraObstaclePositionUncertaintyX:'0.10',cameraObstaclePositionUncertaintyY:'0.15',cameraObstacleHeadingUncertaintyDeg:'2',cameraObstacleRepeatabilityWidthTolerance:'0.02',cameraObstacleRepeatabilityDepthTolerance:'0.02',cameraObstacleHeight:'2.5',cameraObstacleHeightUncertainty:'0.03',cameraObstacleBaseDatumUncertainty:'0.02'
    })[id]||'',
    checked:id==='cameraObstacleVerticalDatumConfirmed'?(options.verticalConfirmed!==false):false,
    textContent:'',style:{},listeners:{},width:0,height:0,
@@ -876,30 +876,36 @@ test('camera gate measurement requires positive jamb thickness and depth bounds'
   await camera.fire('cameraMeasureGate','click');
   await camera.tap(gatePoints);
   assert.equal(camera.appliedRegistrations.length,0,field+' must block camera gate registration');
-  assert.match(camera.elements.cameraStatus.textContent,/Допуски толщины косяка должны быть/);
+  assert.match(camera.elements.cameraStatus.textContent,/Толщина косяка должна быть/);
   camera.fire('cameraStop','click');
  }
 });
 
-test('camera gate repeatability series cannot mix manually entered jamb dimension bounds',async()=>{
- const camera=bootCamera();
- await camera.fire('cameraStart','click');
- const referencePoints=[{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}];
- const gatePoints=[{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}];
- await camera.fire('cameraCalibrate','click');
- await camera.tap(referencePoints);
- await camera.fire('cameraMeasureGate','click');
- await camera.tap(gatePoints);
- camera.fire('cameraReset','click');
- camera.setVideoTime(0.2);
- camera.elements.gateDepthUncertainty.value='0.04';
- await camera.fire('cameraCalibrate','click');
- await camera.tap(referencePoints);
- await camera.fire('cameraMeasureGate','click');
- await camera.tap(gatePoints);
- assert.equal(camera.appliedRegistrations.length,0);
- assert.match(camera.elements.cameraStatus.textContent,/допуски привязки\/размеров косяков ворот изменились внутри серии/);
- camera.fire('cameraStop','click');
+test('camera gate repeatability series cannot mix manually entered jamb geometry or bounds',async()=>{
+ const changes=[
+  ['gatePostWidth','0.3'],['gateDepth','0.7'],
+  ['gatePostWidthUncertainty','0.04'],['gateDepthUncertainty','0.04']
+ ];
+ for(const [field,value] of changes){
+  const camera=bootCamera();
+  await camera.fire('cameraStart','click');
+  const referencePoints=[{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}];
+  const gatePoints=[{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}];
+  await camera.fire('cameraCalibrate','click');
+  await camera.tap(referencePoints);
+  await camera.fire('cameraMeasureGate','click');
+  await camera.tap(gatePoints);
+  camera.fire('cameraReset','click');
+  camera.setVideoTime(0.2);
+  camera.elements[field].value=value;
+  await camera.fire('cameraCalibrate','click');
+  await camera.tap(referencePoints);
+  await camera.fire('cameraMeasureGate','click');
+  await camera.tap(gatePoints);
+  assert.equal(camera.appliedRegistrations.length,0,field+' must invalidate the repeatability series');
+  assert.match(camera.elements.cameraStatus.textContent,/геометрия\/допуски косяков ворот изменились внутри серии/);
+  camera.fire('cameraStop','click');
+ }
 });
 
 test('camera gate repeatability series cannot mix manually entered map poses',async()=>{
