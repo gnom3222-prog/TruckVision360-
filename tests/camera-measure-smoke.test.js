@@ -924,6 +924,23 @@ test('camera gate measurement requires explicit lintel alignment confirmation',a
  camera.fire('cameraStop','click');
 });
 
+test('camera gate measurement requires positive lintel dimensions and uncertainty bounds',async()=>{
+ const camera=bootCamera();
+ camera.elements.gateLintelEnabled.checked=true;
+ camera.elements.gateLintelAlignmentConfirmed.checked=true;
+ camera.elements.gateLintelDepthUncertainty.value='0';
+ await camera.fire('cameraStart','click');
+ const referencePoints=[{x:100,y:100},{x:500,y:100},{x:500,y:300},{x:100,y:300}];
+ const gatePoints=[{x:150,y:150},{x:450,y:150},{x:450,y:250},{x:150,y:250}];
+ await camera.fire('cameraCalibrate','click');
+ await camera.tap(referencePoints);
+ await camera.fire('cameraMeasureGate','click');
+ await camera.tap(gatePoints);
+ assert.equal(camera.appliedRegistrations.length,0);
+ assert.match(camera.elements.cameraStatus.textContent,/Для включённой перемычки задайте измеренные толщину, пролёт и глубину/);
+ camera.fire('cameraStop','click');
+});
+
 test('camera gate repeatability series cannot mix enabled lintel geometry or bounds',async()=>{
  const changes=[
   ['gateLintelThickness','0.4'],['gateLintelDepth','0.7'],
