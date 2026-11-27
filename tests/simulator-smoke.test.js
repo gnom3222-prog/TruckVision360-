@@ -792,7 +792,7 @@ test('route assessment labels the default Volvo FH and tri-axle geometry as prel
  elements.alternativeRouteSelect.value='0';
  elements.alternativeRouteSelect.onchange();
  assert.match(elements.difficultyAdvice.textContent,/геометрия модели Volvo FH 4×2 и трёхосного полуприцепа предварительная/);
- assert.match(elements.difficultyAdvice.textContent,/нулевой допуск означает «не задан», а не точность/);
+ assert.match(elements.difficultyAdvice.textContent,/Нулевой допуск означает «не задан», а не точность/);
  assert.match(elements.difficultyAdvice.textContent,/рекомендация стороны и направления начала манёвра не подтверждена/);
 });
 
