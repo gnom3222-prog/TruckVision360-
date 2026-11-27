@@ -54,7 +54,7 @@ function bootCamera(options={}){
  const sandbox={
   window:win,
   document:{visibilityState:'visible',getElementById:id=>elements[id],addEventListener(type,fn){(documentListeners[type]??=[]).push(fn);}},
-  navigator:{mediaDevices:{getUserMedia:async constraints=>{
+  navigator:{mediaDevices:{getSupportedConstraints:()=>options.facingModeSupported===false?{}:{facingMode:true},getUserMedia:async constraints=>{
    permissionRequests++;
    requestedConstraints.push(constraints);
    if(options.permissionError){const error=new Error('camera permission error');error.name=options.permissionError;throw error;}
@@ -94,6 +94,14 @@ async function measureObstacleFrame(camera,time,points=defaultObstaclePoints){
  await camera.fire('cameraMeasureObstacle','click');
  await camera.tap(points);
 }
+
+test('camera measurement fails closed before permission when facingMode support is not declared',async()=>{
+ const camera=bootCamera({facingModeSupported:false});
+ await camera.fire('cameraStart','click');
+ assert.equal(camera.permissionRequests,0,'unsupported camera direction must be rejected before requesting a stream');
+ assert.match(camera.elements.cameraStatus.textContent,/поддержку выбора задней камеры/);
+ assert.equal(camera.trackStops,0);
+});
 
 test('camera measurement refuses a browser fallback when the rear-facing camera is unavailable',async()=>{
  const camera=bootCamera({permissionError:'OverconstrainedError'});
