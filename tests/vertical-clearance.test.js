@@ -196,6 +196,7 @@ test('route assessment preserves vertical intervals while retaining the explicit
  assert.match(app,/zMin:obstacle\.zMin,zMax:obstacle\.zMax,zUncertainty:obstacle\.zUncertainty/);
  assert.match(app,/road-surface-unverified-horizontal-only/);
  assert.match(app,/вертикальное разделение отключено/);
+ assert.doesNotMatch(app,/flat-reference-assumed/);
 });
 
 
