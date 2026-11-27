@@ -48,8 +48,7 @@ test('vehicle vertical profiles require an explicit positive uncertainty margin'
  const cab=physics.vehicleCollisionParts(pose,p,0,true).find(part=>part.vehiclePart==='кабина');
  assert.ok(cab);
  assert.equal(cab.components.find(component=>component.name==='кабина').verticalRange,null);
- const result=planner.clearance(pose,[overheadAtCab],p);
- assert.equal(result.verticalStatus,'vehicle-height-unverified');
+ assert.throws(()=>planner.clearance(pose,[overheadAtCab],p),/uncertaintyMargin/);
 });
 
 test('auxiliary vertical envelopes require an explicit positive vertical uncertainty',()=>{
