@@ -163,6 +163,14 @@ test('camera measurement stops a stream that contains no video track',async()=>{
  assert.equal(camera.elements.measureVideo.srcObject,null);
  assert.match(camera.elements.cameraStatus.textContent,/не вернул видеодорожку камеры/);
 });
+test('camera stream diagnostics are cleared when the active video track ends',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ assert.match(camera.elements.cameraStreamInfo.textContent,/Параметры активной камеры/);
+ camera.endTrack();
+ assert.equal(camera.elements.measureVideo.srcObject,null);
+ assert.match(camera.elements.cameraStreamInfo.textContent,/видеопоток завершён/);
+});
 test('camera permission is requested only on tap; measurement reports uncertainty and orientation invalidates calibration',async()=>{
  const camera=bootCamera();
  assert.equal(camera.permissionRequests,0,'loading the camera module must not request permission');
