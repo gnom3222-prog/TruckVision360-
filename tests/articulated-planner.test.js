@@ -10,6 +10,15 @@ const flatRoadSurface={
  originZUncertainty:0,gradeXUncertainty:0,gradeYUncertainty:0,
  surfaceResidualUncertainty:0
 };
+test('vertical obstacles require an explicit positive uncertainty instead of an implicit zero',()=>{
+ const obstacle={name:'manual beam',x:1,y:0,w:0.2,h:0.2,zMin:2,zMax:2.5};
+ assert.ok(planner.validateObstacles([obstacle]).some(message=>message.includes('zUncertainty')));
+ assert.ok(planner.validateObstacles([{...obstacle,zUncertainty:0}]).some(message=>message.includes('zUncertainty')));
+ assert.ok(planner.validateObstacles([{...obstacle,zUncertainty:0.0005}]).some(message=>message.includes('zUncertainty')));
+ assert.equal(planner.validateObstacles([{...obstacle,zUncertainty:0.001}]).length,0);
+ assert.ok(planner.validateObstacles([{...obstacle,zUncertainty:2.001}]).length>0);
+ assert.throws(()=>planner.createClearanceChecker([obstacle],params),/zUncertainty/);
+});
 test('articulated planner reaches a clear goal in open space',()=>{
  const result=planner.plan({start:{x:0,y:0,psi:0,psiT:0},goal:{x:7,y:0},params,obstacles:[],integrate,maxExpansions:5000});
  assert.equal(result.ok,true,JSON.stringify(result));
@@ -2375,7 +2384,7 @@ test('vertical wheel clearance shifts component and obstacle heights along the c
  const obstacle={
   name:'upslope vertical beam',
   x:target.center.x+0.8,y:target.center.y-0.05,w:0.1,h:0.1,
-  zMin:1.2,zMax:1.4
+  zMin:1.2,zMax:1.4,zUncertainty:0.02
  };
  const flat=planner.analyzeWheelTrajectoryClearance([q],[obstacle],p);
  const uphill=planner.analyzeWheelTrajectoryClearance([q],[obstacle],{
@@ -2408,7 +2417,7 @@ test('downhill road grade reduces the modeled vertical separation and remains bo
  const obstacle={
   name:'downhill vertical beam',
   x:target.center.x+0.8,y:target.center.y-0.05,w:0.1,h:0.1,
-  zMin:1.2,zMax:1.4
+  zMin:1.2,zMax:1.4,zUncertainty:0.02
  };
  const flat=planner.analyzeWheelTrajectoryClearance([q],[obstacle],p);
  const downhill=planner.analyzeWheelTrajectoryClearance([q],[obstacle],{
@@ -2460,7 +2469,7 @@ test('per-wheel swept lower-bound rate includes the configured road-surface grad
  const start={x:0,y:0,psi:0.2,psiT:0.1,gear:1,steer:0.2,stepDistance:0};
  const distance=0.5,steer=0.2;
  const end=physics.rk4(start,0.7,steer,distance/0.7,p);
- const obstacle={x:100,y:100,w:1,h:1,zMin:0,zMax:1,name:'distant reference obstacle'};
+ const obstacle={x:100,y:100,w:1,h:1,zMin:0,zMax:1,zUncertainty:0.01,name:'distant reference obstacle'};
  const flat=planner.analyzeWheelTrajectoryClearance(
   [start,{...end,gear:1,steer,stepDistance:distance}],[obstacle],p
  );
@@ -2494,7 +2503,7 @@ function calibratedSuspension(){
 
 test('vertical clearance includes bounded suspension heave pitch and roll envelope for the cab',()=>{
  const q={x:0,y:0,psi:0,psiT:0};
- const obstacle=[{name:'overhead beam',x:2.1,y:0,w:0.1,h:0.1,zMin:2.24,zMax:2.30,zUncertainty:0}];
+ const obstacle=[{name:'overhead beam',x:2.1,y:0,w:0.1,h:0.1,zMin:2.24,zMax:2.30,zUncertainty:0.01}];
  const base={
   ...params,roadSurface:flatRoadSurface,
   wheelbaseUncertainty:0.02,
