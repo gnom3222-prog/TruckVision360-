@@ -165,6 +165,22 @@ test('route planning is blocked when any enabled gate dimension or pose bound is
  }
 });
 
+test('route planning is blocked when nominal gate jamb dimensions are invalid',()=>{
+ for(const field of ['gatePostWidth','gateDepth']){
+  const {elements}=bootSimulator();
+  elements.gateEnabled.checked=true;
+  elements.gateWidthUncertainty.value='0.08';
+  elements.gatePostWidthUncertainty.value='0.02';
+  elements.gateDepthUncertainty.value='0.03';
+  elements.gatePositionUncertainty.value='0.05';
+  elements.gateHeadingUncertaintyDeg.value='1';
+  elements[field].value='0';
+  elements.planRoute.onclick();
+  assert.ok(elements.routeAdvice.textContent.includes(field+':'));
+  assert.match(elements.difficultyAdvice.textContent,/Сложность не рассчитана/);
+ }
+});
+
 test('camera gate registration rejects invalid jamb dimensions and zero jamb/pose bounds atomically',()=>{
  const {elements,windowObject}=bootSimulator();
  const fields=[
