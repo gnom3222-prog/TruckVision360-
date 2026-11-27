@@ -671,8 +671,15 @@
   if(!params||typeof params!=='object'){
    return ['Параметры автопоезда отсутствуют.'];
   }
+  // A common axle spacing is only a fallback. When both adjacent spacings
+  // are explicitly measured, the common fallback is not required.
+  const hasBothIndependentTrailerAxleSpacings=
+   Number.isFinite(params.trailerAxleSpacing12)&&params.trailerAxleSpacing12>0&&
+   Number.isFinite(params.trailerAxleSpacing23)&&params.trailerAxleSpacing23>0;
   for(const [key,limits] of Object.entries(VEHICLE_PARAMETER_LIMITS)){
    const value=params[key];
+   if(key==='trailerAxleSpacing'&&hasBothIndependentTrailerAxleSpacings&&
+      (value===undefined||value===null))continue;
    if(limits.optional&&(value===undefined||value===null))continue;
    if(!Number.isFinite(value)){
     errors.push(key+': значение должно быть конечным числом.');
