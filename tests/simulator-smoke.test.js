@@ -611,12 +611,16 @@ test('camera registration rejects an uncertainty envelope that collapses the gat
  assert.notEqual(elements.gateEnabled.checked,true);
 });
 
-test('gate map uncertainty settings are forwarded to both jamb polygons',()=>{
+test('gate map and jamb dimension uncertainty settings are forwarded to both jamb polygons',()=>{
  const root=path.join(__dirname,'..');
  const source=fs.readFileSync(path.join(root,'truckvision.js'),'utf8');
  assert.match(source,/widthUncertainty:cfg\.gateWidthUncertainty/);
+ assert.match(source,/postWidthUncertainty:cfg\.gatePostWidthUncertainty/);
+ assert.match(source,/depthUncertainty:cfg\.gateDepthUncertainty/);
  assert.match(source,/positionUncertainty:cfg\.gatePositionUncertainty/);
  assert.match(source,/headingUncertaintyDeg:cfg\.gateHeadingUncertaintyDeg/);
+ assert.match(source,/gateUncertainty\.conservativePostWidth/);
+ assert.match(source,/gateUncertainty\.conservativeDepth/);
 });
 
 test('camera registration rejects invalid manual gate pose uncertainty without partial mutation',()=>{
@@ -627,7 +631,8 @@ test('camera registration rejects invalid manual gate pose uncertainty without p
  ];
  elements.gateHeadingUncertaintyDeg.value='46';
  const applied=windowObject.TruckVisionApplyGateRegistration({
-  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08
+  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08,
+  clearHeight:3.8,heightUncertaintyBound:0.05
  });
  assert.equal(applied,false);
  assert.deepEqual([
