@@ -1262,6 +1262,13 @@ test('vehicle geometry calibration status accepts explicit bounds and checks ena
  let status=physics.vehicleGeometryCalibrationStatus(params);
  assert.equal(status.status,'positive-bounds-present');
  assert.equal(status.missingBounds.length,0);
+ for(const key of ['tractorFrontOverhang','tractorRearOverhang','tractorBodyWidth']){
+  const missingNominal={...params};
+  delete missingNominal[key];
+  const uncalibrated=physics.vehicleGeometryCalibrationStatus(missingNominal);
+  assert.equal(uncalibrated.status,'preliminary',key);
+  assert.ok(uncalibrated.missingBounds.some(item=>item.parameter===key),key);
+ }
  params.trailerAxleSpacing12=1.25;
  status=physics.vehicleGeometryCalibrationStatus(params);
  assert.ok(status.missingBounds.some(item=>item.uncertainty==='trailerAxleSpacing12Uncertainty'));
