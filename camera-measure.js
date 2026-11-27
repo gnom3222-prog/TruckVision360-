@@ -215,7 +215,7 @@ async function start(){
  startPending=true;
  let acquiredStream=null;
  try{
-  acquiredStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});
+  acquiredStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{exact:'environment'},width:{ideal:1920},height:{ideal:1080}}});
   if(requestId!==streamRequestId||document.visibilityState==='hidden'){
    acquiredStream.getTracks().forEach(t=>t.stop());
    if(document.visibilityState==='hidden')say('Страница перешла в фон. Запрошенный поток остановлен; вернитесь и нажмите «Включить камеру».');
@@ -254,9 +254,9 @@ async function start(){
   const failedStream=stream;stream=null;failedStream?.getTracks().forEach(t=>t.stop());v.srcObject=null;
   const messages={
    NotAllowedError:'Доступ к камере запрещён. Разрешите камеру для этого сайта в настройках Safari и нажмите «Включить камеру» ещё раз.',
-   NotFoundError:'Камера не найдена. Проверьте, что устройство имеет доступную камеру.',
+   NotFoundError:'Задняя камера не найдена. Проверьте доступность задней камеры iPhone и повторите запуск.',
    NotReadableError:'Камера занята другим приложением или недоступна. Закройте другие приложения, использующие камеру.',
-   OverconstrainedError:'Камера не поддерживает запрошенное разрешение. Повторите запуск.',
+   OverconstrainedError:'Safari не смог выбрать заднюю камеру. Проверьте, что задняя камера доступна, и повторите запуск; фронтальная камера для измерений не используется.',
    SecurityError:'Браузер заблокировал камеру. Откройте приложение по HTTPS и проверьте разрешения сайта.'
   };
   say(messages[e.name]||('Не удалось включить камеру: '+(e.message||e.name)));
