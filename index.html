@@ -318,11 +318,13 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <div><label for="gateHeadingDeg">Направление линии ворот от оси +X, °</label><input id="gateHeadingDeg" type="number" min="-180" max="180" value="90" step="1"></div>
 <div><label for="gatePostWidth">Толщина каждого косяка вдоль проёма, м</label><input id="gatePostWidth" type="number" min="0.05" max="2" value="0.25" step="0.05"></div>
 <div><label for="gateDepth">Глубина косяка поперёк проёма, м</label><input id="gateDepth" type="number" min="0.05" max="10" value="0.6" step="0.05"></div>
+<div><label for="gatePostWidthUncertainty">Неопределённость толщины косяка ±, м</label><input id="gatePostWidthUncertainty" type="number" min="0.001" max="1" value="0" step="0.001"></div>
+<div><label for="gateDepthUncertainty">Неопределённость глубины косяка ±, м</label><input id="gateDepthUncertainty" type="number" min="0.001" max="2" value="0" step="0.001"></div>
 <div><label for="gateWidthUncertainty">Погрешность полной ширины проёма ±, м (камера: приблизительно 2σ)</label><input id="gateWidthUncertainty" type="number" min="0.001" max="2" value="0" step="0.01"></div>
 <div><label for="gatePositionUncertainty">Доп. погрешность ручного центра ворот ± по X/Y, м</label><input id="gatePositionUncertainty" type="number" min="0.001" max="2" value="0" step="0.01"></div>
 <div><label for="gateHeadingUncertaintyDeg">Погрешность ручного направления ворот ±, °</label><input id="gateHeadingUncertaintyDeg" type="number" min="0.001" max="45" value="0" step="0.1"></div>
 </div>
-<p class="small">Курс задаёт направление линии между косяками, а глубина направлена перпендикулярно ей. После успешной серии камера переносит среднюю ширину и её screening-оболочку неопределённости в геометрию косяков. Это не жёсткая граница ошибки. Центр и направление остаются ручными; их допуски задаются отдельно. Нулевой допуск означает «не задан», а не отсутствие реальной ошибки. При включённых воротах маршрут блокируется, пока положительные границы ширины, положения и курса не введены. Верхняя перемычка дополнительно требует положительных допусков datum, толщины, пролёта и глубины.</p>
+<p class="small">Курс задаёт направление линии между косяками, а глубина направлена перпендикулярно ей. После успешной серии камера переносит среднюю ширину и её screening-оболочку неопределённости в геометрию косяков. Это не жёсткая граница ошибки. Центр и направление остаются ручными; их допуски задаются отдельно. Камера не измеряет толщину и глубину косяков: задайте их номиналы и отдельные положительные абсолютные границы неопределённости. Планировщик расширяет каждый косяк до верхней допустимой толщины и глубины, сохраняя консервативную границу чистого проёма. Нулевой или отсутствующий допуск означает «не задан», а не отсутствие реальной ошибки. При включённых воротах маршрут блокируется, пока положительные границы ширины, толщины, глубины, положения и курса не введены. Верхняя перемычка дополнительно требует положительных допусков datum, толщины, пролёта и глубины.</p>
 <label for="gateLintelEnabled"><input id="gateLintelEnabled" type="checkbox"> Учитывать измеренную верхнюю перемычку как отдельное вертикальное препятствие</label>
 <label for="gateLintelAlignmentConfirmed"><input id="gateLintelAlignmentConfirmed" type="checkbox"> Я независимо подтвердил: перемычка центрирована над проёмом, параллельна линии косяков и горизонтальна</label>
 <div class="grid">
@@ -546,9 +548,9 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 </main>
 
 <script src="vehicle-physics.js?v=20261127-8"></script>
-<script src="articulated-planner.js?v=20261127-5"></script>
+<script src="articulated-planner.js?v=20261127-6"></script>
 <script src="sensor-perception.js?v=20261126-2"></script>
-<script src="truckvision.js?v=20261127-11"></script>
+<script src="truckvision.js?v=20261127-12"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261126-5"></script>
 <script src="camera-measure.js?v=20261127-11"></script>
