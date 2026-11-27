@@ -2899,3 +2899,28 @@ test('increasing auxiliary-envelope uncertainty expands the corresponding swept-
   'increasing uncertainty on a bound-dominating trailer component must increase the trailer sweep-rate bound');
 });
 
+
+
+test('measured auxiliary envelope participates in obstacle clearance and its uncertainty expands the collision footprint',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const obstacle=[{x:2.0,y:2.47,w:0.1,h:0.1,name:'post beside measured side step'}];
+ const envelope={
+  name:'measured side step',
+  anchor:'tractor-rear-axle',
+  longitudinalOffset:2.0,lateralOffset:2.0,
+  length:1.2,width:0.8,headingOffsetDeg:0,
+  uncertaintyMargin:0.01
+ };
+ const small=planner.clearance(q,obstacle,{
+  ...params,auxiliaryEnvelopes:[envelope]
+ });
+ const large=planner.clearance(q,obstacle,{
+  ...params,auxiliaryEnvelopes:[{...envelope,uncertaintyMargin:0.1}]
+ });
+ assert.ok(small.distance>0,
+  'the smaller measured uncertainty should leave the post just outside the auxiliary envelope');
+ assert.ok(large.distance<=0,
+  'the larger measured uncertainty should make the post intersect the expanded auxiliary envelope');
+ assert.equal(large.component,'measured side step');
+ assert.equal(large.obstacle,'post beside measured side step');
+});
