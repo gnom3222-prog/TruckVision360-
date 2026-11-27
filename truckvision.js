@@ -69,6 +69,8 @@ const cfg={
  gateHeadingUncertaintyDeg:0,
  gatePostWidth:0.25,
  gateDepth:0.6,
+ gatePostWidthUncertainty:0,
+ gateDepthUncertainty:0,
  gateLintelEnabled:false,
  gateLintelClearHeight:0,
  gateLintelCameraHeightUncertainty:0,
@@ -153,6 +155,8 @@ function gateGeometryForPlanner(){
   clearWidth:cfg.gateWidth,
   postWidth:cfg.gatePostWidth,
   depth:cfg.gateDepth,
+  postWidthUncertainty:cfg.gatePostWidthUncertainty,
+  depthUncertainty:cfg.gateDepthUncertainty,
   heading:cfg.gateHeadingDeg*Math.PI/180,
   widthUncertainty:cfg.gateWidthUncertainty,
   positionUncertainty:cfg.gatePositionUncertainty,
@@ -260,6 +264,8 @@ function readSettings(){
  if(gateEnabled){
   const requiredGateBounds=[
    ['gateWidthUncertainty',candidate.gateWidthUncertainty,0.001,2],
+   ['gatePostWidthUncertainty',candidate.gatePostWidthUncertainty,0.001,1],
+   ['gateDepthUncertainty',candidate.gateDepthUncertainty,0.001,2],
    ['gatePositionUncertainty',candidate.gatePositionUncertainty,0.001,2],
    ['gateHeadingUncertaintyDeg',candidate.gateHeadingUncertaintyDeg,0.001,45]
   ];
@@ -289,7 +295,10 @@ function readSettings(){
    const gateCandidate={
     centerX:candidate.gateCenterX,centerY:candidate.gateCenterY,
     clearWidth:candidate.gateWidth,postWidth:candidate.gatePostWidth,
-    depth:candidate.gateDepth,heading:candidate.gateHeadingDeg*Math.PI/180,
+    depth:candidate.gateDepth,
+    postWidthUncertainty:candidate.gatePostWidthUncertainty,
+    depthUncertainty:candidate.gateDepthUncertainty,
+    heading:candidate.gateHeadingDeg*Math.PI/180,
     widthUncertainty:candidate.gateWidthUncertainty,
     positionUncertainty:candidate.gatePositionUncertainty,
     headingUncertaintyDeg:candidate.gateHeadingUncertaintyDeg
@@ -362,6 +371,8 @@ function readSettings(){
   gateHeadingUncertaintyDeg:[0,45],
   gatePostWidth:[0.05,2],
   gateDepth:[0.05,10],
+  gatePostWidthUncertainty:[0,1],
+  gateDepthUncertainty:[0,2],
   gateLintelClearHeight:[0,15],
   gateLintelCameraHeightUncertainty:[0,2],
   gateLintelFloorUncertainty:[0,1],
@@ -1500,7 +1511,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261127-7');
+   worker=new Worker('./planner-worker.js?v=20261127-8');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
@@ -1645,7 +1656,7 @@ if(result.reason==='geometry-sensitive-start'||result.reason==='geometry-envelop
  const geometry=result.geometrySensitivity||{};
  const gate=geometry.gateGeometryUncertainty;
  const gateNote=gate&&gate.enabled?
-  ' Совместная оболочка ворот: ширина '+Number(gate.nominalClearWidth).toFixed(2)+' → '+Number(gate.conservativeClearWidth).toFixed(2)+' м; центр ±'+Number(gate.positionUncertaintyPerAxis).toFixed(2)+' м по X/Y; курс ±'+Number(gate.headingUncertaintyDeg).toFixed(2)+'°.':
+  ' Совместная оболочка ворот: чистая ширина '+Number(gate.nominalClearWidth).toFixed(2)+' → '+Number(gate.conservativeClearWidth).toFixed(2)+' м; толщина косяка '+Number(gate.nominalPostWidth).toFixed(2)+' → '+Number(gate.conservativePostWidth).toFixed(2)+' м; глубина '+Number(gate.nominalDepth).toFixed(2)+' → '+Number(gate.conservativeDepth).toFixed(2)+' м; центр ±'+Number(gate.positionUncertaintyPerAxis).toFixed(2)+' м по X/Y; курс ±'+Number(gate.headingUncertaintyDeg).toFixed(2)+'°.':
   '';
  const perObstacleCount=Math.max(0,Number(geometry.perObstaclePoseEnvelopeCount)||0);
  const perObstacleNote=perObstacleCount?
@@ -1893,7 +1904,7 @@ if(result.reason==='uncertainty-sensitive-start'){
 const geometrySensitivity=result.geometrySensitivity||{};
 const gateUncertainty=geometrySensitivity.gateGeometryUncertainty;
 const gateGeometryNote=gateUncertainty&&gateUncertainty.enabled?
- ' Геометрия ворот проверена совместной ограниченной оболочкой: чистая ширина '+Number(gateUncertainty.nominalClearWidth).toFixed(2)+' → '+Number(gateUncertainty.conservativeClearWidth).toFixed(2)+' м; центр ±'+Number(gateUncertainty.positionUncertaintyPerAxis).toFixed(2)+' м по X/Y; курс ±'+Number(gateUncertainty.headingUncertaintyDeg).toFixed(2)+'°. Это сравнение номинального проёма с консервативно расширенными косяками, а не перебор всех независимых реализаций ошибок.':'';
+ ' Геометрия ворот проверена совместной ограниченной оболочкой: чистая ширина '+Number(gateUncertainty.nominalClearWidth).toFixed(2)+' → '+Number(gateUncertainty.conservativeClearWidth).toFixed(2)+' м; толщина косяка '+Number(gateUncertainty.nominalPostWidth).toFixed(2)+' → '+Number(gateUncertainty.conservativePostWidth).toFixed(2)+' м; глубина '+Number(gateUncertainty.nominalDepth).toFixed(2)+' → '+Number(gateUncertainty.conservativeDepth).toFixed(2)+' м; центр ±'+Number(gateUncertainty.positionUncertaintyPerAxis).toFixed(2)+' м по X/Y; курс ±'+Number(gateUncertainty.headingUncertaintyDeg).toFixed(2)+'°. Это сравнение номинального проёма с консервативно расширенными косяками, а не перебор всех независимых реализаций ошибок.':'';
 const geometryNote=geometrySensitivity.status==='stable-within-bounded-envelope'?
  ' Дополнительно проверена расширенная геометрия: положение препятствий ±'+geometrySensitivity.obstaclePositionUncertainty.toFixed(2)+' м по каждой оси, ошибка полного размера ±'+geometrySensitivity.obstacleSizeUncertainty.toFixed(2)+' м, внешний контур автопоезда расширен на '+geometrySensitivity.vehicleFootprintUncertainty.toFixed(2)+' м с каждой грани. Параметры wheelbase, hitchOffset и kingpinAxles не варьировались; это ограниченная проверка оболочки, не полный анализ неопределённости.'+gateGeometryNote:
  geometrySensitivity.status==='zero-geometry-bounds'?' Геометрические границы неопределённости заданы нулевыми; расширенная проверка не выполнялась.'+gateGeometryNote:'';
@@ -2540,6 +2551,8 @@ function applyCameraGateRegistration(registration){
  };
  const postWidth=readGateSetting('gatePostWidth','gatePostWidth');
  const depth=readGateSetting('gateDepth','gateDepth');
+ const postWidthUncertainty=readGateSetting('gatePostWidthUncertainty','gatePostWidthUncertainty');
+ const depthUncertainty=readGateSetting('gateDepthUncertainty','gateDepthUncertainty');
  const positionUncertainty=readGateSetting('gatePositionUncertainty','gatePositionUncertainty');
  const headingUncertaintyDeg=readGateSetting('gateHeadingUncertaintyDeg','gateHeadingUncertaintyDeg');
  const lintelEnabled=!!($('gateLintelEnabled')&&$('gateLintelEnabled').checked);
@@ -2557,12 +2570,14 @@ function applyCameraGateRegistration(registration){
  }:null;
  if(lintelEnabled&&!lintelAlignmentConfirmed)return false;
  if(![centerX,centerY,clearWidth,headingDeg,widthUncertaintyBound,
-      postWidth,depth,positionUncertainty,headingUncertaintyDeg].every(Number.isFinite)||
+      postWidth,depth,postWidthUncertainty,depthUncertainty,positionUncertainty,headingUncertaintyDeg].every(Number.isFinite)||
     Math.abs(centerX)>100||Math.abs(centerY)>100||
     clearWidth<1||clearWidth>20||headingDeg<-180||headingDeg>180||
     widthUncertaintyBound<0.001||widthUncertaintyBound>2||
     widthUncertaintyBound>=clearWidth-0.05||
     postWidth<0.05||postWidth>2||depth<0.05||depth>10||
+    postWidthUncertainty<0.001||postWidthUncertainty>1||postWidth+postWidthUncertainty>3||
+    depthUncertainty<0.001||depthUncertainty>2||depth+depthUncertainty>12||
     positionUncertainty<0.001||positionUncertainty>2||
     headingUncertaintyDeg<0.001||headingUncertaintyDeg>45||
     !Number.isFinite(clearHeight)||clearHeight<=0.5||clearHeight>15||
@@ -2572,7 +2587,7 @@ function applyCameraGateRegistration(registration){
  try{
   const gate={
    centerX,centerY,clearWidth,
-   postWidth,depth,
+   postWidth,depth,postWidthUncertainty,depthUncertainty,
    heading:headingDeg*Math.PI/180,
    widthUncertainty:widthUncertaintyBound,
    positionUncertainty,
@@ -2590,6 +2605,8 @@ function applyCameraGateRegistration(registration){
  cfg.gateHeadingDeg=headingDeg;
  cfg.gatePostWidth=postWidth;
  cfg.gateDepth=depth;
+ cfg.gatePostWidthUncertainty=postWidthUncertainty;
+ cfg.gateDepthUncertainty=depthUncertainty;
  cfg.gatePositionUncertainty=positionUncertainty;
  cfg.gateHeadingUncertaintyDeg=headingUncertaintyDeg;
  cfg.gateLintelEnabled=lintelEnabled;

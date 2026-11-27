@@ -39,6 +39,8 @@ function bootSimulator(options={}){
  for(const id of Object.keys(values))getElementById(id);
  elements.gatePositionUncertainty.value='0.05';
  elements.gateHeadingUncertaintyDeg.value='1';
+ elements.gatePostWidthUncertainty.value='0.02';
+ elements.gateDepthUncertainty.value='0.03';
  const canvas=getElementById('view');
  canvas.width=1000;
  canvas.height=650;
@@ -138,11 +140,22 @@ test('simulator exposes measured gate geometry and invalidates a route when gate
  assert.match(elements.routeAdvice.textContent,/Параметры модели изменены/);
 });
 
-test('route planning is blocked when any enabled gate pose or width bound is zero',()=>{
- for(const field of ['gateWidthUncertainty','gatePositionUncertainty','gateHeadingUncertaintyDeg']){
+test('gate jamb uncertainty controls advertise positive minima',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
+ for(const id of ['gatePostWidthUncertainty','gateDepthUncertainty']){
+  const input=html.match(new RegExp('<input[^>]*id="'+id+'"[^>]*>'));
+  assert.ok(input,'missing input '+id);
+  assert.match(input[0],/min="0\.001"/,'input '+id+' must reject zero uncertainty');
+ }
+});
+
+test('route planning is blocked when any enabled gate dimension or pose bound is zero',()=>{
+ for(const field of ['gateWidthUncertainty','gatePostWidthUncertainty','gateDepthUncertainty','gatePositionUncertainty','gateHeadingUncertaintyDeg']){
   const {elements}=bootSimulator();
   elements.gateEnabled.checked=true;
   elements.gateWidthUncertainty.value='0.08';
+  elements.gatePostWidthUncertainty.value='0.02';
+  elements.gateDepthUncertainty.value='0.03';
   elements.gatePositionUncertainty.value='0.05';
   elements.gateHeadingUncertaintyDeg.value='1';
   elements[field].value='0';
@@ -152,18 +165,45 @@ test('route planning is blocked when any enabled gate pose or width bound is zer
  }
 });
 
-test('camera gate registration rejects zero manual position or heading uncertainty atomically',()=>{
- const {elements,windowObject}=bootSimulator();
- const before=[elements.gateWidth.value,elements.gateWidthUncertainty.value,elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value];
- elements.gatePositionUncertainty.value='0';
- assert.equal(windowObject.TruckVisionApplyGateRegistration({centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08}),false);
- assert.deepEqual([elements.gateWidth.value,elements.gateWidthUncertainty.value,elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value],before);
- elements.gatePositionUncertainty.value='0.05';
- elements.gateHeadingUncertaintyDeg.value='0';
- assert.equal(windowObject.TruckVisionApplyGateRegistration({centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08}),false);
- assert.deepEqual([elements.gateWidth.value,elements.gateWidthUncertainty.value,elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value],before);
+test('route planning is blocked when nominal gate jamb dimensions are invalid',()=>{
+ for(const field of ['gatePostWidth','gateDepth']){
+  const {elements}=bootSimulator();
+  elements.gateEnabled.checked=true;
+  elements.gateWidthUncertainty.value='0.08';
+  elements.gatePostWidthUncertainty.value='0.02';
+  elements.gateDepthUncertainty.value='0.03';
+  elements.gatePositionUncertainty.value='0.05';
+  elements.gateHeadingUncertaintyDeg.value='1';
+  elements[field].value='0';
+  elements.planRoute.onclick();
+  assert.ok(elements.routeAdvice.textContent.includes(field+':'));
+  assert.match(elements.difficultyAdvice.textContent,/Сложность не рассчитана/);
+ }
 });
 
+test('camera gate registration rejects invalid jamb dimensions and zero jamb/pose bounds atomically',()=>{
+ const {elements,windowObject}=bootSimulator();
+ const fields=[
+  ['gatePostWidth','0','0.25'],['gateDepth','0','0.6'],
+  ['gatePostWidthUncertainty','0','0.02'],['gateDepthUncertainty','0','0.03'],
+  ['gatePositionUncertainty','0','0.05'],['gateHeadingUncertaintyDeg','0','1']
+ ];
+ const before=[elements.gateWidth.value,elements.gateWidthUncertainty.value,elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value];
+ for(const [field,invalidValue,validValue] of fields){
+  elements[field].value=invalidValue;
+  assert.equal(windowObject.TruckVisionApplyGateRegistration({
+   centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,
+   widthUncertaintyBound:0.08,clearHeight:3.8,heightUncertaintyBound:0.05
+  }),false,field+' must reject registration');
+  assert.deepEqual([elements.gateWidth.value,elements.gateWidthUncertainty.value,elements.gateCenterX.value,elements.gateCenterY.value,elements.gateHeadingDeg.value],before);
+  elements[field].value=validValue;
+ }
+ assert.equal(windowObject.TruckVisionApplyGateRegistration({
+  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,
+  widthUncertaintyBound:0.08,clearHeight:3.8,heightUncertaintyBound:0.05
+ }),true,'registration should succeed after all valid jamb dimensions and positive bounds are restored');
+});
+ 
 test('route planning is blocked when an enabled gate lintel lacks alignment confirmation',()=>{
  const {elements}=bootSimulator();
  elements.gateEnabled.checked=true;
@@ -592,12 +632,16 @@ test('camera registration rejects an uncertainty envelope that collapses the gat
  assert.notEqual(elements.gateEnabled.checked,true);
 });
 
-test('gate map uncertainty settings are forwarded to both jamb polygons',()=>{
+test('gate map and jamb dimension uncertainty settings are forwarded to both jamb polygons',()=>{
  const root=path.join(__dirname,'..');
  const source=fs.readFileSync(path.join(root,'truckvision.js'),'utf8');
  assert.match(source,/widthUncertainty:cfg\.gateWidthUncertainty/);
+ assert.match(source,/postWidthUncertainty:cfg\.gatePostWidthUncertainty/);
+ assert.match(source,/depthUncertainty:cfg\.gateDepthUncertainty/);
  assert.match(source,/positionUncertainty:cfg\.gatePositionUncertainty/);
  assert.match(source,/headingUncertaintyDeg:cfg\.gateHeadingUncertaintyDeg/);
+ assert.match(source,/gateUncertainty\.conservativePostWidth/);
+ assert.match(source,/gateUncertainty\.conservativeDepth/);
 });
 
 test('camera registration rejects invalid manual gate pose uncertainty without partial mutation',()=>{
@@ -608,7 +652,8 @@ test('camera registration rejects invalid manual gate pose uncertainty without p
  ];
  elements.gateHeadingUncertaintyDeg.value='46';
  const applied=windowObject.TruckVisionApplyGateRegistration({
-  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08
+  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08,
+  clearHeight:3.8,heightUncertaintyBound:0.05
  });
  assert.equal(applied,false);
  assert.deepEqual([
