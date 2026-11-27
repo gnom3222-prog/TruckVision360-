@@ -269,6 +269,9 @@ function readSettings(){
    }
   }
   if(candidate.gateLintelEnabled){
+   if(!$('gateLintelAlignmentConfirmed')||!$('gateLintelAlignmentConfirmed').checked){
+    errors.push('gateLintelAlignmentConfirmed: независимо подтвердите центрирование, параллельность и горизонтальность перемычки; иначе маршрут с включённой перемычкой заблокирован.');
+   }
    const lintelBounds=[
     ['gateLintelCameraHeightUncertainty',candidate.gateLintelCameraHeightUncertainty,0.001,2],
     ['gateLintelFloorUncertainty',candidate.gateLintelFloorUncertainty,0.001,1],
