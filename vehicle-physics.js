@@ -12,6 +12,7 @@
   wheelbase:{min:1,max:15},
   hitchOffset:{min:0,max:5},
   kingpinAxles:{min:0.5,max:30},
+  trailerKingpinToFront:{min:0.2,max:5,optional:true},
   trailerLength:{min:4,max:30},
   trailerWidth:{min:1.5,max:5},
   trailerAxleSpacing:{min:0.3,max:5,optional:true},
@@ -568,6 +569,7 @@
   check('wheelbase','wheelbaseUncertainty','колёсная база тягача');
   check('hitchOffset','hitchOffsetUncertainty','положение седла относительно задней оси');
   check('kingpinAxles','kingpinAxlesUncertainty','шкворень — эквивалентный центр тележки');
+  check('trailerKingpinToFront','trailerKingpinToFrontUncertainty','расстояние от шкворня до переднего торца полуприцепа');
   check('trailerLength','trailerLengthUncertainty','длина полуприцепа');
   check('trailerWidth','trailerWidthUncertainty','ширина полуприцепа');
   const spacing12=(params&&params.trailerAxleSpacing12)>0;
@@ -654,16 +656,19 @@
     errors.push(key+': расстояние между соседними осями должно быть не меньше 0,30 м.');
    }
   });
+  const trailerKingpinToFront=params.trailerKingpinToFront??1.5;
   const validAxleEnvelope=Number.isFinite(params.kingpinAxles)&&
    params.kingpinAxles>=VEHICLE_PARAMETER_LIMITS.kingpinAxles.min&&
    params.kingpinAxles<=VEHICLE_PARAMETER_LIMITS.kingpinAxles.max&&
    Number.isFinite(params.trailerLength)&&
    params.trailerLength>=VEHICLE_PARAMETER_LIMITS.trailerLength.min&&
    params.trailerLength<=VEHICLE_PARAMETER_LIMITS.trailerLength.max&&
+   Number.isFinite(trailerKingpinToFront)&&trailerKingpinToFront>=0.2&&
+   trailerKingpinToFront<=params.trailerLength-0.5&&
    axleSpacings.every(spacing=>Number.isFinite(spacing)&&spacing>=0.3&&spacing<=5);
   if(validAxleEnvelope){
-   const bodyFront=1.5;
-   const bodyRear=-(params.trailerLength-1.5);
+   const bodyFront=trailerKingpinToFront;
+   const bodyRear=-(params.trailerLength-trailerKingpinToFront);
    trailerAxleOffsets(params).forEach((offset,index)=>{
     const position=-params.kingpinAxles+offset;
     if(position>bodyFront+1e-9||position<bodyRear-1e-9){
@@ -885,12 +890,13 @@
   const cabWidth=params.cabWidth??2.25;
   const cab=localPoint(q,q.psi,cabOffset);
   const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
+  const trailerKingpinToFront=params.trailerKingpinToFront??1.5;
   // The tractor rectangle remains a broad outer envelope. The cab is a
   // nested diagnostic component whose dimensions can be calibrated separately.
   return[
    bodyCorners(q,q.psi,5+uncertainty,-1.2-uncertainty,2.55+2*uncertainty),
    bodyCorners(cab,q.psi,cabFront+uncertainty,-cabRear-uncertainty,cabWidth+2*uncertainty),
-   bodyCorners(h,q.psiT,1.5+uncertainty,-(params.trailerLength-1.5+uncertainty),params.trailerWidth+2*uncertainty)
+   bodyCorners(h,q.psiT,trailerKingpinToFront+uncertainty,-(params.trailerLength-trailerKingpinToFront+uncertainty),params.trailerWidth+2*uncertainty)
   ];
  }
 
@@ -977,16 +983,17 @@
    ))
   );
   const hitch=hitchPoint(q,params);
+  const trailerKingpinToFront=params.trailerKingpinToFront??1.5;
   const trailerWheelComponents=wheels.filter(wheel=>
    wheel.vehiclePart==='полуприцеп'&&(includeInternalComponentsForVertical||!!wheel.verticalRange||polygonOutsideEnvelope(
-    wheel.polygon,hitch,q.psiT,1.5+uncertainty,
-    -(params.trailerLength-1.5+uncertainty),params.trailerWidth+2*uncertainty
+    wheel.polygon,hitch,q.psiT,trailerKingpinToFront+uncertainty,
+    -(params.trailerLength-trailerKingpinToFront+uncertainty),params.trailerWidth+2*uncertainty
    ))
   );
   const trailerAuxiliaryComponents=auxiliary.filter(component=>
    component.vehiclePart==='полуприцеп'&&(includeInternalComponentsForVertical||!!component.verticalRange||polygonOutsideEnvelope(
-    component.polygon,hitch,q.psiT,1.5+uncertainty,
-    -(params.trailerLength-1.5+uncertainty),params.trailerWidth+2*uncertainty
+    component.polygon,hitch,q.psiT,trailerKingpinToFront+uncertainty,
+    -(params.trailerLength-trailerKingpinToFront+uncertainty),params.trailerWidth+2*uncertainty
    ))
   );
   const tractorBodyRange=applySuspensionTravelToVerticalRange(vehicleVerticalRange(params,'tractor-body'),bodies[0],q,params,'tractor');
