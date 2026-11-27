@@ -104,6 +104,13 @@ test('vehicle geometry validation rejects missing, non-finite and implausible di
  assert.ok(errors.some(message=>message.startsWith('kingpinAxles:')));
 });
 
+test('vehicle geometry rejects a kingpin front offset that leaves insufficient rear body',()=>{
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:5,
+  trailerWidth:2.55,trailerAxleSpacing:1.3,trailerKingpinToFront:4.6};
+ const errors=physics.validateVehicleParams(p);
+ assert.ok(errors.some(message=>message.includes('trailerKingpinToFront')));
+});
+
 test('vehicle geometry rejects a three-axle group extending beyond the trailer body',()=>{
  const base={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55};
  const tooWide={...base,trailerAxleSpacing:5};
@@ -315,6 +322,17 @@ test('integrated equivalent axle center remains tangent to trailer heading acros
     'equivalent axle-center displacement should remain tangent to the trailer heading');
   }
  }
+});
+
+test('trailer body contour uses the measured kingpin-to-front offset and derives rear overhang',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,
+  trailerWidth:2.55,trailerKingpinToFront:2.1,footprintUncertainty:0};
+ const hitch=physics.hitchPoint(q,p);
+ const polygon=physics.vehiclePolygons(q,p)[2];
+ const xs=polygon.map(point=>point.x);
+ near(Math.max(...xs),hitch.x+2.1);
+ near(Math.min(...xs),hitch.x-(13.6-2.1));
 });
 
 test('bounded footprint uncertainty expands tractor, cab, and trailer contours outward',()=>{
@@ -1196,14 +1214,14 @@ test('suspension travel rejects derived pitch or roll slopes outside the lineari
 
 test('vehicle geometry calibration status treats zero uncertainty as unbounded, not exact',()=>{
  const nominal={
-  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerKingpinToFront:1.5,trailerLength:13.6,trailerWidth:2.55,
   trailerAxleSpacing:1.3,trailerAxleSpacing12:0,trailerAxleSpacing23:0,
   tractorSteeringTrack:2.05,tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.79,
   trailerAxle1Track:0,trailerAxle2Track:0,trailerAxle3Track:0,
   tireLength:0.72,tireWidth:0.44,cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25,
   mirrorOutboard:0,mirrorLongitudinal:3.0,mirrorLength:0.8,vehicleFootprintUncertainty:0.03,
   wheelbaseUncertainty:0,hitchOffsetUncertainty:0,kingpinAxlesUncertainty:0,
-  trailerLengthUncertainty:0,trailerWidthUncertainty:0,trailerAxleSpacingUncertainty:0,
+  trailerLengthUncertainty:0,trailerKingpinToFrontUncertainty:0,trailerWidthUncertainty:0,trailerAxleSpacingUncertainty:0,
   tractorSteeringTrackUncertainty:0,tractorFrontTrackUncertainty:0,tractorRearTrackUncertainty:0,
   trailerTrackUncertainty:0,tireLengthUncertainty:0,tireWidthUncertainty:0,
   cabOffsetUncertainty:0,cabFrontUncertainty:0,cabRearUncertainty:0,cabWidthUncertainty:0
@@ -1222,14 +1240,14 @@ test('vehicle geometry calibration status treats zero uncertainty as unbounded, 
 
 test('vehicle geometry calibration status accepts explicit bounds and checks enabled mirror/individual axle geometry',()=>{
  const params={
-  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerKingpinToFront:1.5,trailerLength:13.6,trailerWidth:2.55,
   trailerAxleSpacing:1.3,trailerAxleSpacing12:0,trailerAxleSpacing23:0,
   tractorSteeringTrack:2.05,tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.79,
   trailerAxle1Track:0,trailerAxle2Track:0,trailerAxle3Track:0,
   tireLength:0.72,tireWidth:0.44,cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25,
   mirrorOutboard:0,mirrorLongitudinal:3.0,mirrorLength:0.8,vehicleFootprintUncertainty:0.03,
   wheelbaseUncertainty:0.02,hitchOffsetUncertainty:0.02,kingpinAxlesUncertainty:0.05,
-  trailerLengthUncertainty:0.03,trailerWidthUncertainty:0.02,trailerAxleSpacingUncertainty:0.01,
+  trailerLengthUncertainty:0.03,trailerKingpinToFrontUncertainty:0.02,trailerWidthUncertainty:0.02,trailerAxleSpacingUncertainty:0.01,
   tractorSteeringTrackUncertainty:0.01,tractorFrontTrackUncertainty:0.01,tractorRearTrackUncertainty:0.01,
   trailerTrackUncertainty:0.02,tireLengthUncertainty:0.01,tireWidthUncertainty:0.01,
   cabOffsetUncertainty:0.02,cabFrontUncertainty:0.02,cabRearUncertainty:0.02,cabWidthUncertainty:0.02
