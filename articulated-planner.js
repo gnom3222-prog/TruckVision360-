@@ -137,18 +137,22 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
   if(!gate||typeof gate!=='object')throw new Error('Параметры ворот отсутствуют.');
   const {centerX,centerY,clearWidth,postWidth,depth,heading}=gate;
   const widthUncertainty=gate.widthUncertainty;
+  const postWidthUncertainty=gate.postWidthUncertainty===undefined&&allowNominalZeroUncertainty?0:gate.postWidthUncertainty;
+  const depthUncertainty=gate.depthUncertainty===undefined&&allowNominalZeroUncertainty?0:gate.depthUncertainty;
   const positionUncertainty=gate.positionUncertainty;
   const headingUncertaintyDeg=gate.headingUncertaintyDeg;
   const minimumUncertainty=allowNominalZeroUncertainty?0:0.001;
   if(![centerX,centerY,clearWidth,postWidth,depth,heading,
-       widthUncertainty,positionUncertainty,headingUncertaintyDeg].every(Number.isFinite)||
+       widthUncertainty,postWidthUncertainty,depthUncertainty,positionUncertainty,headingUncertaintyDeg].every(Number.isFinite)||
      Math.abs(centerX)>10000||Math.abs(centerY)>10000||
      clearWidth<=0||clearWidth>50||postWidth<=0||postWidth>5||
      depth<=0||depth>10||
      widthUncertainty<minimumUncertainty||widthUncertainty>2||widthUncertainty>=clearWidth||
+     postWidthUncertainty<minimumUncertainty||postWidthUncertainty>1||postWidth+postWidthUncertainty>6||
+     depthUncertainty<minimumUncertainty||depthUncertainty>2||depth+depthUncertainty>12||
      positionUncertainty<minimumUncertainty||positionUncertainty>2||
      headingUncertaintyDeg<minimumUncertainty||headingUncertaintyDeg>45){
-   throw new Error('Ворота требуют явных положительных границ неопределённости: ширина и положение 0,001–2 м, направление 0,001–45°; ноль и отсутствие отклоняются.');
+   throw new Error('Ворота требуют явных положительных границ неопределённости: ширина проёма и положение 0,001–2 м, толщина косяка 0,001–1 м, глубина косяка 0,001–2 м, направление 0,001–45°; ноль и отсутствие отклоняются.');
   }
   const lintel=gate.lintel===undefined||gate.lintel===null?null:gate.lintel;
   let lintelObstacle=null;
@@ -231,9 +235,14 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
   // widthUncertainty is an absolute bound on the full clear width. Moving
   // both jambs inward by half this amount models the narrowest opening.
   const conservativeClearWidth=clearWidth-widthUncertainty;
+  const conservativePostWidth=postWidth+postWidthUncertainty;
+  const conservativeDepth=depth+depthUncertainty;
   const ux=Math.cos(heading),uy=Math.sin(heading);
   const nx=-uy,ny=ux;
-  const halfOffset=conservativeClearWidth/2+postWidth/2;
+  // Move each jamb center out with its expanded thickness. This keeps the
+  // conservative inner face at the narrowed opening boundary while covering
+  // the largest admissible post width.
+  const halfOffset=conservativeClearWidth/2+conservativePostWidth/2;
   const headingDelta=headingUncertaintyDeg*Math.PI/180;
   const positionInflation=Math.SQRT2*positionUncertainty;
   const makePost=(side,name)=>{
@@ -244,10 +253,10 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
     y:cy+along*uy+across*ny
    });
    const nominalPolygon=[
-    point(-postWidth/2,-depth/2),
-    point(postWidth/2,-depth/2),
-    point(postWidth/2,depth/2),
-    point(-postWidth/2,depth/2)
+    point(-conservativePostWidth/2,-conservativeDepth/2),
+    point(conservativePostWidth/2,-conservativeDepth/2),
+    point(conservativePostWidth/2,conservativeDepth/2),
+    point(-conservativePostWidth/2,conservativeDepth/2)
    ];
    // A heading error rotates every jamb vertex around the manually supplied
    // gate center. 2*R*sin(delta/2) bounds that displacement for |delta|.
@@ -261,6 +270,12 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
      nominalClearWidth:clearWidth,
      conservativeClearWidth,
      widthUncertainty,
+     nominalPostWidth:postWidth,
+     postWidthUncertainty,
+     conservativePostWidth,
+     nominalDepth:depth,
+     depthUncertainty,
+     conservativeDepth,
      positionUncertaintyPerAxis:positionUncertainty,
      headingUncertaintyDeg,
      positionInflation,
