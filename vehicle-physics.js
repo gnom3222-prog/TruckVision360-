@@ -183,10 +183,10 @@
    }else if(suspensionAttachment==='trailer-body'&&!String(entry.anchor||'').startsWith('trailer-')){
     errors.push(prefix+'trailer-body допускается только для оболочки, привязанной к оси полуприцепа.');
    }
-   const longitudinalOffset=entry.longitudinalOffset??0;
-   const lateralOffset=entry.lateralOffset??0;
-   const headingOffsetDeg=entry.headingOffsetDeg??0;
-   const uncertaintyMargin=entry.uncertaintyMargin??0;
+   const longitudinalOffset=entry.longitudinalOffset;
+   const lateralOffset=entry.lateralOffset;
+   const headingOffsetDeg=entry.headingOffsetDeg;
+   const uncertaintyMargin=entry.uncertaintyMargin;
    if(!Number.isFinite(longitudinalOffset)||Math.abs(longitudinalOffset)>5){
     errors.push(prefix+'продольное смещение должно находиться в диапазоне ±5 м.');
    }
@@ -202,8 +202,8 @@
    if(!Number.isFinite(entry.width)||entry.width<0.05||entry.width>5){
     errors.push(prefix+'ширина должна быть измеренным числом от 0,05 до 5 м.');
    }
-   if(!Number.isFinite(uncertaintyMargin)||uncertaintyMargin<0||uncertaintyMargin>1){
-    errors.push(prefix+'запас неопределённости должен находиться в диапазоне 0–1 м.');
+   if(!Number.isFinite(uncertaintyMargin)||uncertaintyMargin<0.001||uncertaintyMargin>1){
+    errors.push(prefix+'запас неопределённости должен быть явно задан положительным числом от 0,001 до 1 м.');
    }
    const hasZMin=entry.zMin!==undefined,hasZMax=entry.zMax!==undefined;
    const verticalUncertaintyMargin=entry.verticalUncertaintyMargin;
@@ -624,6 +624,37 @@
     check(spacingKey,spacingKey+'Uncertainty','расстояние между центрами шин '+index+'-й оси');
    }else if(params&&params[widthKey]>0){
     check(widthKey,widthKey+'Uncertainty','ширина группы шин '+index+'-й оси');
+   }
+  }
+  const auxiliaryEnvelopes=params&&params.auxiliaryEnvelopes;
+  if(auxiliaryEnvelopes!==undefined){
+   if(!Array.isArray(auxiliaryEnvelopes)){
+    missingBounds.push({parameter:'auxiliaryEnvelopes',uncertainty:'auxiliaryEnvelopes',label:'дополнительные оболочки измеренных компонентов'});
+   }else{
+    auxiliaryEnvelopes.forEach((entry,index)=>{
+     const fallbackName='оболочка '+(index+1);
+     if(!entry||typeof entry!=='object'||Array.isArray(entry)){
+      missingBounds.push({parameter:'auxiliaryEnvelopes['+index+']',uncertainty:'auxiliaryEnvelopes['+index+']',label:fallbackName});
+      return;
+     }
+     const name=typeof entry.name==='string'&&entry.name.trim()?entry.name.trim():fallbackName;
+     for(const key of ['longitudinalOffset','lateralOffset','headingOffsetDeg']){
+      if(!Number.isFinite(entry[key])){
+       missingBounds.push({parameter:'auxiliaryEnvelopes['+index+'].'+key,uncertainty:'auxiliaryEnvelopes['+index+'].uncertaintyMargin',label:name+': положение и ориентация должны быть заданы явно'});
+      }
+     }
+     const margin=entry.uncertaintyMargin;
+     if(!Number.isFinite(margin)||margin<0.001||margin>1){
+      missingBounds.push({parameter:'auxiliaryEnvelopes['+index+'].uncertaintyMargin',uncertainty:'auxiliaryEnvelopes['+index+'].uncertaintyMargin',label:name+': положительная суммарная погрешность оболочки'});
+     }
+     const hasZMin=entry.zMin!==undefined,hasZMax=entry.zMax!==undefined;
+     if(hasZMin||hasZMax){
+      const verticalMargin=entry.verticalUncertaintyMargin;
+      if(!hasZMin||!hasZMax||!Number.isFinite(verticalMargin)||verticalMargin<0.001||verticalMargin>1){
+       missingBounds.push({parameter:'auxiliaryEnvelopes['+index+'].verticalUncertaintyMargin',uncertainty:'auxiliaryEnvelopes['+index+'].verticalUncertaintyMargin',label:name+': положительная вертикальная погрешность'});
+      }
+     }
+    });
    }
   }
   return {

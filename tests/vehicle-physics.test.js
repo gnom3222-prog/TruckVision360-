@@ -1188,7 +1188,7 @@ test('auxiliary envelopes move with suspension only when body attachment is expl
   auxiliaryEnvelopes:[{
    name:'Frame bracket',anchor:'tractor-front-axle',
    longitudinalOffset:0,lateralOffset:0,length:0.4,width:0.2,
-   headingOffsetDeg:0,uncertaintyMargin:0,zMin:1,zMax:1.5,verticalUncertaintyMargin:0.02
+   headingOffsetDeg:0,uncertaintyMargin:0.01,zMin:1,zMax:1.5,verticalUncertaintyMargin:0.02
   }]
  };
  const axleMounted=physics.auxiliaryEnvelopePolygons(q,base)[0];
@@ -1287,6 +1287,26 @@ test('vehicle geometry calibration status accepts explicit bounds and checks ena
  params.mirrorLengthUncertainty=0.02;
  status=physics.vehicleGeometryCalibrationStatus(params);
  assert.equal(status.status,'positive-bounds-present');
+
+ const measuredEnvelope={
+  name:'Measured frame bracket',anchor:'tractor-front-axle',
+  longitudinalOffset:0,lateralOffset:0.2,length:0.4,width:0.2,
+  headingOffsetDeg:0,uncertaintyMargin:0.03
+ };
+ params.auxiliaryEnvelopes=[measuredEnvelope];
+ status=physics.vehicleGeometryCalibrationStatus(params);
+ assert.equal(status.status,'positive-bounds-present');
+ params.auxiliaryEnvelopes=[{...measuredEnvelope,uncertaintyMargin:0}];
+ status=physics.vehicleGeometryCalibrationStatus(params);
+ assert.equal(status.status,'preliminary');
+ assert.ok(status.missingBounds.some(item=>item.parameter==='auxiliaryEnvelopes[0].uncertaintyMargin'));
+ params.auxiliaryEnvelopes=[{...measuredEnvelope,zMin:0.5,zMax:1.0}];
+ status=physics.vehicleGeometryCalibrationStatus(params);
+ assert.equal(status.status,'preliminary');
+ assert.ok(status.missingBounds.some(item=>item.parameter==='auxiliaryEnvelopes[0].verticalUncertaintyMargin'));
+ params.auxiliaryEnvelopes=[{...measuredEnvelope,zMin:0.5,zMax:1.0,verticalUncertaintyMargin:0.02}];
+ status=physics.vehicleGeometryCalibrationStatus(params);
+ assert.equal(status.status,'positive-bounds-present');
 });
 
 
@@ -1337,4 +1357,29 @@ test('tractor outer envelope is used to classify wheels and auxiliary parts outs
  const parts=physics.vehicleCollisionParts(q,p);
  const tractor=parts.find(part=>part.vehiclePart==='тягач');
  assert.ok(tractor.components.some(component=>component.name==='левое переднее колесо тягача'));
+});
+
+
+test('auxiliary envelopes require explicit local offsets and a positive combined uncertainty margin',()=>{
+ const valid={
+  name:'Measured bumper bracket',anchor:'tractor-front-axle',
+  longitudinalOffset:1.2,lateralOffset:0.8,length:0.4,width:0.25,
+  headingOffsetDeg:0,uncertaintyMargin:0.001
+ };
+ assert.deepEqual(physics.validateAuxiliaryEnvelopes([valid]),[]);
+ const requiredFields=[
+  ['longitudinalOffset','продольное смещение'],
+  ['lateralOffset','поперечное смещение'],
+  ['headingOffsetDeg','угловое смещение']
+ ];
+ for(const [key,message] of requiredFields){
+  const missing={...valid};delete missing[key];
+  assert.ok(physics.validateAuxiliaryEnvelopes([missing]).some(error=>error.includes(message)),key);
+ }
+ for(const margin of [undefined,0,0.0005,-0.01,1.01]){
+  const candidate={...valid};
+  if(margin===undefined)delete candidate.uncertaintyMargin;
+  else candidate.uncertaintyMargin=margin;
+  assert.ok(physics.validateAuxiliaryEnvelopes([candidate]).some(error=>error.includes('неопределённости')),String(margin));
+ }
 });

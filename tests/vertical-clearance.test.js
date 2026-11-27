@@ -52,7 +52,7 @@ test('vehicle vertical profiles require an explicit positive uncertainty margin'
 });
 
 test('auxiliary vertical envelopes require an explicit positive vertical uncertainty',()=>{
- const base={name:'Measured bracket',anchor:'tractor-front-axle',length:0.4,width:0.2,zMin:1,zMax:1.5};
+ const base={name:'Measured bracket',anchor:'tractor-front-axle',longitudinalOffset:0,lateralOffset:0,length:0.4,width:0.2,headingOffsetDeg:0,uncertaintyMargin:0.02,zMin:1,zMax:1.5};
  assert.ok(physics.validateVehicleParams({...params,auxiliaryEnvelopes:[base]}).some(error=>error.includes('verticalUncertaintyMargin')));
  assert.ok(physics.validateVehicleParams({...params,auxiliaryEnvelopes:[{...base,verticalUncertaintyMargin:0}]}).some(error=>error.includes('verticalUncertaintyMargin')));
  assert.deepEqual(physics.validateVehicleParams({...params,auxiliaryEnvelopes:[{...base,verticalUncertaintyMargin:0.001}]}),[]);
@@ -103,7 +103,7 @@ test('overlapping vertical intervals remain a zero-clearance contact',()=>{
 test('auxiliary axle hardware can carry its own measured vertical interval',()=>{
  const p={...params,auxiliaryEnvelopes:[{
   name:'Корпус ступицы',anchor:'trailer-axle-1',longitudinalOffset:0,lateralOffset:1.7,
-  length:0.6,width:0.5,zMin:0.35,zMax:0.9,verticalUncertaintyMargin:0.04
+  length:0.6,width:0.5,headingOffsetDeg:0,uncertaintyMargin:0.04,zMin:0.35,zMax:0.9,verticalUncertaintyMargin:0.04
  }]};
  assert.deepEqual(physics.validateVehicleParams(p),[]);
  const envelope=physics.auxiliaryEnvelopePolygons(pose,p)[0];
@@ -162,7 +162,7 @@ test('measured auxiliary height remains a separate component even inside the bod
   ...allProfiles,'trailer-body':{zMin:1.0,zMax:3.0,uncertaintyMargin:0.02}
  },auxiliaryEnvelopes:[{
   name:'Верхний кронштейн внутри контура',anchor:'trailer-axle-1',
-  longitudinalOffset:0,lateralOffset:0,length:0.4,width:0.4,
+  longitudinalOffset:0,lateralOffset:0,length:0.4,width:0.4,headingOffsetDeg:0,uncertaintyMargin:0.02,
   zMin:3.4,zMax:3.8,verticalUncertaintyMargin:0.02
  }]};
  const envelope=physics.auxiliaryEnvelopePolygons(pose,p)[0];
