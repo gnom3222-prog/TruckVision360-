@@ -37,7 +37,10 @@ function makeHarness(options={}){
  function createStream(){
   const listeners={};
   const track={
+   kind:'video',
+   label:'Back Camera',
    readyState:'live',
+   getSettings(){return {facingMode:'environment',width:640,height:480,frameRate:30};},
    addEventListener(type,handler){(listeners[type]||(listeners[type]=[])).push(handler);},
    fire(type){
     if(type==='ended')this.readyState='ended';
@@ -51,7 +54,7 @@ function makeHarness(options={}){
    }
   };
   tracks.push(track);
-  return {getTracks(){return [track];}};
+  return {getTracks(){return [track];},getVideoTracks(){return [track];}};
  }
  const geometry={
   validQuad(){return true;},

@@ -1,8 +1,37 @@
 (()=>{'use strict';
-const $=id=>document.getElementById(id),v=$('measureVideo'),c=$('measureOverlay'),ctx=c.getContext('2d'),status=$('cameraStatus'),geometry=window.TruckVisionCameraGeometry;
+const $=id=>document.getElementById(id),v=$('measureVideo'),c=$('measureOverlay'),ctx=c.getContext('2d'),status=$('cameraStatus'),streamInfo=$('cameraStreamInfo'),geometry=window.TruckVisionCameraGeometry;
 let stream=null,streamRequestId=0,startPending=false,mode=null,pts=[],Hcal=null,referencePoints=null,referenceWidth=0,referenceHeight=0,fw=0,fh=0,frameLocked=false,frameCaptureId=0,frameCaptureTime=null,lastGateMeasurementFrameId=-1,lastGateFrameTime=null,gateRepeatabilityTolerances=null,gateRepeatabilityPose=null,gateRepeatabilityMeasurementConfig=null,gateRepeatabilityComplete=false,lastObstacleMeasurementFrameId=-1,lastObstacleFrameTime=null,obstacleRepeatabilityTolerances=null,obstacleRepeatabilityPose=null,obstacleRepeatabilityMeasurementConfig=null,obstacleRepeatabilityVerticalMeasurement=null,obstacleRepeatabilityComplete=false;
 const gateReadings=[],obstacleReadings=[];
-const say=s=>status.textContent=s,dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const say=s=>status.textContent=s,setStreamInfo=s=>{if(streamInfo)streamInfo.textContent=s;},dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function readCameraTrackDiagnostics(mediaStream){
+ const tracks=typeof mediaStream.getVideoTracks==='function'
+  ?mediaStream.getVideoTracks()
+  :mediaStream.getTracks().filter(track=>track.kind==='video');
+ const track=tracks&&tracks[0];
+ if(!track){const error=new Error('Браузер не вернул видеодорожку камеры. Измерение остановлено.');error.name='CameraVideoTrackError';throw error;}
+ let settings={};
+ if(typeof track.getSettings==='function'){
+  try{settings=track.getSettings()||{};}catch(_){}
+ }
+ const facingMode=typeof settings.facingMode==='string'?settings.facingMode.toLowerCase():'';
+ if(facingMode&&facingMode!=='environment'){
+  const error=new Error('Браузер сообщил, что выбрано не заднее направление камеры. Видеопоток остановлен; измерение запрещено.');
+  error.name='CameraFacingMismatchError';
+  throw error;
+ }
+ const parts=[];
+ const label=String(track.label||'').trim().slice(0,80);
+ if(label)parts.push('метка браузера: '+label);
+ if(facingMode)parts.push('направление: environment (задняя камера)');
+ else parts.push('направление не возвращено getSettings(); строгий запрос environment принят');
+ const width=Number(settings.width),height=Number(settings.height);
+ if(Number.isFinite(width)&&width>0&&Number.isFinite(height)&&height>0)parts.push('кадр '+Math.round(width)+'×'+Math.round(height)+' px');
+ else parts.push('размер кадра не сообщён');
+ const frameRate=Number(settings.frameRate);
+ if(Number.isFinite(frameRate)&&frameRate>0)parts.push(frameRate.toFixed(1)+' кадр/с');
+ setStreamInfo('Параметры активной камеры: '+parts.join(' · ')+'. Объектив 1×/0,5× и точность геометрии этими данными не подтверждаются.');
+ return track;
+}
 function readMeasurementUncertainty(){
  const pointText=$('cameraPointSigma').value.trim();
  const referenceText=$('cameraReferenceSigma').value.trim();
@@ -217,6 +246,7 @@ async function start(){
    navigator.mediaDevices.getSupportedConstraints()?.facingMode===true;
  }catch(_){}
  if(!facingModeSupported){
+  setStreamInfo('Параметры потока недоступны: камера не запущена.');
   say('Браузер не подтверждает поддержку выбора задней камеры. Обновите Safari или используйте совместимый браузер; измерение не запускается.');
   return;
  }
@@ -230,6 +260,7 @@ async function start(){
    if(document.visibilityState==='hidden')say('Страница перешла в фон. Запрошенный поток остановлен; вернитесь и нажмите «Включить камеру».');
    return;
   }
+  readCameraTrackDiagnostics(acquiredStream);
   stream=acquiredStream;
   const activeStream=stream;
   const handleEnded=()=>{
@@ -239,6 +270,7 @@ async function start(){
    startPending=false;
    v.pause();
    v.srcObject=null;
+   setStreamInfo('Параметры потока недоступны: видеопоток завершён.');
    Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;
    ctx.clearRect(0,0,c.width,c.height);
    clearGateRepeatability(true);
@@ -260,8 +292,11 @@ async function start(){
    acquiredStream?.getTracks().forEach(t=>t.stop());
    return;
   }
-  const failedStream=stream;stream=null;failedStream?.getTracks().forEach(t=>t.stop());v.srcObject=null;
+  const failedStream=stream||acquiredStream;stream=null;failedStream?.getTracks().forEach(t=>t.stop());v.srcObject=null;
+  setStreamInfo('Параметры потока не получены: камера не запущена.');
   const messages={
+   CameraFacingMismatchError:'Браузер сообщил не заднее направление камеры. Поток остановлен; измерение запрещено.',
+   CameraVideoTrackError:'Браузер не вернул видеодорожку камеры. Поток остановлен; измерение запрещено.',
    NotAllowedError:'Доступ к камере запрещён. Разрешите камеру для этого сайта в настройках Safari и нажмите «Включить камеру» ещё раз.',
    NotFoundError:'Задняя камера не найдена. Проверьте доступность задней камеры iPhone и повторите запуск.',
    NotReadableError:'Камера занята другим приложением или недоступна. Закройте другие приложения, использующие камеру.',
@@ -273,7 +308,7 @@ async function start(){
   if(requestId===streamRequestId)startPending=false;
  }
 }
-function stop(){streamRequestId++;startPending=false;const activeStream=stream;stream=null;v.pause();activeStream?.getTracks().forEach(t=>t.stop());v.srcObject=null;Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;clearGateRepeatability(true);clearObstacleRepeatability(true);ctx.clearRect(0,0,c.width,c.height);say('Камера выключена. При следующем запуске нужна новая калибровка.');}
+function stop(){streamRequestId++;startPending=false;const activeStream=stream;stream=null;v.pause();activeStream?.getTracks().forEach(t=>t.stop());v.srcObject=null;setStreamInfo('Параметры потока недоступны: камера выключена.');Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;clearGateRepeatability(true);clearObstacleRepeatability(true);ctx.clearRect(0,0,c.width,c.height);say('Камера выключена. При следующем запуске нужна новая калибровка.');}
 function choose(m){
  if(!stream||!v.videoWidth){say('Сначала включите камеру.');return;}
  if((m==='gate'||m==='obstacle')&&!Hcal){say('Сначала выполните калибровку.');return;}
