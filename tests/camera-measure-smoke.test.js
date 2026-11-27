@@ -124,7 +124,7 @@ test('camera stream diagnostics report browser-provided rear direction and video
  assert.match(info,/environment/);
  assert.match(info,/1280×720 px/);
  assert.match(info,/30\.0 кадр\/с/);
- assert.match(info,/объектив 1×\/0,5×/);
+ assert.match(info,/[Оо]бъектив 1×\/0,5×/);
  assert.doesNotMatch(info,/private-device-id|private-group-id/);
  camera.fire('cameraStop','click');
  assert.match(camera.elements.cameraStreamInfo.textContent,/камера выключена/);
