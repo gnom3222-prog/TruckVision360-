@@ -1692,6 +1692,79 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    components:{pathLength,gearChangePenalty,articulationPenalty,clearancePenalty}
   };
  }
+
+ function explainStartActionComparison(candidates,selectedIndex,options={}){
+  if(!Array.isArray(candidates)||candidates.length===0)return {ok:false,reason:'no-candidates'};
+  if(!Number.isInteger(selectedIndex)||selectedIndex<0||selectedIndex>=candidates.length)return {ok:false,reason:'invalid-selected-candidate'};
+  const firstTurnDistanceTolerance=options.firstTurnDistanceTolerance===undefined?0.25:options.firstTurnDistanceTolerance;
+  if(!Number.isFinite(firstTurnDistanceTolerance)||firstTurnDistanceTolerance<0)return {ok:false,reason:'invalid-first-turn-distance-tolerance'};
+  const actionOf=candidate=>({
+   initialGear:candidate.initialGear,
+   firstTurn:candidate.steeringWheelDirection??candidate.firstTurn??null,
+   firstTurnGear:candidate.firstTurnGear??null,
+   tractorYawDirection:candidate.tractorYawDirection??null,
+   firstTurnDistance:Number.isFinite(candidate.firstTurnDistance)?candidate.firstTurnDistance:null
+  });
+  const sameAction=(a,b)=>{
+   if(a.initialGear!==b.initialGear||a.firstTurn!==b.firstTurn||a.firstTurnGear!==b.firstTurnGear||a.tractorYawDirection!==b.tractorYawDirection)return false;
+   if(a.firstTurnDistance===null||b.firstTurnDistance===null)return a.firstTurnDistance===b.firstTurnDistance;
+   return Math.abs(a.firstTurnDistance-b.firstTurnDistance)<=firstTurnDistanceTolerance+1e-9;
+  };
+  const selected=candidates[selectedIndex];
+  if(!selected||!Number.isFinite(selected.cost)||selected.cost<0)return {ok:false,reason:'invalid-selected-candidate'};
+  const selectedAction=actionOf(selected),alternatives=[];
+  for(let index=0;index<candidates.length;index++){
+   if(index===selectedIndex)continue;
+   const candidate=candidates[index];
+   if(!candidate||!Number.isFinite(candidate.cost)||candidate.cost<0)return {ok:false,reason:'invalid-candidate-cost',candidateIndex:index};
+   if(!sameAction(selectedAction,actionOf(candidate)))alternatives.push({index,candidate});
+  }
+  alternatives.sort((a,b)=>a.candidate.cost-b.candidate.cost||a.index-b.index);
+  const selectedSummary={index:selectedIndex,label:selected.label||'выбранный вариант',cost:selected.cost,action:selectedAction};
+  if(!alternatives.length)return {
+   ok:true,status:'no-different-action-alternative',selected:selectedSummary,alternative:null,
+   candidatesCompared:candidates.length,firstTurnDistanceTolerance
+  };
+  const alternative=alternatives[0];
+  if(alternative.candidate.cost<selected.cost-1e-9)return {
+   ok:false,reason:'selected-candidate-is-not-lowest-cost',selectedIndex,alternativeIndex:alternative.index
+  };
+  const alternativeSummary={
+   index:alternative.index,label:alternative.candidate.label||'альтернатива',
+   cost:alternative.candidate.cost,action:actionOf(alternative.candidate)
+  };
+  const keys=['pathLength','gearChangePenalty','articulationPenalty','clearancePenalty'];
+  const selectedComponents=selected.scoreComponents,alternativeComponents=alternative.candidate.scoreComponents;
+  if(!selectedComponents||!alternativeComponents||!keys.every(key=>
+   Number.isFinite(selectedComponents[key])&&Number.isFinite(alternativeComponents[key]))){
+   return {
+    ok:true,status:'score-breakdown-unavailable',selected:selectedSummary,alternative:alternativeSummary,
+    scoreDelta:alternative.candidate.cost-selected.cost,componentDeltas:null,
+    candidatesCompared:candidates.length,firstTurnDistanceTolerance
+   };
+  }
+  const selectedComponentSum=keys.reduce((sum,key)=>sum+selectedComponents[key],0);
+  const alternativeComponentSum=keys.reduce((sum,key)=>sum+alternativeComponents[key],0);
+  const componentDeltas=Object.fromEntries(keys.map(key=>[key,alternativeComponents[key]-selectedComponents[key]]));
+  const componentDeltaSum=keys.reduce((sum,key)=>sum+componentDeltas[key],0);
+  const scoreDelta=alternative.candidate.cost-selected.cost;
+  if(Math.abs(selectedComponentSum-selected.cost)>1e-7||
+     Math.abs(alternativeComponentSum-alternative.candidate.cost)>1e-7||
+     Math.abs(componentDeltaSum-scoreDelta)>1e-7)return {
+   ok:false,reason:'score-breakdown-mismatch',scoreDelta,componentDeltaSum,
+   selectedComponentSum,alternativeComponentSum,
+   selectedIndex,alternativeIndex:alternative.index
+  };
+  const dominantComponent=keys.slice().sort((a,b)=>Math.abs(componentDeltas[b])-Math.abs(componentDeltas[a]))[0];
+  return {
+   ok:true,status:'compared-different-action',selected:selectedSummary,alternative:alternativeSummary,
+   scoreDelta,componentDeltas,componentDeltaSum,dominantComponent,
+   selectedHasLowerTotalScore:scoreDelta>0,candidatesCompared:candidates.length,
+   firstTurnDistanceTolerance,
+   note:'Разложение показывает арифметический вклад компонентов эвристического балла; оно не доказывает причинность и не является вероятностью безопасности.'
+  };
+ }
+
  function planAlternatives(options={}){
   const inputErrors=validatePlanOptions(options);
   if(inputErrors.length)return {ok:false,reason:'invalid-input',errors:inputErrors,expanded:0};
@@ -1824,6 +1897,10 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    ok:true,status:comparison.status,
    recommendation:comparison.recommendation||selected.recommendation,
    recommendationComparison:comparison,
+   recommendationEvidence:explainStartActionComparison(
+    candidateSummaries,comparison.bestCandidate.index,
+    {firstTurnDistanceTolerance:options.firstTurnDistanceTolerance}
+   ),
    selectedCandidate:comparison.bestCandidate.index,
    candidatesFound:candidates.length,candidatesAttempted:candidateCount,
    candidateSummaries,failures,
@@ -2606,5 +2683,5 @@ function planAlternativesWithVehicleParameterBounds(options={}){
  };
 }
 
-return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,parameterEndpointVectors,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,routeSegmentDistance,articulationExposure,recommendStart,nextGearTransitionBoundary,compareStartCandidates,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon,inflateObstaclePoseUncertainty});
+return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,parameterEndpointVectors,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,routeSegmentDistance,articulationExposure,recommendStart,nextGearTransitionBoundary,compareStartCandidates,explainStartActionComparison,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon,inflateObstaclePoseUncertainty});
 });
