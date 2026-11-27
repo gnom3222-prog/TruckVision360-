@@ -855,8 +855,34 @@ test('articulation exposure locates the peak angle and cumulative route distance
  assert.equal(result.sampleCount,4);
  assert.ok(Math.abs(result.maxSampleSpacing-2)<1e-12);
  assert.ok(result.maxAdjacentAngleChangeDegrees>50);
+ assert.ok(Math.abs(result.maxSampledAngleChangePerMeterDegrees-(Math.abs(Math.atan2(Math.sin(0.1-0.2),Math.cos(0.1-0.2)))*180/Math.PI))<1e-9);
+ assert.equal(result.maxSampledAngleChangePerMeterSegmentIndex,0);
+ assert.ok(Math.abs(result.maxSampledAngleChangePerMeterDistanceAlongRoute-0.5)<1e-12);
+ assert.equal(result.zeroDistanceAngleChangeCount,0);
  assert.equal(result.samplingMethod,'discrete-route-states');
  assert.equal(result.continuousPeakVerified,false);
+});
+
+test('articulation exposure reports maximum sampled angle change per metre on the tightest segment',()=>{
+ const result=planner.articulationExposure([
+  {x:0,y:0,psi:0,psiT:0},
+  {x:2,y:0,psi:0.1,psiT:0},
+  {x:3,y:0,psi:0.3,psiT:0}
+ ]);
+ assert.ok(Math.abs(result.maxSampledAngleChangePerMeterDegrees-(0.2*180/Math.PI))<1e-9);
+ assert.equal(result.maxSampledAngleChangePerMeterSegmentIndex,1);
+ assert.ok(Math.abs(result.maxSampledAngleChangePerMeterDistanceAlongRoute-2.5)<1e-12);
+ assert.equal(result.zeroDistanceAngleChangeCount,0);
+});
+
+test('articulation exposure flags angle jumps with no translation and does not invent a per-metre rate',()=>{
+ const result=planner.articulationExposure([
+  {x:0,y:0,psi:0,psiT:0},
+  {x:0,y:0,psi:0.2,psiT:0}
+ ]);
+ assert.equal(result.maxSampledAngleChangePerMeterDegrees,null);
+ assert.equal(result.maxSampledAngleChangePerMeterSegmentIndex,null);
+ assert.equal(result.zeroDistanceAngleChangeCount,1);
 });
 
 test('articulation exposure reports zero spacing for a single sampled state',()=>{
@@ -866,6 +892,9 @@ test('articulation exposure reports zero spacing for a single sampled state',()=
  assert.equal(result.sampleCount,1);
  assert.equal(result.maxSampleSpacing,0);
  assert.equal(result.maxAdjacentAngleChangeDegrees,0);
+ assert.equal(result.maxSampledAngleChangePerMeterDegrees,null);
+ assert.equal(result.maxSampledAngleChangePerMeterSegmentIndex,null);
+ assert.equal(result.zeroDistanceAngleChangeCount,0);
  assert.equal(result.continuousPeakVerified,false);
 });
 
