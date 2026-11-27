@@ -138,12 +138,18 @@ test('simulator exposes measured gate geometry and invalidates a route when gate
  assert.match(elements.routeAdvice.textContent,/Параметры модели изменены/);
 });
 
-test('route planning is blocked when enabled gate has missing uncertainty bounds',()=>{
- const {elements}=bootSimulator();
- elements.gateEnabled.checked=true;
- elements.planRoute.onclick();
- assert.match(elements.routeAdvice.textContent,/gateWidthUncertainty: при включённых воротах задайте положительную границу неопределённости/);
- assert.match(elements.difficultyAdvice.textContent,/Сложность не рассчитана/);
+test('route planning is blocked when any enabled gate pose or width bound is zero',()=>{
+ for(const field of ['gateWidthUncertainty','gatePositionUncertainty','gateHeadingUncertaintyDeg']){
+  const {elements}=bootSimulator();
+  elements.gateEnabled.checked=true;
+  elements.gateWidthUncertainty.value='0.08';
+  elements.gatePositionUncertainty.value='0.05';
+  elements.gateHeadingUncertaintyDeg.value='1';
+  elements[field].value='0';
+  elements.planRoute.onclick();
+  assert.ok(elements.routeAdvice.textContent.includes(field+': при включённых воротах задайте положительную границу неопределённости'));
+  assert.match(elements.difficultyAdvice.textContent,/Сложность не рассчитана/);
+ }
 });
 
 test('camera gate registration rejects zero manual position or heading uncertainty atomically',()=>{
@@ -168,6 +174,23 @@ test('route planning is blocked when an enabled gate lintel lacks alignment conf
  elements.gateLintelAlignmentConfirmed.checked=false;
  elements.planRoute.onclick();
  assert.match(elements.routeAdvice.textContent,/gateLintelAlignmentConfirmed: независимо подтвердите центрирование, параллельность и горизонтальность/);
+});
+
+test('route planning is blocked when an enabled lintel has any zero uncertainty bound',()=>{
+ const fields=['gateLintelCameraHeightUncertainty','gateLintelFloorUncertainty','gateLintelThicknessUncertainty','gateLintelSpanUncertainty','gateLintelDepthUncertainty'];
+ for(const field of fields){
+  const {elements}=bootSimulator();
+  elements.gateEnabled.checked=true;
+  elements.gateWidthUncertainty.value='0.08';
+  elements.gatePositionUncertainty.value='0.05';
+  elements.gateHeadingUncertaintyDeg.value='1';
+  elements.gateLintelEnabled.checked=true;
+  elements.gateLintelAlignmentConfirmed.checked=true;
+  for(const key of fields)elements[key].value='0.02';
+  elements[field].value='0';
+  elements.planRoute.onclick();
+  assert.ok(elements.routeAdvice.textContent.includes(field+': для верхней перемычки задайте положительную границу неопределённости'));
+ }
 });
 
 test('automatic route remains blocked when obstacle checks are disabled',()=>{
@@ -391,6 +414,7 @@ test('camera obstacle registration requires three repeatable measurements and ap
  assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,repeatability),false,'a camera obstacle without independent height confirmation must be rejected');
  assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,'',poseUncertainty,repeatability,verticalMeasurement),false);
  assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,{positionX:0,positionY:0.15,headingDeg:2},repeatability,verticalMeasurement),false,'zero X uncertainty must be rejected');
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,{positionX:0.1,positionY:0,headingDeg:2},repeatability,verticalMeasurement),false,'zero Y uncertainty must be rejected');
  assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,{positionX:0.1,positionY:0.15,headingDeg:0},repeatability,verticalMeasurement),false,'zero heading uncertainty must be rejected');
  assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,repeatability,verticalMeasurement),true);
  assert.match(windowObject.TruckVisionCameraObstacleVerticalStatus,/только по горизонтальной 2D-оболочке/);
