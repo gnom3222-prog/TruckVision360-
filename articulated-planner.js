@@ -1439,6 +1439,22 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    terminalErrors:goalErrors(finish.q,goal)
   };
  }
+ function routeSegmentDistance(previous,current,index=0,context='route'){
+  if(!previous||!current||![previous.x,previous.y,current.x,current.y].every(Number.isFinite)){
+   throw new Error('Route segment '+index+' has invalid coordinates for '+context+'.');
+  }
+  const chordSpacing=Math.hypot(current.x-previous.x,current.y-previous.y);
+  if(current.stepDistance!==undefined){
+   if(!Number.isFinite(current.stepDistance)||current.stepDistance<0){
+    throw new Error('Route state '+index+' has invalid integration stepDistance for '+context+'.');
+   }
+   if(current.stepDistance+1e-8<chordSpacing){
+    throw new Error('Route state '+index+' moves farther than its integration stepDistance.');
+   }
+   return {distance:current.stepDistance,chordSpacing,source:'integration-stepDistance'};
+  }
+  return {distance:chordSpacing,chordSpacing,source:'coordinate-chord-fallback'};
+ }
  function articulationExposure(states){
   if(!Array.isArray(states)||states.length===0)throw new Error('Route states are required for articulation exposure.');
   let distance=0,peak=null,maxSampleSpacing=0,maxSampleChordSpacing=0,maxAdjacentAngleChangeDegrees=0;
@@ -1455,23 +1471,11 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    let sampleSpacing=0;
    if(i>0){
     const previous=states[i-1];
-    const chordSpacing=Math.hypot(current.x-previous.x,current.y-previous.y);
-    maxSampleChordSpacing=Math.max(maxSampleChordSpacing,chordSpacing);
-    if(current.stepDistance!==undefined){
-     if(!Number.isFinite(current.stepDistance)||current.stepDistance<0){
-      throw new Error('Route state '+i+' has invalid integration stepDistance for articulation exposure.');
-     }
-     if(current.stepDistance+1e-8<chordSpacing){
-      throw new Error('Route state '+i+' moves farther than its integration stepDistance.');
-     }
-     sampleSpacing=current.stepDistance;
-     stepDistanceSegmentCount++;
-    }else{
-     // External routes without the planner's spatial integration distance use
-     // the coordinate chord as a conservative fallback denominator.
-     sampleSpacing=chordSpacing;
-     chordFallbackSegmentCount++;
-    }
+    const segment=routeSegmentDistance(previous,current,i,'articulation exposure');
+    maxSampleChordSpacing=Math.max(maxSampleChordSpacing,segment.chordSpacing);
+    sampleSpacing=segment.distance;
+    if(segment.source==='integration-stepDistance')stepDistanceSegmentCount++;
+    else chordFallbackSegmentCount++;
     distance+=sampleSpacing;
     maxSampleSpacing=Math.max(maxSampleSpacing,sampleSpacing);
    }
@@ -1512,7 +1516,8 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
   }
   const distanceSource=stepDistanceSegmentCount&&chordFallbackSegmentCount?
    'mixed-stepDistance-and-chord-fallback':
-   stepDistanceSegmentCount?'integration-stepDistance':'coordinate-chord-fallback';
+   stepDistanceSegmentCount?'integration-stepDistance':
+   chordFallbackSegmentCount?'coordinate-chord-fallback':'no-segments';
   return {
    ...peak,
    sampleCount:states.length,
@@ -1552,7 +1557,11 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
   let tractorYawDirection=null;
   for(let i=1;i<states.length;i++){
    const previous=states[i-1],current=states[i];
-   distance+=Math.hypot(current.x-previous.x,current.y-previous.y);
+   try{
+    distance+=routeSegmentDistance(previous,current,i,'start recommendation').distance;
+   }catch(error){
+    return {ok:false,reason:'invalid-route-distance',message:error&&error.message?error.message:String(error)};
+   }
    const steer=Number(current.steer)||0;
    if(Math.abs(steer)>=steeringThreshold){
     firstTurn=steer>0?'left':'right';
@@ -1660,7 +1669,7 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
   for(let i=1;i<states.length;i++){
    if(i>0){
     const previous=states[i-1],current=states[i];
-    pathLength+=Math.hypot(current.x-previous.x,current.y-previous.y);
+    pathLength+=routeSegmentDistance(previous,current,i,'candidate route scoring').distance;
    }
    if(i>1){
     const gear=(states[i].gear??previousGear)<0?-1:1;
@@ -2597,5 +2606,5 @@ function planAlternativesWithVehicleParameterBounds(options={}){
  };
 }
 
-return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,parameterEndpointVectors,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,articulationExposure,recommendStart,nextGearTransitionBoundary,compareStartCandidates,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon,inflateObstaclePoseUncertainty});
+return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,parameterEndpointVectors,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,routeSegmentDistance,articulationExposure,recommendStart,nextGearTransitionBoundary,compareStartCandidates,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon,inflateObstaclePoseUncertainty});
 });
