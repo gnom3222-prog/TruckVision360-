@@ -2848,3 +2848,52 @@ test('three active vehicle geometry parameters enumerate all eight joint endpoin
   '000','001','010','011','100','101','110','111'
  ]);
 });
+
+test('swept displacement bounds include measured auxiliary envelopes on tractor and trailer',()=>{
+ const q={psi:0,psiT:0};
+ const base=planner.sweptDisplacementRatesPerMeter(0.25,params,q);
+ const tractorEnvelope={
+  name:'measured front bumper extension',
+  anchor:'tractor-front-axle',
+  longitudinalOffset:4.5,lateralOffset:0,
+  length:1.0,width:0.6,headingOffsetDeg:0,
+  uncertaintyMargin:0.05
+ };
+ const tractor=planner.sweptDisplacementRatesPerMeter(0.25,{
+  ...params,auxiliaryEnvelopes:[tractorEnvelope]
+ },q);
+ assert.ok(tractor.tractor>base.tractor,
+  'a measured component beyond the tractor front envelope must increase the tractor sweep-rate bound');
+ const trailerEnvelope={
+  name:'measured rear chassis bracket',
+  anchor:'trailer-axle-3',
+  longitudinalOffset:-4.5,lateralOffset:0,
+  length:1.2,width:0.8,headingOffsetDeg:15,
+  uncertaintyMargin:0.05
+ };
+ const trailer=planner.sweptDisplacementRatesPerMeter(0.25,{
+  ...params,auxiliaryEnvelopes:[trailerEnvelope]
+ },q);
+ assert.ok(trailer.trailer>base.trailer,
+  'a measured component beyond the trailer rear envelope must increase the trailer sweep-rate bound');
+});
+
+test('increasing auxiliary-envelope uncertainty expands the corresponding swept-displacement bound',()=>{
+ const q={psi:0,psiT:0};
+ const envelope={
+  name:'measured side step',
+  anchor:'tractor-rear-axle',
+  longitudinalOffset:-1.8,lateralOffset:1.5,
+  length:1.4,width:0.7,headingOffsetDeg:20,
+  uncertaintyMargin:0.01
+ };
+ const small=planner.sweptDisplacementRatesPerMeter(0.3,{
+  ...params,auxiliaryEnvelopes:[envelope]
+ },q);
+ const large=planner.sweptDisplacementRatesPerMeter(0.3,{
+  ...params,auxiliaryEnvelopes:[{...envelope,uncertaintyMargin:0.45}]
+ },q);
+ assert.ok(large.tractor>small.tractor,
+  'the uncertainty margin must be included in the auxiliary component corner radius');
+});
+
