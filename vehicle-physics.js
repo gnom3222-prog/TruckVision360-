@@ -69,15 +69,42 @@
   });
  }
 
+ function resolveTrailerAxleSpacings(params){
+  const source=params&&typeof params==='object'?params:{};
+  const present=key=>source[key]!==undefined&&source[key]!==null;
+  const inRange=value=>Number.isFinite(value)&&value>=0.3&&value<=5;
+  const commonPresent=present('trailerAxleSpacing');
+  const commonValid=inRange(source.trailerAxleSpacing);
+  if(commonPresent&&!commonValid){
+   return {valid:false,spacings:null,reason:'Общий резервный шаг задан, но находится вне диапазона 0,30–5 м.'};
+  }
+  const readIndividual=key=>{
+   if(!present(key)||source[key]===0)return {kind:'missing'};
+   if(!inRange(source[key]))return {kind:'invalid'};
+   return {kind:'valid',value:source[key]};
+  };
+  const first=readIndividual('trailerAxleSpacing12');
+  const second=readIndividual('trailerAxleSpacing23');
+  if(first.kind==='invalid'||second.kind==='invalid'){
+   return {valid:false,spacings:null,reason:'Индивидуальные расстояния между соседними осями должны быть в диапазоне 0,30–5 м; ноль означает отсутствие измерения.'};
+  }
+  if((first.kind==='missing'||second.kind==='missing')&&!commonValid){
+   return {valid:false,spacings:null,reason:'Задайте положительный общий шаг как резервное значение, если не заданы оба положительных индивидуальных шага осей 1–2 и 2–3.'};
+  }
+  return {
+   valid:true,
+   spacings:[
+    first.kind==='valid'?first.value:source.trailerAxleSpacing,
+    second.kind==='valid'?second.value:source.trailerAxleSpacing
+   ],
+   usedFallback:first.kind==='missing'||second.kind==='missing'
+  };
+ }
+
  function trailerAxleSpacings(params){
-  const common=Number.isFinite(params&&params.trailerAxleSpacing)&&params.trailerAxleSpacing>0?
-   params.trailerAxleSpacing:1.3;
-  return [
-   Number.isFinite(params&&params.trailerAxleSpacing12)&&params.trailerAxleSpacing12>0?
-    params.trailerAxleSpacing12:common,
-   Number.isFinite(params&&params.trailerAxleSpacing23)&&params.trailerAxleSpacing23>0?
-    params.trailerAxleSpacing23:common
-  ];
+  const resolved=resolveTrailerAxleSpacings(params);
+  if(!resolved.valid)throw new Error('Невозможно определить шаги трёхосной тележки: '+resolved.reason);
+  return resolved.spacings;
  }
 
  function trailerAxleTracks(params){
@@ -470,7 +497,10 @@
     ['tractorFrontTrackUncertainty',params.tractorFrontTrackUncertainty],
     ['tractorRearTrackUncertainty',params.tractorRearTrackUncertainty]
    ];
-   const axleSpacings=trailerAxleSpacings(params);
+   const axleSpacingResolution=resolveTrailerAxleSpacings(params);
+   if(!axleSpacingResolution.valid){
+    errors.push('suspensionTravel.trailer: '+axleSpacingResolution.reason);
+   }
    geometryBounds.push(
     [(params.trailerAxleSpacing12??0)>0?'trailerAxleSpacing12Uncertainty':'trailerAxleSpacingUncertainty',
      (params.trailerAxleSpacing12??0)>0?params.trailerAxleSpacing12Uncertainty:params.trailerAxleSpacingUncertainty],
@@ -487,7 +517,7 @@
      errors.push('suspensionTravel требует положительную измеренную границу '+key+'; ноль не считается подтверждённой точностью.');
     }
    }
-   if(geometryBounds.every(([,value])=>Number.isFinite(value)&&value>0)){
+   if(axleSpacingResolution.valid&&geometryBounds.every(([,value])=>Number.isFinite(value)&&value>0)){
     for(const group of ['tractor','trailer']){
     const bounds=suspensionPoseCoefficientBounds(config,params,group);
     if(!bounds){
@@ -671,14 +701,11 @@
   if(!params||typeof params!=='object'){
    return ['Параметры автопоезда отсутствуют.'];
   }
-  // The common spacing is optional only when both adjacent axle spacings
-  // are independently supplied. Otherwise a missing fallback must be explicit.
-  const hasBothIndependentTrailerAxleSpacings=
-   Number.isFinite(params.trailerAxleSpacing12)&&params.trailerAxleSpacing12>0&&
-   Number.isFinite(params.trailerAxleSpacing23)&&params.trailerAxleSpacing23>0;
-  if(!hasBothIndependentTrailerAxleSpacings&&
-     (params.trailerAxleSpacing===undefined||params.trailerAxleSpacing===null)){
-   errors.push('trailerAxleSpacing: задайте общий шаг как резервное значение, если не заданы оба индивидуальных шага осей 1–2 и 2–3.');
+  // Resolve spacing without inventing a nominal default. Validation reports
+  // the missing/invalid fallback; geometry helpers fail closed when called directly.
+  const axleSpacingResolution=resolveTrailerAxleSpacings(params);
+  if(!axleSpacingResolution.valid){
+   errors.push('trailerAxleSpacing: '+axleSpacingResolution.reason);
   }
   for(const [key,limits] of Object.entries(VEHICLE_PARAMETER_LIMITS)){
    const value=params[key];
@@ -693,7 +720,7 @@
   }
   // The middle axle remains the equivalent kinematic reference. The two
   // measured adjacent spacings place the outer axle centers independently.
-  const axleSpacings=trailerAxleSpacings(params);
+  const axleSpacings=axleSpacingResolution.spacings||[NaN,NaN];
   [
    ['trailerAxleSpacing12',params.trailerAxleSpacing12??0],
    ['trailerAxleSpacing23',params.trailerAxleSpacing23??0]
