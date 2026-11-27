@@ -1441,24 +1441,37 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
  }
  function articulationExposure(states){
   if(!Array.isArray(states)||states.length===0)throw new Error('Route states are required for articulation exposure.');
-  let distance=0,peak=null,maxSampleSpacing=0,maxAdjacentAngleChangeDegrees=0,previousSignedAngle=null;
+  let distance=0,peak=null,maxSampleSpacing=0,maxAdjacentAngleChangeDegrees=0;
+  let maxSampledAngleChangePerMeterDegrees=null;
+  let maxSampledAngleChangePerMeterSegmentIndex=null;
+  let maxSampledAngleChangePerMeterDistanceAlongRoute=null;
+  let zeroDistanceAngleChangeCount=0,previousSignedAngle=null;
   for(let i=0;i<states.length;i++){
    const current=states[i];
    if(!current||![current.x,current.y,current.psi,current.psiT].every(Number.isFinite)){
     throw new Error('Route state '+i+' has invalid coordinates or headings for articulation exposure.');
    }
+   let sampleSpacing=0;
    if(i>0){
     const previous=states[i-1];
-    const sampleSpacing=Math.hypot(current.x-previous.x,current.y-previous.y);
+    sampleSpacing=Math.hypot(current.x-previous.x,current.y-previous.y);
     distance+=sampleSpacing;
     maxSampleSpacing=Math.max(maxSampleSpacing,sampleSpacing);
    }
    const signedAngle=norm(current.psi-current.psiT);
    if(previousSignedAngle!==null){
-    maxAdjacentAngleChangeDegrees=Math.max(
-     maxAdjacentAngleChangeDegrees,
-     Math.abs(norm(signedAngle-previousSignedAngle))*180/Math.PI
-    );
+    const angularChangeDegrees=Math.abs(norm(signedAngle-previousSignedAngle))*180/Math.PI;
+    maxAdjacentAngleChangeDegrees=Math.max(maxAdjacentAngleChangeDegrees,angularChangeDegrees);
+    if(sampleSpacing>1e-9){
+     const changePerMeter=angularChangeDegrees/sampleSpacing;
+     if(maxSampledAngleChangePerMeterDegrees===null||changePerMeter>maxSampledAngleChangePerMeterDegrees){
+      maxSampledAngleChangePerMeterDegrees=changePerMeter;
+      maxSampledAngleChangePerMeterSegmentIndex=i-1;
+      maxSampledAngleChangePerMeterDistanceAlongRoute=distance-sampleSpacing/2;
+     }
+    }else if(angularChangeDegrees>1e-6){
+     zeroDistanceAngleChangeCount++;
+    }
    }
    previousSignedAngle=signedAngle;
    const magnitude=Math.abs(signedAngle);
@@ -1485,6 +1498,10 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    sampleCount:states.length,
    maxSampleSpacing,
    maxAdjacentAngleChangeDegrees,
+   maxSampledAngleChangePerMeterDegrees,
+   maxSampledAngleChangePerMeterSegmentIndex,
+   maxSampledAngleChangePerMeterDistanceAlongRoute,
+   zeroDistanceAngleChangeCount,
    samplingMethod:'discrete-route-states',
    continuousPeakVerified:false
   };
