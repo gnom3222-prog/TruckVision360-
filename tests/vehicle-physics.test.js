@@ -1036,12 +1036,22 @@ test('bounded planar road surface computes elevation extrema across a component 
  assert.equal(shifted.roadSurfaceStatus,'configured-planar-surface-with-bounds');
 });
 
-test('missing road-surface calibration is explicitly reported as a flat-reference assumption',()=>{
+test('missing road-surface calibration provides no vertical datum',()=>{
  const polygon=[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
- const elevation=physics.roadSurfaceElevationRange(polygon,null);
- assert.deepEqual(elevation,{min:0,max:0,status:'flat-reference-assumed'});
- const shifted=physics.verticalRangeOnRoadSurface({min:0.2,max:0.8},polygon,null);
- assert.deepEqual(shifted,{min:0.2,max:0.8,roadSurfaceStatus:'flat-reference-assumed'});
+ assert.equal(physics.roadSurfaceElevationRange(polygon,null),null);
+ assert.equal(physics.verticalRangeOnRoadSurface({min:0.2,max:0.8},polygon,null),null);
+});
+
+
+test('road-surface uncertainty bounds must be explicit and positive',()=>{
+ const valid={originX:0,originY:0,originZ:0,gradeX:0,gradeY:0,
+  originZUncertainty:0.001,gradeXUncertainty:0.0001,gradeYUncertainty:0.0001,surfaceResidualUncertainty:0.001};
+ assert.deepEqual(physics.validateRoadSurface(valid),[]);
+ for(const key of ['originZUncertainty','gradeXUncertainty','gradeYUncertainty','surfaceResidualUncertainty']){
+  assert.ok(physics.validateRoadSurface({...valid,[key]:0}).some(error=>error.includes(key)),key+' must reject zero');
+  const missing={...valid};delete missing[key];
+  assert.ok(physics.validateRoadSurface(missing).some(error=>error.includes(key)),key+' must reject missing bounds');
+ }
 });
 
 test('road-surface calibration rejects missing uncertainty bounds and excessive grades',()=>{
@@ -1049,7 +1059,7 @@ test('road-surface calibration rejects missing uncertainty bounds and excessive 
  assert.ok(physics.validateRoadSurface(incomplete).some(error=>error.includes('originZUncertainty')));
  const steep={
   originX:0,originY:0,originZ:0,gradeX:0.3,gradeY:0,
-  originZUncertainty:0,gradeXUncertainty:0,gradeYUncertainty:0,surfaceResidualUncertainty:0
+  originZUncertainty:0.001,gradeXUncertainty:0.0001,gradeYUncertainty:0.0001,surfaceResidualUncertainty:0.001
  };
  assert.ok(physics.validateRoadSurface(steep).some(error=>error.includes('gradeX')));
  assert.deepEqual(physics.validateRoadSurface(null),[]);
@@ -1132,10 +1142,10 @@ test('suspension travel expands measured body and cab profiles but leaves road-c
  const p={
   ...suspensionGeometryParams,suspensionTravel:config,
   vehicleVerticalProfiles:{
-   'tractor-body':{zMin:0.8,zMax:1.2},
-   'tractor-cab':{zMin:1.8,zMax:2.2},
-   'trailer-body':{zMin:1,zMax:4},
-   'tractor-front-wheel':{zMin:0,zMax:0.9}
+   'tractor-body':{zMin:0.8,zMax:1.2,uncertaintyMargin:0.02},
+   'tractor-cab':{zMin:1.8,zMax:2.2,uncertaintyMargin:0.02},
+   'trailer-body':{zMin:1,zMax:4,uncertaintyMargin:0.02},
+   'tractor-front-wheel':{zMin:0,zMax:0.9,uncertaintyMargin:0.02}
   }
  };
  const parts=physics.vehicleCollisionParts(q,p,0,true);
@@ -1149,7 +1159,7 @@ test('suspension travel expands measured body and cab profiles but leaves road-c
  const frontWheel=physics.wheelFootprints(q,p,0).find(wheel=>
   wheel.vehiclePart==='тягач'&&wheel.axleIndex===1
  );
- assert.deepEqual(frontWheel.verticalRange,{min:0,max:0.9});
+ assert.deepEqual(frontWheel.verticalRange,{min:-0.02,max:0.92});
 });
 
 test('auxiliary envelopes move with suspension only when body attachment is explicit',()=>{
@@ -1160,14 +1170,14 @@ test('auxiliary envelopes move with suspension only when body attachment is expl
   auxiliaryEnvelopes:[{
    name:'Frame bracket',anchor:'tractor-front-axle',
    longitudinalOffset:0,lateralOffset:0,length:0.4,width:0.2,
-   headingOffsetDeg:0,uncertaintyMargin:0,zMin:1,zMax:1.5
+   headingOffsetDeg:0,uncertaintyMargin:0,zMin:1,zMax:1.5,verticalUncertaintyMargin:0.02
   }]
  };
  const axleMounted=physics.auxiliaryEnvelopePolygons(q,base)[0];
  const bodyMounted=physics.auxiliaryEnvelopePolygons(q,{
   ...base,auxiliaryEnvelopes:[{...base.auxiliaryEnvelopes[0],suspensionAttachment:'tractor-body'}]
  })[0];
- assert.deepEqual(axleMounted.verticalRange,{min:1,max:1.5});
+ assert.deepEqual(axleMounted.verticalRange,{min:0.98,max:1.52});
  assert.equal(bodyMounted.verticalRange.suspensionStatus,'bounded-rigid-plane-support-envelope');
  assert.ok(bodyMounted.verticalRange.max>axleMounted.verticalRange.max);
  const mismatched=[{...base.auxiliaryEnvelopes[0],suspensionAttachment:'tractor-body',anchor:'trailer-axle-1'}];

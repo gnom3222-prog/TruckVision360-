@@ -202,14 +202,17 @@
     errors.push(prefix+'запас неопределённости должен находиться в диапазоне 0–1 м.');
    }
    const hasZMin=entry.zMin!==undefined,hasZMax=entry.zMax!==undefined;
-   const verticalUncertaintyMargin=entry.verticalUncertaintyMargin??0;
+   const verticalUncertaintyMargin=entry.verticalUncertaintyMargin;
    if(hasZMin!==hasZMax){
     errors.push(prefix+'вертикальный диапазон должен содержать одновременно zMin и zMax.');
    }else if(hasZMin&&(!Number.isFinite(entry.zMin)||!Number.isFinite(entry.zMax)||
       entry.zMin< -2||entry.zMax>15||entry.zMax<=entry.zMin)){
     errors.push(prefix+'zMin/zMax должны задавать измеренный интервал высоты от −2 до 15 м.');
    }
-   if(!Number.isFinite(verticalUncertaintyMargin)||verticalUncertaintyMargin<0||verticalUncertaintyMargin>1){
+   if(hasZMin&&(!Number.isFinite(verticalUncertaintyMargin)||verticalUncertaintyMargin<0.001||verticalUncertaintyMargin>1)){
+    errors.push(prefix+'для вертикального интервала требуется явно заданная положительная verticalUncertaintyMargin от 0,001 до 1 м.');
+   }else if(!hasZMin&&verticalUncertaintyMargin!==undefined&&
+      (!Number.isFinite(verticalUncertaintyMargin)||verticalUncertaintyMargin<0||verticalUncertaintyMargin>1)){
     errors.push(prefix+'вертикальная неопределённость должна находиться в диапазоне 0–1 м.');
    }
    if(!hasZMin&&verticalUncertaintyMargin>0){
@@ -245,9 +248,9 @@
       profile.zMin< -2||profile.zMax>15||profile.zMax<=profile.zMin){
     errors.push(prefix+'zMin/zMax должны задавать измеренный интервал высоты от −2 до 15 м.');
    }
-   const margin=profile.uncertaintyMargin??0;
-   if(!Number.isFinite(margin)||margin<0||margin>1){
-    errors.push(prefix+'uncertaintyMargin должен находиться в диапазоне 0–1 м.');
+   const margin=profile.uncertaintyMargin;
+   if(!Number.isFinite(margin)||margin<0.001||margin>1){
+    errors.push(prefix+'uncertaintyMargin должен быть явно задан положительным числом от 0,001 до 1 м.');
    }
   }
   return errors;
@@ -255,8 +258,9 @@
 
  function verticalRangeFromProfile(profile,extraMargin=0){
   if(!profile||!Number.isFinite(profile.zMin)||!Number.isFinite(profile.zMax)||profile.zMax<=profile.zMin)return null;
-  const margin=(profile.uncertaintyMargin??0)+extraMargin;
-  return {min:profile.zMin-margin,max:profile.zMax+margin};
+  const margin=profile.uncertaintyMargin;
+  if(!Number.isFinite(margin)||margin<0.001||margin>1||!Number.isFinite(extraMargin)||extraMargin<0)return null;
+  return {min:profile.zMin-margin-extraMargin,max:profile.zMax+margin+extraMargin};
  }
 
  function validateRoadSurface(surface){
@@ -275,8 +279,8 @@
   const limits={
    originX:[-100000,100000],originY:[-100000,100000],originZ:[-100,100],
    gradeX:[-0.25,0.25],gradeY:[-0.25,0.25],
-   originZUncertainty:[0,1],gradeXUncertainty:[0,0.05],
-   gradeYUncertainty:[0,0.05],surfaceResidualUncertainty:[0,1]
+   originZUncertainty:[0.0001,1],gradeXUncertainty:[0.000001,0.05],
+   gradeYUncertainty:[0.000001,0.05],surfaceResidualUncertainty:[0.0001,1]
   };
   for(const [key,[min,max]] of Object.entries(limits)){
    const value=surface[key];
@@ -290,9 +294,7 @@
  function roadSurfaceElevationRange(polygon,surface){
   if(!Array.isArray(polygon)||polygon.length<3||
      !polygon.every(point=>point&&Number.isFinite(point.x)&&Number.isFinite(point.y)))return null;
-  if(surface===undefined||surface===null){
-   return {min:0,max:0,status:'flat-reference-assumed'};
-  }
+  if(surface===undefined||surface===null)return null;
   const errors=validateRoadSurface(surface);
   if(errors.length)return null;
   const lower=[],upper=[];
@@ -862,7 +864,7 @@
    const polygon=bodyCorners(center,heading,entry.length/2+margin,-entry.length/2-margin,entry.width+2*margin);
    const suspensionAttachment=entry.suspensionAttachment??'axle';
    const verticalRange=entry.zMin!==undefined?verticalRangeFromProfile({
-    zMin:entry.zMin,zMax:entry.zMax,uncertaintyMargin:entry.verticalUncertaintyMargin??0
+    zMin:entry.zMin,zMax:entry.zMax,uncertaintyMargin:entry.verticalUncertaintyMargin
    }):null;
    const attachedVerticalRange=suspensionAttachment==='tractor-body'?
     applySuspensionTravelToVerticalRange(verticalRange,polygon,q,params,'tractor'):

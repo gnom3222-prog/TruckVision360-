@@ -5,6 +5,20 @@ const physics=require('../vehicle-physics.js');
 const planner=require('../articulated-planner.js');
 const params={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,tractorSteeringTrack:2.05,tractorFrontTrack:2.05,tractorRearTrack:2.05,trailerTrack:2.11,tireLength:0.72,tireWidth:0.44};
 const integrate=(q,v,steer,dt,p)=>physics.rk4(q,v,steer,dt,p);
+const flatRoadSurface={
+ originX:0,originY:0,originZ:0,gradeX:0,gradeY:0,
+ originZUncertainty:0.001,gradeXUncertainty:0.0001,gradeYUncertainty:0.0001,
+ surfaceResidualUncertainty:0.001
+};
+test('vertical obstacles require an explicit positive uncertainty instead of an implicit zero',()=>{
+ const obstacle={name:'manual beam',x:1,y:0,w:0.2,h:0.2,zMin:2,zMax:2.5};
+ assert.ok(planner.validateObstacles([obstacle]).some(message=>message.includes('zUncertainty')));
+ assert.ok(planner.validateObstacles([{...obstacle,zUncertainty:0}]).some(message=>message.includes('zUncertainty')));
+ assert.ok(planner.validateObstacles([{...obstacle,zUncertainty:0.0005}]).some(message=>message.includes('zUncertainty')));
+ assert.equal(planner.validateObstacles([{...obstacle,zUncertainty:0.001}]).length,0);
+ assert.ok(planner.validateObstacles([{...obstacle,zUncertainty:2.001}]).length>0);
+ assert.throws(()=>planner.createClearanceChecker([obstacle],params),/zUncertainty/);
+});
 test('articulated planner reaches a clear goal in open space',()=>{
  const result=planner.plan({start:{x:0,y:0,psi:0,psiT:0},goal:{x:7,y:0},params,obstacles:[],integrate,maxExpansions:5000});
  assert.equal(result.ok,true,JSON.stringify(result));
@@ -270,12 +284,12 @@ test('gate helper rejects incomplete or physically inconsistent lintel measureme
 test('vertical gate lintel clearance separates a measured low cab and reports overlap for a taller cab',()=>{
  const q={x:0,y:0,psi:0,psiT:0};
  const baseProfiles={
-  'tractor-body':{zMin:0,zMax:3.5},
-  'tractor-cab':{zMin:0,zMax:3.5},
-  'trailer-body':{zMin:0,zMax:3.5},
-  'mirror':{zMin:0,zMax:3.5},
-  'tractor-wheel':{zMin:0,zMax:1},
-  'trailer-wheel':{zMin:0,zMax:1}
+  'tractor-body':{zMin:0,zMax:3.5,uncertaintyMargin:0.02},
+  'tractor-cab':{zMin:0,zMax:3.5,uncertaintyMargin:0.02},
+  'trailer-body':{zMin:0,zMax:3.5,uncertaintyMargin:0.02},
+  'mirror':{zMin:0,zMax:3.5,uncertaintyMargin:0.02},
+  'tractor-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+  'trailer-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02}
  };
  const gate=planner.createGateObstacles({
   centerX:0,centerY:0,clearWidth:8,postWidth:0.2,depth:8,heading:0,
@@ -286,7 +300,7 @@ test('vertical gate lintel clearance separates a measured low cab and reports ov
   }
  });
  const separated=planner.createClearanceChecker([gate[2]],{
-  ...params,vehicleVerticalProfiles:baseProfiles
+  ...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:baseProfiles
  })(q);
  const cabSeparated=separated.perPart.find(item=>item.vehiclePart==='кабина');
  assert.ok(cabSeparated);
@@ -296,10 +310,10 @@ test('vertical gate lintel clearance separates a measured low cab and reports ov
  assert.ok(cabSeparated.verticalGap>0);
  const overlapProfiles={
   ...baseProfiles,
-  'tractor-cab':{zMin:0,zMax:4.0}
+  'tractor-cab':{zMin:0,zMax:4.0,uncertaintyMargin:0.02}
  };
  const overlap=planner.createClearanceChecker([gate[2]],{
-  ...params,vehicleVerticalProfiles:overlapProfiles
+  ...params,roadSurface:flatRoadSurface,vehicleVerticalProfiles:overlapProfiles
  })(q);
  const cabOverlap=overlap.perPart.find(item=>item.vehiclePart==='кабина');
  assert.ok(cabOverlap);
@@ -317,12 +331,55 @@ test('gate lintel never claims vertical separation when vehicle height profiles 
    span:8,spanUncertainty:0,depth:8,depthUncertainty:0
   }
  });
- const result=planner.createClearanceChecker([gate[2]],params)(q);
+ const result=planner.createClearanceChecker([gate[2]],{...params,roadSurface:flatRoadSurface})(q);
  const cab=result.perPart.find(item=>item.vehiclePart==='кабина');
  assert.ok(cab);
  assert.ok(cab.verticalUnverifiedObstacleCount>0);
  assert.equal(cab.verticalStatus,'vehicle-height-unverified');
  assert.equal(cab.distance,0);
+});
+
+test('all vertical obstacles including gate lintels remain horizontal-only without a calibrated road surface',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const gate=planner.createGateObstacles({
+  centerX:0,centerY:0,clearWidth:8,postWidth:0.2,depth:8,heading:0,
+  lintel:{
+   clearHeight:3.8,clearHeightUncertainty:0.03,floorDatumUncertainty:0.02,
+   thickness:0.25,thicknessUncertainty:0.01,
+   span:8,spanUncertainty:0,depth:8,depthUncertainty:0
+  }
+ });
+ const obstacle=[gate[2]];
+ const profiles={
+  'tractor-body':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+  'tractor-cab':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+  'trailer-body':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+  'mirror':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+  'tractor-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+  'trailer-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02}
+ };
+ const result=planner.createClearanceChecker(obstacle,{...params,vehicleVerticalProfiles:profiles})(q);
+ const cab=result.perPart.find(item=>item.vehiclePart==='кабина');
+ assert.ok(cab);
+ assert.equal(cab.verticalStatus,'road-surface-unverified');
+ assert.equal(cab.roadSurfaceStatus,'road-surface-unverified-horizontal-only');
+ assert.equal(cab.verticalEvaluatedObstacleCount,0);
+ assert.ok(cab.verticalUnverifiedObstacleCount>0);
+ assert.equal(cab.distance,0);
+ const wheelProfiles={
+  'tractor-front-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+  'tractor-rear-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+  'trailer-axle-1-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+  'trailer-axle-2-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+  'trailer-axle-3-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02}
+ };
+ const wheelResult=planner.analyzeWheelTrajectoryClearance(
+  [{...q,gear:1,steer:0,stepDistance:0}],obstacle,
+  {...params,vehicleVerticalProfiles:wheelProfiles}
+ );
+ assert.equal(wheelResult.roadSurfaceStatus,'road-surface-unverified-horizontal-only');
+ assert.equal(wheelResult.verticalEvaluatedChecks,0);
+ assert.ok(wheelResult.verticalUnverifiedChecks>0);
 });
 
 test('oriented gate jamb polygons participate in whole-vehicle clearance',()=>{
@@ -2312,13 +2369,13 @@ test('per-wheel adaptive displacement rate uses the configured track of its own 
 
 test('vertical wheel clearance shifts component and obstacle heights along the configured road grade',()=>{
  const p={
-  ...params,
+  ...params,roadSurface:flatRoadSurface,
   vehicleVerticalProfiles:{
-   'tractor-front-wheel':{zMin:0,zMax:1},
-   'tractor-rear-wheel':{zMin:0,zMax:1},
-   'trailer-axle-1-wheel':{zMin:0,zMax:1},
-   'trailer-axle-2-wheel':{zMin:0,zMax:1},
-   'trailer-axle-3-wheel':{zMin:0,zMax:1}
+   'tractor-front-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+   'tractor-rear-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+   'trailer-axle-1-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+   'trailer-axle-2-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+   'trailer-axle-3-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02}
   }
  };
  const q={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
@@ -2327,7 +2384,7 @@ test('vertical wheel clearance shifts component and obstacle heights along the c
  const obstacle={
   name:'upslope vertical beam',
   x:target.center.x+0.8,y:target.center.y-0.05,w:0.1,h:0.1,
-  zMin:1.2,zMax:1.4
+  zMin:1.2,zMax:1.4,zUncertainty:0.02
  };
  const flat=planner.analyzeWheelTrajectoryClearance([q],[obstacle],p);
  const uphill=planner.analyzeWheelTrajectoryClearance([q],[obstacle],{
@@ -2335,16 +2392,16 @@ test('vertical wheel clearance shifts component and obstacle heights along the c
   roadSurface:{
    originX:target.center.x,originY:target.center.y,originZ:0,
    gradeX:0.1,gradeY:0,
-   originZUncertainty:0,gradeXUncertainty:0,gradeYUncertainty:0,
-   surfaceResidualUncertainty:0
+   originZUncertainty:0.001,gradeXUncertainty:0.0001,gradeYUncertainty:0.0001,
+   surfaceResidualUncertainty:0.001
   }
  });
  const flatWheel=flat.wheels.find(wheel=>wheel.name===target.name);
  const uphillWheel=uphill.wheels.find(wheel=>wheel.name===target.name);
  assert.ok(flatWheel&&uphillWheel);
- assert.equal(flat.roadSurfaceStatus,'flat-reference-assumed');
+ assert.equal(flat.roadSurfaceStatus,'configured-planar-surface-with-bounds');
  assert.equal(uphill.roadSurfaceStatus,'configured-planar-surface-with-bounds');
- assert.equal(flatWheel.minimumSampledPolygonDetail.roadSurfaceStatus,'flat-reference-assumed');
+ assert.equal(flatWheel.minimumSampledPolygonDetail.roadSurfaceStatus,'configured-planar-surface-with-bounds');
  assert.equal(uphillWheel.minimumSampledPolygonDetail.roadSurfaceStatus,'configured-planar-surface-with-bounds');
  assert.ok(uphillWheel.minimumSampledPolygonDetail.verticalGap>flatWheel.minimumSampledPolygonDetail.verticalGap);
  assert.ok(uphillWheel.minimumSampledPolygonClearance>flatWheel.minimumSampledPolygonClearance);
@@ -2352,15 +2409,15 @@ test('vertical wheel clearance shifts component and obstacle heights along the c
 
 test('downhill road grade reduces the modeled vertical separation and remains bounded',()=>{
  const p={
-  ...params,
-  vehicleVerticalProfiles:{'tractor-front-wheel':{zMin:0,zMax:1}}
+  ...params,roadSurface:flatRoadSurface,
+  vehicleVerticalProfiles:{'tractor-front-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02}}
  };
  const q={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0};
  const target=physics.wheelFootprints(q,p,0).find(wheel=>wheel.name==='левое переднее колесо тягача');
  const obstacle={
   name:'downhill vertical beam',
   x:target.center.x+0.8,y:target.center.y-0.05,w:0.1,h:0.1,
-  zMin:1.2,zMax:1.4
+  zMin:1.2,zMax:1.4,zUncertainty:0.02
  };
  const flat=planner.analyzeWheelTrajectoryClearance([q],[obstacle],p);
  const downhill=planner.analyzeWheelTrajectoryClearance([q],[obstacle],{
@@ -2368,7 +2425,7 @@ test('downhill road grade reduces the modeled vertical separation and remains bo
   roadSurface:{
    originX:target.center.x,originY:target.center.y,originZ:0,
    gradeX:-0.1,gradeY:0,
-   originZUncertainty:0.01,gradeXUncertainty:0.002,gradeYUncertainty:0,
+   originZUncertainty:0.01,gradeXUncertainty:0.002,gradeYUncertainty:0.0001,
    surfaceResidualUncertainty:0.01
   }
  });
@@ -2402,17 +2459,17 @@ test('per-wheel swept lower-bound rate includes the configured road-surface grad
  const p={
   ...params,
   vehicleVerticalProfiles:{
-   'tractor-front-wheel':{zMin:0,zMax:1},
-   'tractor-rear-wheel':{zMin:0,zMax:1},
-   'trailer-axle-1-wheel':{zMin:0,zMax:1},
-   'trailer-axle-2-wheel':{zMin:0,zMax:1},
-   'trailer-axle-3-wheel':{zMin:0,zMax:1}
+   'tractor-front-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+   'tractor-rear-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+   'trailer-axle-1-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+   'trailer-axle-2-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+   'trailer-axle-3-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02}
   }
  };
  const start={x:0,y:0,psi:0.2,psiT:0.1,gear:1,steer:0.2,stepDistance:0};
  const distance=0.5,steer=0.2;
  const end=physics.rk4(start,0.7,steer,distance/0.7,p);
- const obstacle={x:100,y:100,w:1,h:1,zMin:0,zMax:1,name:'distant reference obstacle'};
+ const obstacle={x:100,y:100,w:1,h:1,zMin:0,zMax:1,zUncertainty:0.01,name:'distant reference obstacle'};
  const flat=planner.analyzeWheelTrajectoryClearance(
   [start,{...end,gear:1,steer,stepDistance:distance}],[obstacle],p
  );
@@ -2421,8 +2478,8 @@ test('per-wheel swept lower-bound rate includes the configured road-surface grad
    ...p,
    roadSurface:{
     originX:0,originY:0,originZ:0,gradeX:0.1,gradeY:0,
-    originZUncertainty:0,gradeXUncertainty:0.01,gradeYUncertainty:0,
-    surfaceResidualUncertainty:0
+    originZUncertainty:0.001,gradeXUncertainty:0.01,gradeYUncertainty:0.0001,
+    surfaceResidualUncertainty:0.001
    }
   }
  );
@@ -2446,18 +2503,18 @@ function calibratedSuspension(){
 
 test('vertical clearance includes bounded suspension heave pitch and roll envelope for the cab',()=>{
  const q={x:0,y:0,psi:0,psiT:0};
- const obstacle=[{name:'overhead beam',x:2.1,y:0,w:0.1,h:0.1,zMin:2.24,zMax:2.30,zUncertainty:0}];
+ const obstacle=[{name:'overhead beam',x:2.1,y:0,w:0.1,h:0.1,zMin:2.24,zMax:2.30,zUncertainty:0.01}];
  const base={
-  ...params,
+  ...params,roadSurface:flatRoadSurface,
   wheelbaseUncertainty:0.02,
   tractorFrontTrackUncertainty:0.02,
   tractorRearTrackUncertainty:0.02,
   trailerAxleSpacingUncertainty:0.02,
   trailerTrackUncertainty:0.02,
   vehicleVerticalProfiles:{
-   'tractor-body':{zMin:0.4,zMax:0.8},
-   'tractor-cab':{zMin:2.0,zMax:2.2},
-   'trailer-body':{zMin:0.5,zMax:4.0}
+   'tractor-body':{zMin:0.4,zMax:0.8,uncertaintyMargin:0.02},
+   'tractor-cab':{zMin:2.0,zMax:2.2,uncertaintyMargin:0.02},
+   'trailer-body':{zMin:0.5,zMax:4.0,uncertaintyMargin:0.02}
   }
  };
  const staticResult=planner.clearance(q,obstacle,base);
@@ -2506,9 +2563,15 @@ test('ground-supported obstacle height is compared only in a calibrated road dat
  assert.ok(cabHigh);
  assert.equal(cabHigh.verticalStatus,'vertical-overlap');
  assert.equal(cabHigh.distance,0);
- const unverified=planner.createClearanceChecker(obstacle(1.0),params)(q);
- const cabUnverified=unverified.perPart.find(item=>item.vehiclePart==='кабина');
- assert.ok(cabUnverified);
- assert.equal(cabUnverified.verticalStatus,'vehicle-height-unverified');
- assert.equal(cabUnverified.distance,0);
+ const noSurface=planner.createClearanceChecker(obstacle(1.0),{...base,roadSurface:null})(q);
+ const cabNoSurface=noSurface.perPart.find(item=>item.vehiclePart==='кабина');
+ assert.ok(cabNoSurface);
+ assert.equal(cabNoSurface.verticalStatus,'road-surface-unverified');
+ assert.equal(cabNoSurface.roadSurfaceStatus,'road-surface-unverified-horizontal-only');
+ assert.equal(cabNoSurface.distance,0);
+ const missingProfile=planner.createClearanceChecker(obstacle(1.0),{...params,roadSurface})(q);
+ const cabMissingProfile=missingProfile.perPart.find(item=>item.vehiclePart==='кабина');
+ assert.ok(cabMissingProfile);
+ assert.equal(cabMissingProfile.verticalStatus,'vehicle-height-unverified');
+ assert.equal(cabMissingProfile.distance,0);
 });

@@ -1142,7 +1142,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
    const wheelObstacles=routeObstacles.map(obstacle=>({
     name:obstacle.name||'препятствие',polygon:obstacleEnvelopePolygon(obstacle),
     ...(Number.isFinite(obstacle.zMin)&&Number.isFinite(obstacle.zMax)?{
-     zMin:obstacle.zMin,zMax:obstacle.zMax,zUncertainty:obstacle.zUncertainty??0
+     zMin:obstacle.zMin,zMax:obstacle.zMax,zUncertainty:obstacle.zUncertainty
     }: {})
    }));
    wheelClearance=planner.analyzeWheelTrajectoryClearance(path,wheelObstacles,{
@@ -1191,7 +1191,9 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
  const verticalObstacleCount=sceneObstacles().filter(obstacle=>Number.isFinite(obstacle.zMin)&&Number.isFinite(obstacle.zMax)).length;
  if(verticalObstacleCount){
   const unverifiedVerticalChecks=(trajectoryClearance?.verticalUnverifiedChecks||0)+(wheelClearance?.verticalUnverifiedChecks||0);
-  if(unverifiedVerticalChecks>0){
+  if(wheelClearance?.roadSurfaceStatus==='road-surface-unverified-horizontal-only'){
+   reasons.push('вертикальные препятствия: '+verticalObstacleCount+'; плоскость дороги не откалибрована, поэтому вертикальное разделение отключено и все такие препятствия учитываются только по горизонтальной 2D-проекции');
+  }else if(unverifiedVerticalChecks>0){
    reasons.push('вертикальные препятствия: '+verticalObstacleCount+'; для части компонентов высота не откалибрована, поэтому используется только консервативная нижняя оценка по горизонтальной проекции');
   }else{
    const suspensionStatus=physics.suspensionTravelStatus(cfg);
@@ -1201,8 +1203,8 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
     reasons.push('вертикальные препятствия проверены по измеренным профилям, но диапазоны хода подвески не откалиброваны; изменение высоты и наклона кузова не подтверждено');
    }
   }
-  if(wheelClearance?.roadSurfaceStatus==='flat-reference-assumed'){
-   reasons.push('уклон дороги не откалиброван: вертикальные интервалы сопоставлены при допущении плоской поверхности');
+  if(wheelClearance?.roadSurfaceStatus==='road-surface-unverified-horizontal-only'){
+   reasons.push('вертикальное разделение отключено: нет откалиброванной плоскости дороги; препятствия остаются горизонтальными 2D-оболочками');
   }else if(wheelClearance?.roadSurfaceStatus==='configured-planar-surface-with-bounds'){
    reasons.push('учтена заданная плоскость дороги с указанными границами неопределённости; локальные неровности вне этого диапазона не моделируются');
   }
@@ -1276,8 +1278,8 @@ function wheelClearanceSummaryText(metrics){
  const incomplete=wheelClearance?.segmentsWithoutIntermediateKinematicSamples>0?
   ' Промежуточная проверка не завершена на '+wheelClearance.segmentsWithoutIntermediateKinematicSamples+
   ' сегментах; виртуальный автопроезд заблокирован.':'';
- const surfaceReference=wheelClearance?.roadSurfaceStatus==='flat-reference-assumed'?
-  ' Вертикальные интервалы сопоставлены при допущении плоской поверхности; уклон не откалиброван.':
+ const surfaceReference=wheelClearance?.roadSurfaceStatus==='road-surface-unverified-horizontal-only'?
+  ' Плоскость дороги не откалибрована: вертикальное разделение отключено, все вертикальные препятствия учитываются как горизонтальные 2D-оболочки.':
   wheelClearance?.roadSurfaceStatus==='configured-planar-surface-with-bounds'?
    ' Учтена заданная плоскость дороги с границами неопределённости; это не 3D-карта рельефа.':'';
  const controlTransitions=wheelClearance?[
@@ -1400,7 +1402,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261126-11');
+   worker=new Worker('./planner-worker.js?v=20261127-2');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
