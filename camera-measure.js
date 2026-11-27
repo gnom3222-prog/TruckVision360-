@@ -211,6 +211,15 @@ async function start(){
  if(document.visibilityState==='hidden'){say('Страница находится в фоне. Вернитесь в приложение и нажмите «Включить камеру».');return;}
  if(!geometry){say('Модуль геометрии камеры не загрузился. Обновите страницу и повторите попытку.');return;}
  if(!isSecureContext||!navigator.mediaDevices?.getUserMedia){say('Камера доступна только на защищённой HTTPS-странице в Safari.');return;}
+ let facingModeSupported=false;
+ try{
+  facingModeSupported=typeof navigator.mediaDevices.getSupportedConstraints==='function'&&
+   navigator.mediaDevices.getSupportedConstraints()?.facingMode===true;
+ }catch(_){}
+ if(!facingModeSupported){
+  say('Браузер не подтверждает поддержку выбора задней камеры. Обновите Safari или используйте совместимый браузер; измерение не запускается.');
+  return;
+ }
  const requestId=++streamRequestId;
  startPending=true;
  let acquiredStream=null;
