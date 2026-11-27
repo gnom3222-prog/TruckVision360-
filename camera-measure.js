@@ -1,6 +1,6 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id),v=$('measureVideo'),c=$('measureOverlay'),ctx=c.getContext('2d'),status=$('cameraStatus'),geometry=window.TruckVisionCameraGeometry;
-let stream=null,streamRequestId=0,startPending=false,mode=null,pts=[],Hcal=null,referencePoints=null,referenceWidth=0,referenceHeight=0,fw=0,fh=0,frameLocked=false,frameCaptureId=0,frameCaptureTime=null,lastGateMeasurementFrameId=-1,lastGateFrameTime=null,gateRepeatabilityTolerances=null,gateRepeatabilityPose=null,gateRepeatabilityMeasurementConfig=null,gateRepeatabilityComplete=false,lastObstacleMeasurementFrameId=-1,lastObstacleFrameTime=null,obstacleRepeatabilityTolerances=null,obstacleRepeatabilityPose=null,obstacleRepeatabilityMeasurementConfig=null,obstacleRepeatabilityComplete=false;
+let stream=null,streamRequestId=0,startPending=false,mode=null,pts=[],Hcal=null,referencePoints=null,referenceWidth=0,referenceHeight=0,fw=0,fh=0,frameLocked=false,frameCaptureId=0,frameCaptureTime=null,lastGateMeasurementFrameId=-1,lastGateFrameTime=null,gateRepeatabilityTolerances=null,gateRepeatabilityPose=null,gateRepeatabilityMeasurementConfig=null,gateRepeatabilityComplete=false,lastObstacleMeasurementFrameId=-1,lastObstacleFrameTime=null,obstacleRepeatabilityTolerances=null,obstacleRepeatabilityPose=null,obstacleRepeatabilityMeasurementConfig=null,obstacleRepeatabilityVerticalMeasurement=null,obstacleRepeatabilityComplete=false;
 const gateReadings=[],obstacleReadings=[];
 const say=s=>status.textContent=s,dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 function readMeasurementUncertainty(){
@@ -73,6 +73,32 @@ function readObstacleMapPose(){
  }
  return {anchor,headingDeg,name,poseUncertainty};
 }
+function readObstacleVerticalMeasurement(){
+ const confirmed=$('cameraObstacleVerticalDatumConfirmed').checked===true;
+ const heightText=$('cameraObstacleHeight').value.trim();
+ const heightUncertaintyText=$('cameraObstacleHeightUncertainty').value.trim();
+ const baseDatumUncertaintyText=$('cameraObstacleBaseDatumUncertainty').value.trim();
+ if(!confirmed)throw new Error('Подтвердите независимое измерение высоты от местной поверхности дороги до верхней точки препятствия. Камера измеряет только основание.');
+ if(!heightText||!heightUncertaintyText||!baseDatumUncertaintyText){
+  throw new Error('Введите высоту препятствия, допуск её измерения и допуск привязки основания к местной поверхности.');
+ }
+ const height=Number(heightText);
+ const heightUncertainty=Number(heightUncertaintyText);
+ const baseDatumUncertainty=Number(baseDatumUncertaintyText);
+ const totalUncertainty=heightUncertainty+baseDatumUncertainty;
+ if(!Number.isFinite(height)||height<0.05||height>15||
+    !Number.isFinite(heightUncertainty)||heightUncertainty<0.001||heightUncertainty>1||
+    !Number.isFinite(baseDatumUncertainty)||baseDatumUncertainty<0.001||baseDatumUncertainty>1||
+    !Number.isFinite(totalUncertainty)||totalUncertainty>2){
+  throw new Error('Высота должна быть 0,05–15 м; оба абсолютных допуска — 0,001–1 м, их сумма — не более 2 м.');
+ }
+ return {
+  height,heightUncertainty,baseDatumUncertainty,totalUncertainty,
+  datum:'local-road-surface',
+  source:'manual-independent-measurement',
+  confirmed:true
+ };
+}
 function clearGateRepeatability(resetFrameTracking=false){
  gateReadings.length=0;
  gateRepeatabilityTolerances=null;
@@ -90,6 +116,7 @@ function clearObstacleRepeatability(resetFrameTracking=false){
  obstacleRepeatabilityTolerances=null;
  obstacleRepeatabilityPose=null;
  obstacleRepeatabilityMeasurementConfig=null;
+ obstacleRepeatabilityVerticalMeasurement=null;
  obstacleRepeatabilityComplete=false;
  if(resetFrameTracking){lastObstacleMeasurementFrameId=-1;lastObstacleFrameTime=null;}
  const output=$('cameraObstacleRepeatabilityStatus');
@@ -203,6 +230,7 @@ if(measurement.shapeWarning)throw Error('Основание объекта не 
 if(measurement.nonlinearSensitivityAvailable!==true||measurement.nonlinearWarning===true)throw Error('Нелинейная проверка неопределённости не пройдена. Основание не добавлено на карту; повторите калибровку с более крупным эталоном и устойчивым ракурсом.');
 const tolerances=readObstacleRepeatabilityTolerance();
 const mapPose=readObstacleMapPose();
+const verticalMeasurement=readObstacleVerticalMeasurement();
 if(obstacleRepeatabilityTolerances&&
    (Math.abs(tolerances.widthTolerance-obstacleRepeatabilityTolerances.widthTolerance)>1e-12||
     Math.abs(tolerances.heightTolerance-obstacleRepeatabilityTolerances.heightTolerance)>1e-12)){
@@ -228,6 +256,16 @@ if(obstacleRepeatabilityMeasurementConfig&&(
 }
 if(!obstacleRepeatabilityTolerances)obstacleRepeatabilityTolerances=tolerances;
 if(!obstacleRepeatabilityPose)obstacleRepeatabilityPose=mapPose;
+if(obstacleRepeatabilityVerticalMeasurement&&(
+   Math.abs(verticalMeasurement.height-obstacleRepeatabilityVerticalMeasurement.height)>1e-12||
+   Math.abs(verticalMeasurement.heightUncertainty-obstacleRepeatabilityVerticalMeasurement.heightUncertainty)>1e-12||
+   Math.abs(verticalMeasurement.baseDatumUncertainty-obstacleRepeatabilityVerticalMeasurement.baseDatumUncertainty)>1e-12||
+   verticalMeasurement.confirmed!==obstacleRepeatabilityVerticalMeasurement.confirmed||
+   verticalMeasurement.datum!==obstacleRepeatabilityVerticalMeasurement.datum||
+   verticalMeasurement.source!==obstacleRepeatabilityVerticalMeasurement.source)){
+ throw Error('Высота препятствия или допуски вертикального datum изменились внутри серии. Очистите серию и начните заново.');
+}
+if(!obstacleRepeatabilityVerticalMeasurement)obstacleRepeatabilityVerticalMeasurement=verticalMeasurement;
 if(!obstacleRepeatabilityMeasurementConfig)obstacleRepeatabilityMeasurementConfig=measurementConfig;
 obstacleReadings.push({width:measurement.width,height:measurement.height,sigmaWidth:measurement.sigmaWidth,sigmaHeight:measurement.sigmaHeight});
 lastObstacleMeasurementFrameId=frameCaptureId;
@@ -246,13 +284,14 @@ if(!repeatability.withinTolerance){
  mode=null;pts=[];draw();return;
 }
 const applyObstacle=window.TruckVisionAddCameraObstacle;
-if(typeof applyObstacle!=='function'||applyObstacle(measurement,mapPose.anchor,mapPose.headingDeg*Math.PI/180,mapPose.name,mapPose.poseUncertainty,repeatability)!==true){
+if(typeof applyObstacle!=='function'||applyObstacle(measurement,mapPose.anchor,mapPose.headingDeg*Math.PI/180,mapPose.name,mapPose.poseUncertainty,repeatability,verticalMeasurement)!==true){
  obstacleRepeatabilityComplete=true;
  throw Error('Препятствие не прошло проверку повторяемости, неопределённости и геометрии привязки. Оно не добавлено на карту.');
 }
 obstacleRepeatabilityComplete=true;
-$('cameraObstacleRepeatabilityStatus').textContent=repeatabilityText+' Допуск повторяемости выполнен; препятствие добавлено с консервативной оболочкой.';
-say('Препятствие добавлено после трёх отдельных кадров: '+repeatability.meanWidth.toFixed(2)+' × '+repeatability.meanHeight.toFixed(2)+' м. Положение и курс введены вручную; повторяемость не подтверждает независимость ошибок. Перестройте маршрут и перепроверьте размеры рулеткой.');
+const verticalStatus=window.TruckVisionCameraObstacleVerticalStatus||'Высота введена вручную; вертикальное разделение не подтверждено.';
+$('cameraObstacleRepeatabilityStatus').textContent=repeatabilityText+' Допуск повторяемости выполнен; основание добавлено с консервативной оболочкой. '+verticalStatus;
+say('Основание добавлено после трёх отдельных кадров: '+repeatability.meanWidth.toFixed(2)+' × '+repeatability.meanHeight.toFixed(2)+' м. Высота '+verticalMeasurement.height.toFixed(2)+' м введена вручную, а не измерена камерой. '+verticalStatus+' Положение и курс введены вручную; перепроверьте размеры рулеткой.');
 }else{if(c.width!==fw||c.height!==fh)throw Error('Размер кадра изменился. Повторите калибровку.');if(!geometry.validQuad(pts,1000,20))throw Error('Углы ворот должны образовывать чёткий четырёхугольник по часовой стрелке.');const {sigmaPixels,sigmaReference}=readMeasurementUncertainty();const measurement=geometry.estimateUncertainty({referencePoints,referenceWidth,referenceHeight,measuredPoints:pts,sigmaPixels,sigmaReferenceWidth:sigmaReference,sigmaReferenceHeight:sigmaReference});const w=measurement.width,h=measurement.height;const conditioningWarning=measurement.conditioningWarning===true;const nonlinearWarning=measurement.nonlinearSensitivityAvailable!==true||measurement.nonlinearWarning===true;const shape=measurement.shapeDiagnostics||{};const shapeWarning=measurement.shapeWarning===true;const nonlinearText=' Нелинейная проверка ±1σ: '+(measurement.nonlinearSensitivityAvailable?'выполнена; расхождение линейной и конечной оценки ширины '+(100*Number(measurement.nonlinearMismatchWidth||0)).toFixed(1)+'%, нормированный чётный сдвиг '+(100*Number(measurement.maxAxisAsymmetryRatio||0)).toFixed(1)+'%, порог 25%.':'недоступна; результат не переносится на карту.');const shapeText=' Геометрия проёма: разброс ширины '+(100*Number(shape.widthSpreadRatio||0)).toFixed(1)+'%, разброс высоты '+(100*Number(shape.heightSpreadRatio||0)).toFixed(1)+'%, отклонение угла '+Number(shape.maxOrthogonalityErrorDeg||0).toFixed(1)+'°, расхождение диагоналей '+(100*Number(shape.diagonalSpreadRatio||0)).toFixed(1)+'%.';const dimensions='Предварительный результат: ширина ≈ '+w.toFixed(2)+' м (локальная оценка чувствительности ±'+measurement.sigmaWidth.toFixed(3)+' м, 1σ); высота ≈ '+h.toFixed(2)+' м (±'+measurement.sigmaHeight.toFixed(3)+' м, 1σ).'+shapeText+nonlinearText;if(conditioningWarning){$('gateResult').textContent='Калибровка численно неустойчива. '+dimensions+' Результат не передан в настройки ворот. Увеличьте эталон в кадре, измените угол съёмки и выполните калибровку заново.';say('Калибровка плохо обусловлена. Предварительные размеры показаны только для диагностики; ширина ворот не обновлена. Увеличьте площадь эталона в кадре и повторите калибровку.');}else if(nonlinearWarning){$('gateResult').textContent='Нелинейная проверка неопределённости не прошла. '+dimensions+' Результат не передан в настройки ворот. Повторите калибровку с более крупным эталоном, меньшей перспективной деформацией или обоснованно меньшей погрешностью отметки.';say('Нелинейная проверка погрешности не пройдена. Ширина ворот не обновлена; повторите калибровку и измерение.');}else if(shapeWarning){$('gateResult').textContent='Форма измеренного проёма не соответствует прямоугольнику в заданных пределах. '+dimensions+' Результат не передан в настройки ворот. Проверьте порядок четырёх углов, плоскость эталона и проёма, затем повторите измерение.';say('Форма измеренного проёма заметно отличается от прямоугольника. Ширина ворот не обновлена; проверьте четыре угла и положение эталона в той же плоскости.');}else{
  if(gateReadings.length>=10)throw Error('Достигнут предел 10 повторных кадров. Очистите серию и начните заново.');
  const tolerances=readGateRepeatabilityTolerance();

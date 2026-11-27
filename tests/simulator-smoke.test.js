@@ -342,6 +342,10 @@ test('camera obstacle registration requires three repeatable measurements and ap
  };
  const anchor={x:3,y:4},heading=Math.PI/2,name='Опорный столб';
  const poseUncertainty={positionX:0.1,positionY:0.15,headingDeg:2};
+ const verticalMeasurement={
+  height:2.5,heightUncertainty:0.03,baseDatumUncertainty:0.02,totalUncertainty:0.05,
+  datum:'local-road-surface',source:'manual-independent-measurement',confirmed:true
+ };
  assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty),false);
  const readings=[
   {width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01},
@@ -350,8 +354,10 @@ test('camera obstacle registration requires three repeatable measurements and ap
  ];
  const repeatability=cameraGeometry.summarizeRepeatability(readings,{widthTolerance:0.02,heightTolerance:0.02});
  assert.equal(repeatability.withinTolerance,true);
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,'',poseUncertainty,repeatability),false);
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,repeatability),true);
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,repeatability),false,'a camera obstacle without independent height confirmation must be rejected');
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,'',poseUncertainty,repeatability,verticalMeasurement),false);
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,repeatability,verticalMeasurement),true);
+ assert.match(windowObject.TruckVisionCameraObstacleVerticalStatus,/только по горизонтальной 2D-оболочке/);
  assert.match(elements.routeAdvice.textContent,/Параметры модели изменены/);
  assert.equal(windowObject.TruckVisionClearCameraObstacles(),true);
 });
@@ -365,20 +371,21 @@ test('camera obstacle registration rejects a two-frame or unstable repeatability
  };
  const anchor={x:3,y:4},heading=Math.PI/2,name='Опорный столб';
  const poseUncertainty={positionX:0.1,positionY:0.15,headingDeg:2};
+ const verticalMeasurement={height:2.5,heightUncertainty:0.03,baseDatumUncertainty:0.02,totalUncertainty:0.05,datum:'local-road-surface',source:'manual-independent-measurement',confirmed:true};
  const validRepeatability=cameraGeometry.summarizeRepeatability([
   {width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01},
   {width:2.005,height:1.004,sigmaWidth:0.012,sigmaHeight:0.012},
   {width:1.998,height:0.998,sigmaWidth:0.011,sigmaHeight:0.011}
  ],{widthTolerance:0.02,heightTolerance:0.02});
  const twoFrames={...validRepeatability,count:2};
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,twoFrames),false);
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,twoFrames,verticalMeasurement),false);
  const unstable=cameraGeometry.summarizeRepeatability([
   {width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01},
   {width:2.2,height:1.1,sigmaWidth:0.01,sigmaHeight:0.01},
   {width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01}
  ],{widthTolerance:0.02,heightTolerance:0.02});
  assert.equal(unstable.withinTolerance,false);
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,unstable),false);
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,unstable,verticalMeasurement),false);
 });
 
 test('camera obstacle registration rejects inconsistent repeatability uncertainty summaries',()=>{
@@ -390,14 +397,15 @@ test('camera obstacle registration rejects inconsistent repeatability uncertaint
  };
  const anchor={x:3,y:4},heading=Math.PI/2,name='Опорный столб';
  const poseUncertainty={positionX:0.1,positionY:0.15,headingDeg:2};
+ const verticalMeasurement={height:2.5,heightUncertainty:0.03,baseDatumUncertainty:0.02,totalUncertainty:0.05,datum:'local-road-surface',source:'manual-independent-measurement',confirmed:true};
  const valid=cameraGeometry.summarizeRepeatability([
   {width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01},
   {width:2.005,height:1.004,sigmaWidth:0.012,sigmaHeight:0.012},
   {width:1.998,height:0.998,sigmaWidth:0.011,sigmaHeight:0.011}
  ],{widthTolerance:0.02,heightTolerance:0.02});
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,{...valid,maxSigmaWidth:0.001}),false);
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,{...valid,widthEnvelopeBound:0.001}),false);
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,{...valid,maxDeviationWidth:valid.rangeWidth+0.01}),false);
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,{...valid,maxSigmaWidth:0.001},verticalMeasurement),false);
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,{...valid,widthEnvelopeBound:0.001},verticalMeasurement),false);
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,{...valid,maxDeviationWidth:valid.rangeWidth+0.01},verticalMeasurement),false);
 });
  
 test('camera registration atomically applies measured gate pose and enables jamb obstacles',()=>{
@@ -1009,4 +1017,45 @@ test('per-axle uncertainty cannot be entered when the individual geometry field 
  assert.match(elements.routeAdvice.textContent,/сначала задайте индивидуальное измеренное значение/);
  assert.match(elements.routeAdvice.textContent,/trailerAxleSpacing12/);
  assert.match(elements.routeAdvice.textContent,/trailerAxle1Track/);
+});
+
+test('camera obstacle vertical range is enabled only after a valid road-surface calibration is applied',()=>{
+ const {elements,windowObject}=bootSimulator();
+ const surface={
+  originX:0,originY:0,originZ:0,gradeX:0.01,gradeY:-0.005,
+  originZUncertainty:0.01,gradeXUncertainty:0.001,gradeYUncertainty:0.001,
+  surfaceResidualUncertainty:0.01
+ };
+ elements.roadSurface.value=JSON.stringify(surface);
+ elements.apply.onclick();
+ assert.doesNotMatch(elements.routeAdvice.textContent,/Параметры не применены/);
+ const measurement={
+  width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01,
+  conditioningWarning:false,shapeWarning:false,
+  nonlinearSensitivityAvailable:true,nonlinearWarning:false
+ };
+ const readings=[
+  {width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01},
+  {width:2.005,height:1.004,sigmaWidth:0.012,sigmaHeight:0.012},
+  {width:1.998,height:0.998,sigmaWidth:0.011,sigmaHeight:0.011}
+ ];
+ const repeatability=cameraGeometry.summarizeRepeatability(readings,{widthTolerance:0.02,heightTolerance:0.02});
+ const verticalMeasurement={
+  height:2.5,heightUncertainty:0.03,baseDatumUncertainty:0.02,totalUncertainty:0.05,
+  datum:'local-road-surface',source:'manual-independent-measurement',confirmed:true
+ };
+ elements.roadSurface.value='null';
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(
+  measurement,{x:3,y:4},Math.PI/2,'Опорный столб',
+  {positionX:0.1,positionY:0.15,headingDeg:2},repeatability,verticalMeasurement
+ ),true);
+ assert.match(windowObject.TruckVisionCameraObstacleVerticalStatus,/только по горизонтальной 2D-оболочке/);
+ assert.equal(windowObject.TruckVisionClearCameraObstacles(),true);
+ elements.roadSurface.value=JSON.stringify(surface);
+ elements.apply.onclick();
+ assert.equal(windowObject.TruckVisionAddCameraObstacle(
+  measurement,{x:3,y:4},Math.PI/2,'Опорный столб',
+  {positionX:0.1,positionY:0.15,headingDeg:2},repeatability,verticalMeasurement
+ ),true);
+ assert.match(windowObject.TruckVisionCameraObstacleVerticalStatus,/Вертикальный диапазон привязан к откалиброванной плоскости дороги/);
 });

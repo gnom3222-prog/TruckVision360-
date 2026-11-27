@@ -2470,3 +2470,45 @@ test('vertical clearance includes bounded suspension heave pitch and roll envelo
  assert.ok(boundedResult.suspensionDisplacement&&boundedResult.suspensionDisplacement.max>0);
  assert.equal(boundedResult.distance,0,'the support-travel envelope must prevent a false vertical-separation result');
 });
+
+test('ground-supported obstacle height is compared only in a calibrated road datum and bounded vehicle profile',()=>{
+ const q={x:0,y:0,psi:0,psiT:0};
+ const roadSurface={
+  originX:0,originY:0,originZ:0,gradeX:0,gradeY:0,
+  originZUncertainty:0.01,gradeXUncertainty:0.001,gradeYUncertainty:0.001,
+  surfaceResidualUncertainty:0.01
+ };
+ const base={
+  ...params,roadSurface,
+  vehicleVerticalProfiles:{
+   'tractor-body':{zMin:0.4,zMax:1.5,uncertaintyMargin:0.02},
+   'tractor-cab':{zMin:2.0,zMax:3.2,uncertaintyMargin:0.02},
+   'trailer-body':{zMin:0.5,zMax:3.5,uncertaintyMargin:0.02},
+   'mirror':{zMin:2.0,zMax:3.5,uncertaintyMargin:0.02},
+   'tractor-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02},
+   'trailer-wheel':{zMin:0,zMax:1,uncertaintyMargin:0.02}
+  }
+ };
+ const obstacle=(height)=>[{
+  name:'manually measured ground-supported post',
+  x:2.1,y:0,w:0.1,h:0.1,
+  zMin:0,zMax:height,zUncertainty:0.05,
+  verticalDatum:'local-road-surface'
+ }];
+ const low=planner.createClearanceChecker(obstacle(1.0),base)(q);
+ const cabLow=low.perPart.find(item=>item.vehiclePart==='кабина');
+ assert.ok(cabLow);
+ assert.equal(cabLow.verticalStatus,'vertical-separated');
+ assert.equal(cabLow.roadSurfaceStatus,'configured-planar-surface-with-bounds');
+ assert.ok(cabLow.verticalGap>0);
+ const high=planner.createClearanceChecker(obstacle(2.5),base)(q);
+ const cabHigh=high.perPart.find(item=>item.vehiclePart==='кабина');
+ assert.ok(cabHigh);
+ assert.equal(cabHigh.verticalStatus,'vertical-overlap');
+ assert.equal(cabHigh.distance,0);
+ const unverified=planner.createClearanceChecker(obstacle(1.0),params)(q);
+ const cabUnverified=unverified.perPart.find(item=>item.vehiclePart==='кабина');
+ assert.ok(cabUnverified);
+ assert.equal(cabUnverified.verticalStatus,'vehicle-height-unverified');
+ assert.equal(cabUnverified.distance,0);
+});

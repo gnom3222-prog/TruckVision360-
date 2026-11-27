@@ -499,6 +499,15 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
  <div><label for="cameraObstaclePositionUncertaintyY">Допуск положения Y, ± м</label><input id="cameraObstaclePositionUncertaintyY" type="number" min="0" max="2" step="0.01" placeholder="Введите допуск" required></div>
  <div><label for="cameraObstacleHeadingUncertaintyDeg">Допуск направления, ± °</label><input id="cameraObstacleHeadingUncertaintyDeg" type="number" min="0" max="45" step="0.1" placeholder="Введите допуск" required></div>
 </div>
+<div class="section">Высота препятствия · независимое ручное измерение</div>
+<p class="small camera-warning">Камера измеряет только основание в плоскости пола и не определяет высоту. Для отдельно стоящего объекта, опирающегося на местную поверхность, измерьте высоту рулеткой или лазерным дальномером от поверхности у основания до верхней точки. Не используйте эту форму для нависающих балок, труб или объектов с несколькими уровнями основания. Допуски ниже — абсолютные максимальные границы, не 1σ.</p>
+<div class="grid">
+ <div><label for="cameraObstacleHeight">Высота над местной поверхностью, м</label><input id="cameraObstacleHeight" type="number" min="0.05" max="15" step="0.01" placeholder="Измерьте отдельно" required></div>
+ <div><label for="cameraObstacleHeightUncertainty">Максимальный допуск высоты, ± м</label><input id="cameraObstacleHeightUncertainty" type="number" min="0.001" max="1" step="0.001" placeholder="Введите допуск" required></div>
+ <div><label for="cameraObstacleBaseDatumUncertainty">Допуск основания относительно поверхности, ± м</label><input id="cameraObstacleBaseDatumUncertainty" type="number" min="0.001" max="1" step="0.001" placeholder="Введите допуск" required></div>
+</div>
+<label class="small"><input id="cameraObstacleVerticalDatumConfirmed" type="checkbox"> Подтверждаю независимое измерение высоты от местной поверхности до верхней точки и контакт основания с этой поверхностью.</label>
+<p class="small">Вертикальный диапазон передаётся планировщику только при наличии откалиброванной плоскости дороги с границами неопределённости. Без неё препятствие остаётся горизонтальной 2D-оболочкой. Даже при откалиброванной поверхности вертикальное разделение не подтверждается для частей автопоезда без измеренных вертикальных профилей.</p>
 <div class="camera-actions"><button id="cameraMeasureObstacle">3 · Измерить основание препятствия</button><button id="cameraClearObstacles">Очистить камерные препятствия</button></div>
 <p class="small">Камерные препятствия хранятся только в текущем сеансе страницы и удаляются при перезагрузке. Очистка удаляет только объекты, добавленные этим измерительным режимом; данные внешнего восприятия и демонстрационная карта не изменяются.</p>
 <div class="section">Автоматическое окружение · LiDAR + камеры</div>
@@ -525,10 +534,10 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <script src="vehicle-physics.js?v=20261126-15"></script>
 <script src="articulated-planner.js?v=20261126-9"></script>
 <script src="sensor-perception.js?v=20261126-2"></script>
-<script src="truckvision.js?v=20261126-16"></script>
+<script src="truckvision.js?v=20261126-17"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261126-5"></script>
-<script src="camera-measure.js?v=20261126-9"></script>
+<script src="camera-measure.js?v=20261126-10"></script>
 
 <script>
 // App-style section navigation. Existing controls remain in the DOM with their IDs.

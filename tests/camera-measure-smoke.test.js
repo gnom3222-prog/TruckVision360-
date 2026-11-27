@@ -9,13 +9,14 @@ const geometry=require('../camera-geometry.js');
 function bootCamera(options={}){
  const elements={},windowListeners={},documentListeners={};
  const context={clearRect(){},beginPath(){},moveTo(){},lineTo(){},closePath(){},stroke(){},arc(){},fill(){},fillText(){}};
- const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateWidthUncertainty','gateCenterX','gateCenterY','gateHeadingDeg','gateResult','cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg','cameraObstacleRepeatabilityWidthTolerance','cameraObstacleRepeatabilityDepthTolerance','cameraObstacleRepeatabilityStatus','cameraClearObstacleRepeats','cameraRepeatabilityWidthTolerance','cameraRepeatabilityHeightTolerance','cameraRepeatabilityStatus','cameraClearGateRepeats'];
+ const ids=['measureVideo','measureOverlay','cameraStatus','cameraStart','cameraStop','cameraCalibrate','cameraMeasureGate','cameraReset','cameraReferenceWidth','cameraReferenceHeight','cameraPointSigma','cameraReferenceSigma','gateWidth','gateWidthUncertainty','gateCenterX','gateCenterY','gateHeadingDeg','gateResult','cameraMeasureObstacle','cameraClearObstacles','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg','cameraObstacleRepeatabilityWidthTolerance','cameraObstacleRepeatabilityDepthTolerance','cameraObstacleRepeatabilityStatus','cameraClearObstacleRepeats','cameraObstacleHeight','cameraObstacleHeightUncertainty','cameraObstacleBaseDatumUncertainty','cameraObstacleVerticalDatumConfirmed','cameraRepeatabilityWidthTolerance','cameraRepeatabilityHeightTolerance','cameraRepeatabilityStatus','cameraClearGateRepeats'];
  for(const id of ids){
   elements[id]={
    id,value:({
     cameraReferenceWidth:'2.970',cameraReferenceHeight:'2.100',
-    cameraPointSigma:'2',cameraReferenceSigma:'2',cameraRepeatabilityWidthTolerance:'0.02',cameraRepeatabilityHeightTolerance:'0.02',gateWidth:'3.50',gateWidthUncertainty:'0',gateCenterX:'12',gateCenterY:'0',gateHeadingDeg:'90',cameraObstacleName:'Опорный столб',cameraObstacleX:'3',cameraObstacleY:'4',cameraObstacleHeading:'90',cameraObstaclePositionUncertaintyX:'0.10',cameraObstaclePositionUncertaintyY:'0.15',cameraObstacleHeadingUncertaintyDeg:'2',cameraObstacleRepeatabilityWidthTolerance:'0.02',cameraObstacleRepeatabilityDepthTolerance:'0.02'
+    cameraPointSigma:'2',cameraReferenceSigma:'2',cameraRepeatabilityWidthTolerance:'0.02',cameraRepeatabilityHeightTolerance:'0.02',gateWidth:'3.50',gateWidthUncertainty:'0',gateCenterX:'12',gateCenterY:'0',gateHeadingDeg:'90',cameraObstacleName:'Опорный столб',cameraObstacleX:'3',cameraObstacleY:'4',cameraObstacleHeading:'90',cameraObstaclePositionUncertaintyX:'0.10',cameraObstaclePositionUncertaintyY:'0.15',cameraObstacleHeadingUncertaintyDeg:'2',cameraObstacleRepeatabilityWidthTolerance:'0.02',cameraObstacleRepeatabilityDepthTolerance:'0.02',cameraObstacleHeight:'2.5',cameraObstacleHeightUncertainty:'0.03',cameraObstacleBaseDatumUncertainty:'0.02'
    })[id]||'',
+   checked:id==='cameraObstacleVerticalDatumConfirmed'?(options.verticalConfirmed!==false):false,
    textContent:'',style:{},listeners:{},width:0,height:0,
    videoWidth:id==='measureVideo'?640:0,
    videoHeight:id==='measureVideo'?480:0,
@@ -45,7 +46,7 @@ function bootCamera(options={}){
  const win={
   TruckVisionCameraGeometry:options.geometry||geometry,
   TruckVisionApplyGateRegistration:options.applyGateRegistration||((registration)=>{appliedRegistrations.push(registration);elements.gateWidth.value=registration.clearWidth.toFixed(2);elements.gateWidthUncertainty.value=registration.widthUncertaintyBound.toFixed(3);elements.gateCenterX.value=registration.centerX.toFixed(2);elements.gateCenterY.value=registration.centerY.toFixed(2);elements.gateHeadingDeg.value=registration.headingDeg.toFixed(2);return true;}),
-  TruckVisionAddCameraObstacle:options.addCameraObstacle||((measurement,anchor,heading,name,poseUncertainty,repeatability)=>{obstacleRegistrations.push({measurement,anchor,heading,name,poseUncertainty,repeatability});return true;}),
+  TruckVisionAddCameraObstacle:options.addCameraObstacle||((measurement,anchor,heading,name,poseUncertainty,repeatability,verticalMeasurement)=>{obstacleRegistrations.push({measurement,anchor,heading,name,poseUncertainty,repeatability,verticalMeasurement});return true;}),
   TruckVisionClearCameraObstacles:options.clearCameraObstacles||(()=>{clearCalls++;return true;}),
   addEventListener(type,fn){(windowListeners[type]??=[]).push(fn);}
  };
@@ -293,7 +294,14 @@ test('camera-measured obstacle is registered only after three distinct frames an
  assert.equal(registration.repeatability.count,3);
  assert.ok(registration.repeatability.widthEnvelopeBound>0);
  assert.ok(registration.repeatability.heightEnvelopeBound>0);
- assert.match(camera.elements.cameraStatus.textContent,/Препятствие добавлено после трёх отдельных кадров/);
+ assert.equal(registration.verticalMeasurement.height,2.5);
+ assert.equal(registration.verticalMeasurement.heightUncertainty,0.03);
+ assert.equal(registration.verticalMeasurement.baseDatumUncertainty,0.02);
+ assert.equal(registration.verticalMeasurement.totalUncertainty,0.05);
+ assert.equal(registration.verticalMeasurement.datum,'local-road-surface');
+ assert.equal(registration.verticalMeasurement.source,'manual-independent-measurement');
+ assert.equal(registration.verticalMeasurement.confirmed,true);
+ assert.match(camera.elements.cameraStatus.textContent,/Высота 2.50 м введена вручную/);
  await camera.fire('cameraClearObstacles','click');
  assert.equal(camera.clearCalls,1);
  assert.match(camera.elements.cameraStatus.textContent,/препятствия удалены с карты/);
@@ -368,6 +376,24 @@ test('camera obstacle repeatability locks the manual map pose across frames',asy
  camera.fire('cameraStop','click');
 });
 
+test('camera obstacle height requires explicit independent measurement and locks its datum through all frames',async()=>{
+ const camera=bootCamera();
+ await camera.fire('cameraStart','click');
+ await measureObstacleFrame(camera,null);
+ camera.elements.cameraObstacleHeight.value='2.8';
+ await measureObstacleFrame(camera,0.2);
+ assert.equal(camera.obstacleRegistrations.length,0);
+ assert.match(camera.elements.cameraStatus.textContent,/Высота препятствия или допуски вертикального datum изменились внутри серии/);
+ camera.fire('cameraStop','click');
+
+ const unconfirmed=bootCamera({verticalConfirmed:false});
+ await unconfirmed.fire('cameraStart','click');
+ await measureObstacleFrame(unconfirmed,null);
+ assert.equal(unconfirmed.obstacleRegistrations.length,0);
+ assert.match(unconfirmed.elements.cameraStatus.textContent,/Подтвердите независимое измерение высоты/);
+ unconfirmed.fire('cameraStop','click');
+});
+
 test('camera obstacle registration requires explicit map coordinates and heading',async()=>{
  const camera=bootCamera();
  camera.elements.cameraObstacleX.value='';
@@ -403,7 +429,7 @@ test('measured gate height is exposed only as an optional overhead lintel input'
 
 test('measurement page exposes the complete camera obstacle workflow',()=>{
  const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
- for(const id of ['cameraMeasureObstacle','cameraClearObstacles','cameraClearObstacleRepeats','cameraObstacleRepeatabilityWidthTolerance','cameraObstacleRepeatabilityDepthTolerance','cameraObstacleRepeatabilityStatus','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg']){
+ for(const id of ['cameraMeasureObstacle','cameraClearObstacles','cameraClearObstacleRepeats','cameraObstacleRepeatabilityWidthTolerance','cameraObstacleRepeatabilityDepthTolerance','cameraObstacleRepeatabilityStatus','cameraObstacleName','cameraObstacleX','cameraObstacleY','cameraObstacleHeading','cameraObstaclePositionUncertaintyX','cameraObstaclePositionUncertaintyY','cameraObstacleHeadingUncertaintyDeg','cameraObstacleHeight','cameraObstacleHeightUncertainty','cameraObstacleBaseDatumUncertainty','cameraObstacleVerticalDatumConfirmed']){
   assert.match(html,new RegExp('id="'+id+'"'),'missing camera obstacle control '+id);
  }
  assert.match(html,/в той же плоскости пола/);
@@ -411,6 +437,9 @@ test('measurement page exposes the complete camera obstacle workflow',()=>{
  assert.match(html,/placeholder="Введите направление"/);
  assert.match(html,/трёх отдельных кадров/);
  assert.match(html,/Допустимый разброс ширины основания/);
+ assert.match(html,/Камера измеряет только основание/);
+ assert.match(html,/независимое ручное измерение/);
+ assert.match(html,/откалиброванной плоскости дороги/);
 });
 
 test('camera-registered obstacles remain in planner input while live perception is active',()=>{
