@@ -852,6 +852,21 @@ test('articulation exposure locates the peak angle and cumulative route distance
  assert.ok(Math.abs(result.maxAngleDegrees-60)<1e-9);
  assert.ok(Math.abs(result.distanceAlongRoute-3)<1e-9);
  assert.deepEqual(result.state,{x:3,y:0,psi:Math.PI/3,psiT:0,gear:-1,steer:-0.12});
+ assert.equal(result.sampleCount,4);
+ assert.ok(Math.abs(result.maxSampleSpacing-2)<1e-12);
+ assert.ok(result.maxAdjacentAngleChangeDegrees>50);
+ assert.equal(result.samplingMethod,'discrete-route-states');
+ assert.equal(result.continuousPeakVerified,false);
+});
+
+test('articulation exposure reports zero spacing for a single sampled state',()=>{
+ const result=planner.articulationExposure([
+  {x:1,y:2,psi:0.2,psiT:0.1,gear:1}
+ ]);
+ assert.equal(result.sampleCount,1);
+ assert.equal(result.maxSampleSpacing,0);
+ assert.equal(result.maxAdjacentAngleChangeDegrees,0);
+ assert.equal(result.continuousPeakVerified,false);
 });
 
 test('articulation exposure uses wrapped angular difference near plus and minus pi',()=>{
