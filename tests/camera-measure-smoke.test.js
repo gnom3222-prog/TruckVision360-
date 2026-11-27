@@ -903,7 +903,7 @@ test('camera gate repeatability series cannot mix manually entered jamb geometry
   await camera.fire('cameraMeasureGate','click');
   await camera.tap(gatePoints);
   assert.equal(camera.appliedRegistrations.length,0,field+' must invalidate the repeatability series');
-  assert.match(camera.elements.cameraStatus.textContent,/геометрия\/допуски косяков ворот изменились внутри серии/);
+  assert.match(camera.elements.cameraStatus.textContent,/геометрия косяков или настройки верхней перемычки изменились внутри серии/);
   camera.fire('cameraStop','click');
  }
 });
