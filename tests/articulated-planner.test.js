@@ -209,16 +209,15 @@ test('gate helper creates two oriented convex jamb polygons with the requested c
 });
 
 test('gate width uncertainty narrows the opening and map pose uncertainty expands both jambs',()=>{
- const nominal=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
-  postWidthUncertainty:0.01,
-  depthUncertainty:0.02,
-  centerX:10,centerY:-2,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2
- });
- const widthBound=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
-  postWidthUncertainty:0.01,
-  depthUncertainty:0.02,
+ const nominal=planner.createGateObstacles({
   centerX:10,centerY:-2,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2,
-  widthUncertainty:0.2
+  widthUncertainty:0.001,postWidthUncertainty:0.01,depthUncertainty:0.02,
+  positionUncertainty:0.001,headingUncertaintyDeg:0.001
+ });
+ const widthBound=planner.createGateObstacles({
+  centerX:10,centerY:-2,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2,
+  widthUncertainty:0.2,postWidthUncertainty:0.01,depthUncertainty:0.02,
+  positionUncertainty:0.001,headingUncertaintyDeg:0.001
  });
  const axis={x:Math.cos(Math.PI/2),y:Math.sin(Math.PI/2)};
  const opening=items=>{
@@ -227,13 +226,10 @@ test('gate width uncertainty narrows the opening and map pose uncertainty expand
  };
  assert.ok(Math.abs(opening(widthBound)-(3.8-2*widthBound[0].gateUncertainty.totalInflation))<1e-9);
  assert.equal(widthBound[0].gateUncertainty.conservativeClearWidth,3.8);
- const poseBound=planner.createGateObstacles({widthUncertainty:0.001,positionUncertainty:0.001,headingUncertaintyDeg:0.001,
-  postWidthUncertainty:0.01,
-  depthUncertainty:0.02,
+ const poseBound=planner.createGateObstacles({
   centerX:10,centerY:-2,clearWidth:4,postWidth:0.2,depth:0.6,heading:Math.PI/2,
-  widthUncertainty:0.2,positionUncertainty:0.1,headingUncertaintyDeg:2,
-  postWidthUncertainty:0.01,
-  depthUncertainty:0.02
+  widthUncertainty:0.2,postWidthUncertainty:0.01,depthUncertainty:0.02,
+  positionUncertainty:0.1,headingUncertaintyDeg:2
  });
  assert.equal(planner.validateObstacles(poseBound).length,0);
  const maxRadius=items=>Math.max(...items.flatMap(item=>item.polygon.map(point=>Math.hypot(point.x-10,point.y+2))));
