@@ -1568,6 +1568,13 @@ test('gate uncertainty compares nominal and joint width-centre-heading envelopes
  assert.equal(gate.nominalClearWidth,8);
  assert.equal(gate.conservativeClearWidth,7.6);
  assert.equal(gate.widthUncertainty,0.4);
+ assert.equal(gate.nominalPostWidth,0.25);
+ assert.equal(gate.conservativePostWidth,0.26);
+ assert.equal(gate.postWidthUncertainty,0.01);
+ assert.equal(gate.nominalDepth,0.6);
+ assert.equal(gate.conservativeDepth,0.62);
+ assert.equal(gate.depthUncertainty,0.02);
+ assert.match(gate.model,/jamb thickness\/depth expansion/);
  assert.equal(gate.positionUncertaintyPerAxis,0.1);
  assert.equal(gate.headingUncertaintyDeg,1);
  assert.equal(result.geometrySensitivity.comparison.status,'stable');
