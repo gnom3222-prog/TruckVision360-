@@ -139,16 +139,21 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
   const widthUncertainty=gate.widthUncertainty;
   const positionUncertainty=gate.positionUncertainty;
   const headingUncertaintyDeg=gate.headingUncertaintyDeg;
+  const postWidthUncertainty=gate.postWidthUncertainty;
+  const depthUncertainty=gate.depthUncertainty;
   const minimumUncertainty=allowNominalZeroUncertainty?0:0.001;
   if(![centerX,centerY,clearWidth,postWidth,depth,heading,
-       widthUncertainty,positionUncertainty,headingUncertaintyDeg].every(Number.isFinite)||
+       widthUncertainty,positionUncertainty,headingUncertaintyDeg,
+       postWidthUncertainty,depthUncertainty].every(Number.isFinite)||
      Math.abs(centerX)>10000||Math.abs(centerY)>10000||
      clearWidth<=0||clearWidth>50||postWidth<=0||postWidth>5||
      depth<=0||depth>10||
      widthUncertainty<minimumUncertainty||widthUncertainty>2||widthUncertainty>=clearWidth||
      positionUncertainty<minimumUncertainty||positionUncertainty>2||
-     headingUncertaintyDeg<minimumUncertainty||headingUncertaintyDeg>45){
-   throw new Error('Ворота требуют явных положительных границ неопределённости: ширина и положение 0,001–2 м, направление 0,001–45°; ноль и отсутствие отклоняются.');
+     headingUncertaintyDeg<minimumUncertainty||headingUncertaintyDeg>45||
+     postWidthUncertainty<minimumUncertainty||postWidthUncertainty>1||postWidthUncertainty>=postWidth||
+     depthUncertainty<minimumUncertainty||depthUncertainty>2||depthUncertainty>=depth){
+   throw new Error('Ворота требуют явных положительных границ неопределённости: ширина и положение 0,001–2 м, направление 0,001–45°, толщина косяка 0,001–1 м и глубина косяка 0,001–2 м; допуски размеров косяка должны быть меньше номинальных размеров.');
   }
   const lintel=gate.lintel===undefined||gate.lintel===null?null:gate.lintel;
   let lintelObstacle=null;
@@ -231,9 +236,13 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
   // widthUncertainty is an absolute bound on the full clear width. Moving
   // both jambs inward by half this amount models the narrowest opening.
   const conservativeClearWidth=clearWidth-widthUncertainty;
+  const conservativePostWidth=postWidth+postWidthUncertainty;
+  const conservativeDepth=depth+2*depthUncertainty;
   const ux=Math.cos(heading),uy=Math.sin(heading);
   const nx=-uy,ny=ux;
-  const halfOffset=conservativeClearWidth/2+postWidth/2;
+  // Keep the measured inner face fixed: the uncertain post thickness expands
+  // outward from the opening, while depth uncertainty expands on both sides.
+  const halfOffset=conservativeClearWidth/2+conservativePostWidth/2;
   const headingDelta=headingUncertaintyDeg*Math.PI/180;
   const positionInflation=Math.SQRT2*positionUncertainty;
   const makePost=(side,name)=>{
@@ -243,24 +252,30 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
     x:cx+along*ux+across*nx,
     y:cy+along*uy+across*ny
    });
-   const nominalPolygon=[
-    point(-postWidth/2,-depth/2),
-    point(postWidth/2,-depth/2),
-    point(postWidth/2,depth/2),
-    point(-postWidth/2,depth/2)
+   const conservativePolygon=[
+    point(-conservativePostWidth/2,-conservativeDepth/2),
+    point(conservativePostWidth/2,-conservativeDepth/2),
+    point(conservativePostWidth/2,conservativeDepth/2),
+    point(-conservativePostWidth/2,conservativeDepth/2)
    ];
-   // A heading error rotates every jamb vertex around the manually supplied
-   // gate center. 2*R*sin(delta/2) bounds that displacement for |delta|.
-   const radius=Math.max(...nominalPolygon.map(p=>Math.hypot(p.x-centerX,p.y-centerY)));
+   // A heading error rotates every conservative jamb vertex around the
+   // manually supplied gate center. 2*R*sin(delta/2) bounds that displacement.
+   const radius=Math.max(...conservativePolygon.map(p=>Math.hypot(p.x-centerX,p.y-centerY)));
    const headingInflation=2*radius*Math.sin(headingDelta/2);
    const uncertaintyInflation=positionInflation+headingInflation;
-   const polygon=inflateConvexPolygon(nominalPolygon,uncertaintyInflation);
+   const polygon=inflateConvexPolygon(conservativePolygon,uncertaintyInflation);
    return {
     name,kind:'gate-jamb',polygon,
     gateUncertainty:{
      nominalClearWidth:clearWidth,
      conservativeClearWidth,
      widthUncertainty,
+     nominalPostWidth:postWidth,
+     postWidthUncertainty,
+     conservativePostWidth,
+     nominalDepth:depth,
+     depthUncertainty,
+     conservativeDepth,
      positionUncertaintyPerAxis:positionUncertainty,
      headingUncertaintyDeg,
      positionInflation,
@@ -2050,7 +2065,8 @@ function planAlternativesWithGeometryUncertainty(options={}){
   }
   try{
    const nominalGatePosts=createGateObstaclesInternal({
-    ...gateGeometry,widthUncertainty:0,positionUncertainty:0,headingUncertaintyDeg:0
+    ...gateGeometry,widthUncertainty:0,positionUncertainty:0,headingUncertaintyDeg:0,
+    postWidthUncertainty:0,depthUncertainty:0
    },true);
    const boundedGatePosts=createGateObstacles(gateGeometry);
    const nominalStaticObstacles=nominalizedObstacles.filter(obstacle=>obstacle?.kind!=='gate-jamb');
@@ -2060,15 +2076,24 @@ function planAlternativesWithGeometryUncertainty(options={}){
    const widthUncertainty=gateGeometry.widthUncertainty??0;
    const positionUncertainty=gateGeometry.positionUncertainty??0;
    const headingUncertaintyDeg=gateGeometry.headingUncertaintyDeg??0;
-   gateBoundsActive=widthUncertainty>0||positionUncertainty>0||headingUncertaintyDeg>0;
+   const postWidthUncertainty=gateGeometry.postWidthUncertainty??0;
+   const depthUncertainty=gateGeometry.depthUncertainty??0;
+   gateBoundsActive=widthUncertainty>0||positionUncertainty>0||headingUncertaintyDeg>0||
+    postWidthUncertainty>0||depthUncertainty>0;
    gateGeometryUncertainty={
     enabled:true,
     nominalClearWidth:gateGeometry.clearWidth,
     conservativeClearWidth:gateGeometry.clearWidth-widthUncertainty,
     widthUncertainty,
+    nominalPostWidth:gateGeometry.postWidth,
+    postWidthUncertainty,
+    conservativePostWidth:gateGeometry.postWidth+postWidthUncertainty,
+    nominalDepth:gateGeometry.depth,
+    depthUncertainty,
+    conservativeDepth:gateGeometry.depth+2*depthUncertainty,
     positionUncertaintyPerAxis:positionUncertainty,
     headingUncertaintyDeg,
-    model:'joint bounded envelope: inward jamb shift for width plus radial per-jamb expansion for simultaneous centre X/Y and heading error'
+    model:'joint bounded envelope: inward jamb shift for clear width, outward expansion for post thickness, symmetric expansion for post depth, plus radial per-jamb expansion for simultaneous centre X/Y and heading error'
    };
   }catch(error){
    return {ok:false,reason:'invalid-input',errors:[error&&error.message?error.message:'Некорректная геометрия ворот.'],expanded:0};
@@ -2331,7 +2356,9 @@ function planAlternativesWithVehicleParameterBounds(options={}){
  const hasGateBounds=!!gateBounds&&[
   gateBounds.widthUncertainty??0,
   gateBounds.positionUncertainty??0,
-  gateBounds.headingUncertaintyDeg??0
+  gateBounds.headingUncertaintyDeg??0,
+  gateBounds.postWidthUncertainty??0,
+  gateBounds.depthUncertainty??0
  ].some(value=>Number.isFinite(value)&&value>0);
  const geometryScenarioCount=hasGeometryBounds||hasGateBounds?2:1;
  if(activeDimensions.length>31){
