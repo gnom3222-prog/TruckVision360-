@@ -1562,3 +1562,34 @@ test('auxiliary envelopes require explicit local offsets and a positive combined
   assert.ok(physics.validateAuxiliaryEnvelopes([candidate]).some(error=>error.includes('неопределённости')),String(margin));
  }
 });
+
+test('public trailer axle diagnostics rejects invalid kinematic inputs instead of returning NaN',()=>{
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerAxleSpacing:1.3};
+ const q={x:0,y:0,psi:0.2,psiT:0.05};
+ const valid=physics.trailerAxleDiagnostics(q,0.7,0.18,p);
+ assert.ok(Number.isFinite(valid.trailerYawRate));
+ assert.ok(valid.axles.every(axle=>Number.isFinite(axle.lateralVelocity)));
+ assert.equal(valid.spacingUncertaintyStatus,'incomplete');
+
+ assert.throws(
+  ()=>physics.trailerAxleDiagnostics(q,0.7,0.18,{...p,wheelbase:0}),
+  /wheelbase: кинематический параметр/
+ );
+ assert.throws(
+  ()=>physics.trailerAxleDiagnostics({...q,psi:NaN},0.7,0.18,p),
+  /Состояние автопоезда/
+ );
+ assert.throws(
+  ()=>physics.trailerAxleDiagnostics(q,NaN,0.18,p),
+  /Скорость для диагностики/
+ );
+ assert.throws(
+  ()=>physics.trailerAxleDiagnostics(q,0.7,Math.PI/2,p),
+  /Угол рулевого воздействия/
+ );
+ assert.throws(
+  ()=>physics.trailerAxleDiagnostics(q,0.7,0.18,{...p,trailerAxleSpacing12:0.2}),
+  /Некорректные шаги осей/
+ );
+});
+
