@@ -1116,6 +1116,7 @@ test('virtual playback holds at the gear boundary until the explicit confirmatio
  const simulator=bootSimulator({workerResult:routeControlBoundaryWorkerResult(states)});
  const {elements,frames}=simulator;
  elements.trailerAxleSpacingUncertainty.value='0.02';
+ elements.measurementUncertainty.value='0.05';
  elements.apply.onclick();
  elements.goalX.value=String(reverse.x);
  elements.goalY.value=String(reverse.y);
@@ -1124,7 +1125,7 @@ test('virtual playback holds at the gear boundary until the explicit confirmatio
  elements.alternativeRouteSelect.value='0';
  elements.alternativeRouteSelect.onchange();
  assert.equal(elements.routeStart.disabled,undefined);
- assert.equal(elements.difficultyAdvice.textContent.includes('Автопроезд остаётся заблокирован'),false);
+ assert.equal(elements.difficultyAdvice.textContent.includes('Автопроезд остаётся заблокирован'),false,elements.difficultyAdvice.textContent);
  elements.routeStart.onclick();
  assert.match(elements.routeAdvice.textContent,/Виртуальный автопроезд начат/);
  let timestamp=1000;
