@@ -1115,6 +1115,8 @@ test('virtual playback holds at the gear boundary until the explicit confirmatio
  ];
  const simulator=bootSimulator({workerResult:routeControlBoundaryWorkerResult(states)});
  const {elements,frames}=simulator;
+ elements.trailerAxleSpacingUncertainty.value='0.02';
+ elements.apply.onclick();
  elements.goalX.value=String(reverse.x);
  elements.goalY.value=String(reverse.y);
  elements.goalHeading.value='0';
