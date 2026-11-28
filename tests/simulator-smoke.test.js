@@ -909,6 +909,7 @@ test('route assessment names the individual trailer wheel that limits the swept 
  assert.match(elements.difficultyAdvice.textContent,/Ограничивающее колесо: левое колесо 1-й оси полуприцепа/);
  assert.match(elements.difficultyAdvice.textContent,/консервативная геометрическая оценка/);
  assert.match(elements.difficultyAdvice.textContent,/Автопроезд остаётся заблокирован/);
+ assert.match(elements.difficultyAdvice.textContent,/отсутствует положительная погрешность расстояния между осями/);
 });
 
 test('route assessment labels the default Volvo FH and tri-axle geometry as preliminary when bounds are zero',async()=>{
