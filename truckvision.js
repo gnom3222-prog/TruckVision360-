@@ -86,6 +86,10 @@ const cfg={
  obstaclePositionUncertainty:0.05,
  obstacleSizeUncertainty:0.02,
  vehicleFootprintUncertainty:0.03,
+ initialPositionXUncertainty:0,
+ initialPositionYUncertainty:0,
+ initialTractorHeadingUncertaintyDeg:0,
+ initialTrailerHeadingUncertaintyDeg:0,
  wheelbaseUncertainty:0,
  hitchOffsetUncertainty:0,
  kingpinAxlesUncertainty:0,
@@ -387,6 +391,10 @@ function readSettings(){
   obstaclePositionUncertainty:[0,1],
   obstacleSizeUncertainty:[0,1],
   vehicleFootprintUncertainty:[0,0.5],
+  initialPositionXUncertainty:[0,2],
+  initialPositionYUncertainty:[0,2],
+  initialTractorHeadingUncertaintyDeg:[0,45],
+  initialTrailerHeadingUncertaintyDeg:[0,45],
   wheelbaseUncertainty:[0,2],
   hitchOffsetUncertainty:[0,1],
   kingpinAxlesUncertainty:[0,5],
@@ -1564,7 +1572,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261128-5');
+   worker=new Worker('./planner-worker.js?v=20261128-6');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
@@ -1654,6 +1662,12 @@ async function buildRoute(){
    obstacleSizeUncertainty:cfg.obstacleSizeUncertainty,
    vehicleFootprintUncertainty:cfg.vehicleFootprintUncertainty,
    vehicleParameterBounds:vehicleParameterBoundsFromSettings(),
+   initialPoseUncertainty:{
+    positionX:cfg.initialPositionXUncertainty,
+    positionY:cfg.initialPositionYUncertainty,
+    tractorHeadingDeg:cfg.initialTractorHeadingUncertaintyDeg,
+    trailerHeadingDeg:cfg.initialTrailerHeadingUncertaintyDeg
+   },
    bounds:{minX:-20,maxX:42,minY:-20,maxY:20}
   },progress=>{
    if(token!==routeBuildToken)return;
@@ -1916,6 +1930,19 @@ if(result.reason==='uncertainty-sensitive-start'){
   }
 
   const m=routeMetrics(plannedRoute,result.minimumClearanceLowerBound,result.sweptClearanceDetail,result.trajectoryClearance);
+  const poseSensitivity=result.initialPoseSensitivity||{
+   ok:false,status:'not-assessed',reason:'missing-worker-result',
+   note:'Проверка неопределённости исходной позы не вернула результат.'
+  };
+  m.initialPoseSensitivity=poseSensitivity;
+  if(!poseSensitivity.ok){
+   m.clearanceInsufficient=true;
+   m.level='Не пройден';
+   m.reasons.push('неопределённость исходной позы не подтверждена: '+
+    (poseSensitivity.note||poseSensitivity.reason||poseSensitivity.status||'нет результата'));
+  }else{
+   m.reasons.push('повторная RK4-проверка фиксированного маршрута пройдена для 17 сценариев исходной позы; это конечная сценарная проверка, не непрерывная граница и не повторная оптимизация начального действия');
+  }
   routeAssessment=m;
   const recommendationComparison=result.recommendationComparison||
    planner.compareStartCandidates([{states:plannedRoute,cost:result.length,label:'одиночный маршрут'}],{costTolerance:0.25});
@@ -2012,6 +2039,9 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
  parameterSensitivity.status==='not-varied'?
  ' Неопределённости физических размеров не заданы (нулевые допуски означают «не оценивалось», а не доказанную точность).':
  ' Устойчивость к диапазонам физических размеров не подтверждена.';
+ const poseSensitivityNote=poseSensitivity.ok?
+  ' Исходная поза повторно интегрирована для номинала и 16 угловых сочетаний X/Y и курсов тягача/полуприцепа; это конечная проверка фиксированных команд, не непрерывная граница и не повторная оптимизация стороны.':
+  ' Неопределённость исходной позы не оценена: задайте положительные допуски X/Y и курсов тягача/полуприцепа; до этого виртуальный автопроезд заблокирован.';
 
   const peakGearText=m.articulationPeak.gear<0?'задним ходом':'вперёд';
   const sampledAngleGradientText=Number.isFinite(m.articulationPeak.maxSampledAngleChangePerMeterDegrees)?
@@ -2035,7 +2065,7 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
    ' м; переключений передачи: '+m.gearChanges+'; изменений руля: '+m.steeringChanges+
    '; задний ход: '+m.reverseDistance.toFixed(1)+' м. Заданный конечный курс '+headingDegrees.toFixed(0)+
    '°; ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+'°; угол сочленения у цели '+
-   m.finalArticulationDeg.toFixed(1)+'° (допуск '+articulationLimitDegrees.toFixed(0)+'°); '+articulationPeakText+'.'+geometryNote+parameterNote;
+   m.finalArticulationDeg.toFixed(1)+'° (допуск '+articulationLimitDegrees.toFixed(0)+'°); '+articulationPeakText+'.'+geometryNote+parameterNote+poseSensitivityNote;
 
   const closestLocationText=m.clearanceDetail?
    m.clearanceDetail.vehiclePart+(m.clearanceDetail.component?' · '+m.clearanceDetail.component:'')+
@@ -3097,6 +3127,19 @@ $('alternativeRouteSelect').onchange=()=>{
   candidate.metrics?.sweptClearanceDetail??null,
   candidate.trajectoryClearance??null
  );
+ const candidatePoseSensitivity=candidate.initialPoseSensitivity||{
+  ok:false,status:'not-assessed',reason:'missing-candidate-pose-screen',
+  note:'Для выбранной альтернативы отсутствует проверка исходной позы.'
+ };
+ routeAssessment.initialPoseSensitivity=candidatePoseSensitivity;
+ if(!candidatePoseSensitivity.ok){
+  routeAssessment.clearanceInsufficient=true;
+  routeAssessment.level='Не пройден';
+  routeAssessment.reasons.push('неопределённость исходной позы для выбранной альтернативы не подтверждена: '+
+   (candidatePoseSensitivity.note||candidatePoseSensitivity.reason||candidatePoseSensitivity.status));
+ }else{
+  routeAssessment.reasons.push('выбранная фиксированная последовательность повторно проверена для 17 сценариев исходной позы; непрерывная граница и повторная оптимизация не подтверждены');
+ }
  const passed=!routeAssessment.collision&&routeAssessment.reached&&
   !routeAssessment.articulationBlocked&&!routeAssessment.clearanceInsufficient&&
   Number.isFinite(routeAssessment.effectiveClearance);
@@ -3149,6 +3192,10 @@ $('routeStart').onclick=()=>{
   return;
  }
  const clearance=routeAssessment.effectiveClearance;
+ if(!routeAssessment.initialPoseSensitivity?.ok){
+  $('routeAdvice').textContent='Автопроезд не запущен: исходная поза тягача и полуприцепа не прошла сценарную проверку. Введите положительные допуски X/Y и обоих курсов, затем перестройте маршрут. Даже успешная проверка покрывает только 16 угловых сценариев и не является непрерывной гарантией.';
+  return;
+ }
  const wheelCheckUnverified=!routeAssessment.wheelClearance||
   !!routeAssessment.wheelClearanceError||!!routeAssessment.wheelClearanceIncomplete;
  if(routeAssessment.collision||!routeAssessment.reached||routeAssessment.clearanceInsufficient||
