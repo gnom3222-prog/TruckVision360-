@@ -1713,4 +1713,7 @@ test('vehicle parameter uncertainty bounds reject invalid or unmeasured active d
  assert.throws(()=>physics.vehicleParameterBoundsFromUncertainties({
   trailerAxle1Track:0,trailerAxle1TrackUncertainty:0.1
  }),/положительное измеренное значение/);
+ assert.throws(()=>physics.vehicleParameterBoundsFromUncertainties({
+  tractorFrontOverhang:5,tractorFrontOverhangUncertainty:5
+ }),/погрешность нельзя молча обрезать/);
 });
