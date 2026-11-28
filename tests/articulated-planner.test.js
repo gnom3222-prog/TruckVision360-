@@ -3185,3 +3185,79 @@ test('trailer swept-rate spectral bound dominates sampled exact no-slip point sp
    'spectral bound '+rateBound+' must dominate sampled point speed '+sampledMaximum+' at steer '+steer);
  }
 });
+
+test('initial pose uncertainty replays the fixed route at nominal and all 16 independent bound corners',()=>{
+ const states=[{x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0}];
+ let q={x:0,y:0,psi:0,psiT:0};
+ for(let index=0;index<20;index++){
+  q=physics.rk4(q,0.7,0,0.05/0.7,params);
+  states.push({...q,gear:1,steer:0,stepDistance:0.05});
+ }
+ const result=planner.analyzeInitialPoseUncertainty(
+  states,[],params,
+  {positionX:0.05,positionY:0.04,tractorHeadingDeg:0.5,trailerHeadingDeg:0.75},
+  integrate,
+  {goal:{x:1,y:0,heading:0},minClearance:0.3,positionTolerance:0.9,
+   headingTolerance:5*Math.PI/180,maxTerminalArticulation:5*Math.PI/180}
+ );
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.scenarioCount,17);
+ assert.equal(result.cornerScenarioCount,16);
+ assert.equal(result.scenariosEvaluated,17);
+ assert.equal(result.continuousBoundVerified,false);
+ assert.equal(result.replanningIncluded,false);
+ assert.equal(result.recommendationOptimizationIncluded,false);
+ assert.equal(result.clearanceFailures,0);
+ assert.equal(result.goalFailures,0);
+});
+
+test('initial pose uncertainty is not assessed when any required positive bound is missing',()=>{
+ const states=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
+  {x:0.05,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0.05}
+ ];
+ const result=planner.analyzeInitialPoseUncertainty(
+  states,[],params,
+  {positionX:0.05,positionY:0.04,tractorHeadingDeg:0.5,trailerHeadingDeg:0},
+  integrate
+ );
+ assert.equal(result.ok,false);
+ assert.equal(result.status,'not-assessed');
+ assert.deepEqual(result.missingBounds,['trailerHeadingDeg']);
+ assert.equal(result.scenarioCount,0);
+});
+
+test('initial pose uncertainty blocks a fixed route when one of the 16 corners loses the required clearance',()=>{
+ const states=[{x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0}];
+ let q={x:0,y:0,psi:0,psiT:0};
+ for(let index=0;index<4;index++){
+  q=physics.rk4(q,0.7,0,0.05/0.7,params);
+  states.push({...q,gear:1,steer:0,stepDistance:0.05});
+ }
+ const obstacle={x:2,y:1.55,w:0.2,h:0.2,name:'near-side pallet'};
+ const result=planner.analyzeInitialPoseUncertainty(
+  states,[obstacle],params,
+  {positionX:0.02,positionY:0.20,tractorHeadingDeg:0.1,trailerHeadingDeg:0.1},
+  integrate,
+  {minClearance:0.10}
+ );
+ assert.equal(result.ok,false,JSON.stringify(result));
+ assert.equal(result.status,'clearance-failed-in-pose-scenario');
+ assert.ok(result.clearanceFailures>0);
+ assert.ok(result.scenariosEvaluated<=17);
+});
+
+test('initial pose uncertainty rejects routes without explicit integration distances',()=>{
+ const states=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
+  {x:0.05,y:0,psi:0,psiT:0,gear:1,steer:0}
+ ];
+ const result=planner.analyzeInitialPoseUncertainty(
+  states,[],params,
+  {positionX:0.05,positionY:0.05,tractorHeadingDeg:0.5,trailerHeadingDeg:0.5},
+  integrate
+ );
+ assert.equal(result.ok,false);
+ assert.equal(result.status,'invalid-route');
+ assert.equal(result.reason,'invalid-route-state');
+});
