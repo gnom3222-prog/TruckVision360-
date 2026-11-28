@@ -63,40 +63,76 @@ self.addEventListener('message',event=>{
     gateGeometryIncluded:options.gateGeometry!==undefined&&options.gateGeometry!==null
    };
   };
-  if(result.ok&&Array.isArray(result.states)){
-   result.initialPoseSensitivity=assessPose(result.states);
-  }
-  for(const key of ['candidateRoutes','conservativeCandidateRoutes']){
-   if(Array.isArray(result[key])){
-    result[key]=result[key].map(candidate=>candidate&&Array.isArray(candidate.states)?
-     {...candidate,initialPoseSensitivity:assessPose(candidate.states)}:candidate);
-   }
-  }
-  if(Array.isArray(result.candidateRoutes)&&result.candidateRoutes.length){
-   result.recommendationPoseSensitivity=self.TruckVisionPlanner.compareCandidateRecommendationAcrossPoseScenarios(
-    result.candidateRoutes,{costTolerance:options.costTolerance??0.25}
-   );
-   if(result.recommendationPoseSensitivity.ok&&
-      ['stable','single-candidate-unverified'].includes(result.recommendationPoseSensitivity.status)&&
-      result.reason!=='ambiguous-start'){
-    // Keep the worker message compact when the comparison is resolved.
-    delete result.candidateRoutes;
-   }else{
-    const allCandidates=result.candidateRoutes;
-    result.candidateRoutes=allCandidates.filter(candidate=>
-     candidate&&candidate.initialPoseSensitivity?.ok===true
-    ).map(candidate=>({
-     ...candidate,
-     recommendationPoseSensitivity:result.recommendationPoseSensitivity
-    }));
-    result.rejectedCandidateCount=allCandidates.length-result.candidateRoutes.length;
-   }
-  }else{
+  const poseRouteKeys=['candidateRoutes','conservativeCandidateRoutes'];
+  const poseRoutes=poseRouteKeys.flatMap(key=>Array.isArray(result[key])?result[key]:[]);
+  const estimatedReplayStates=poseRoutes.reduce((sum,candidate)=>
+   sum+(Array.isArray(candidate?.states)?candidate.states.length*17:0),0
+  );
+  const maxCandidatePoseReplayStates=options.maxCandidatePoseReplayStates??150000;
+  const validReplayBudget=Number.isInteger(maxCandidatePoseReplayStates)&&
+   maxCandidatePoseReplayStates>=1000&&maxCandidatePoseReplayStates<=1000000;
+  if(poseRoutes.length&&(!validReplayBudget||estimatedReplayStates>maxCandidatePoseReplayStates)){
+   const note='Сравнение первых действий не выполнено: сценарная проверка всех найденных кандидатов потребовала бы '+
+    estimatedReplayStates+' повторных состояний при лимите '+maxCandidatePoseReplayStates+
+    '. Уменьшите сложность сцены или используйте более короткий маршрут; резерв погрешности не уменьшайте.';
+   result.initialPoseSensitivity=result.ok?{
+    ok:false,status:'not-assessed',reason:'candidate-pose-screen-budget-exceeded',
+    estimatedReplayStates,maxCandidatePoseReplayStates,note
+   }:result.initialPoseSensitivity;
    result.recommendationPoseSensitivity={
-    ok:false,status:'not-assessed',stable:false,recommendation:null,
-    reason:'candidate-routes-unavailable',
-    note:'Сравнение первых действий по альтернативным траекториям не выполнено.'
+    ok:false,status:'candidate-pose-screen-budget-exceeded',stable:false,
+    recommendation:null,reason:'candidate-pose-screen-budget-exceeded',
+    estimatedReplayStates,maxCandidatePoseReplayStates,note
    };
+   result.rejectedCandidateCount=poseRoutes.length;
+   result.candidateRoutes=[];
+   result.conservativeCandidateRoutes=[];
+  }else{
+   for(const key of poseRouteKeys){
+    if(Array.isArray(result[key])){
+     result[key]=result[key].map(candidate=>candidate&&Array.isArray(candidate.states)?
+      {...candidate,initialPoseSensitivity:assessPose(candidate.states)}:candidate);
+    }
+   }
+   if(result.ok&&Array.isArray(result.candidateRoutes)){
+    const selectedCandidate=result.candidateRoutes.find(candidate=>
+     candidate&&(candidate.index===result.selectedCandidate||candidate.states===result.states)
+    );
+    result.initialPoseSensitivity=selectedCandidate?.initialPoseSensitivity||
+     (Array.isArray(result.states)?assessPose(result.states):{
+      ok:false,status:'not-assessed',reason:'selected-candidate-pose-evidence-missing',
+      note:'Не найдена сценарная проверка выбранной траектории.'
+     });
+   }else if(result.ok&&Array.isArray(result.states)){
+    result.initialPoseSensitivity=assessPose(result.states);
+   }
+   if(Array.isArray(result.candidateRoutes)&&result.candidateRoutes.length){
+    result.recommendationPoseSensitivity=self.TruckVisionPlanner.compareCandidateRecommendationAcrossPoseScenarios(
+     result.candidateRoutes,{costTolerance:options.costTolerance??0.25}
+    );
+    if(result.recommendationPoseSensitivity.ok&&
+       ['stable','single-candidate-unverified'].includes(result.recommendationPoseSensitivity.status)&&
+       result.reason!=='ambiguous-start'){
+     // Keep the worker message compact when the comparison is resolved.
+     delete result.candidateRoutes;
+    }else{
+     const allCandidates=result.candidateRoutes;
+     result.candidateRoutes=allCandidates.filter(candidate=>
+      candidate&&candidate.initialPoseSensitivity?.ok===true
+     ).map(candidate=>({
+      ...candidate,
+      recommendationPoseSensitivity:result.recommendationPoseSensitivity
+     }));
+     result.rejectedCandidateCount=(result.rejectedCandidateCount||0)+
+      allCandidates.length-result.candidateRoutes.length;
+    }
+   }else{
+    result.recommendationPoseSensitivity={
+     ok:false,status:'not-assessed',stable:false,recommendation:null,
+     reason:'candidate-routes-unavailable',
+     note:'Сравнение первых действий по альтернативным траекториям не выполнено.'
+    };
+   }
   }
   self.postMessage({id,type:'result',result});
  }catch(error){
