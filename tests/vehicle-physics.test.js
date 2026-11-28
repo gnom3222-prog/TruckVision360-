@@ -995,6 +995,103 @@ test('asymmetric axle spacings produce asymmetric rigid-group scrub diagnostics'
  );
 });
 
+test('asymmetric axle-spacing tolerances propagate independently to lateral-velocity bounds',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,
+  trailerAxleSpacing12:1.1,trailerAxleSpacing23:1.6,
+  trailerAxleSpacing12Uncertainty:0.02,
+  trailerAxleSpacing23Uncertainty:0.05
+ };
+ const diagnostic=physics.trailerAxleDiagnostics(
+  {x:0,y:0,psi:0.3,psiT:0},1,0.18,p
+ );
+ const yawRate=Math.abs(diagnostic.trailerYawRate);
+ assert.equal(diagnostic.spacingUncertaintyStatus,'complete');
+ assert.equal(diagnostic.axles[0].uncertaintySource,'individual-spacing');
+ assert.equal(diagnostic.axles[2].uncertaintySource,'individual-spacing');
+ near(diagnostic.axles[0].offsetUncertaintyBound,0.02,1e-12);
+ near(diagnostic.axles[2].offsetUncertaintyBound,0.05,1e-12);
+ near(diagnostic.axles[0].lateralVelocityUncertaintyBound,yawRate*0.02,1e-12);
+ near(diagnostic.axles[2].lateralVelocityUncertaintyBound,yawRate*0.05,1e-12);
+ near(
+  diagnostic.axles[0].lateralVelocityLowerBound,
+  diagnostic.axles[0].lateralVelocity-yawRate*0.02,1e-12
+ );
+ near(
+  diagnostic.axles[2].lateralVelocityUpperBound,
+  diagnostic.axles[2].lateralVelocity+yawRate*0.05,1e-12
+ );
+ assert.equal(diagnostic.axles[1].uncertaintyStatus,'reference-axis');
+ assert.match(diagnostic.uncertaintyScope,/yaw-rate.*excluded/);
+});
+
+test('common axle-spacing tolerance is used only for an axle inherited from the fallback',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,
+  trailerAxleSpacing:1.3,trailerAxleSpacingUncertainty:0.04,
+  trailerAxleSpacing12:1.1,trailerAxleSpacing12Uncertainty:0.02
+ };
+ const diagnostic=physics.trailerAxleDiagnostics(
+  {x:0,y:0,psi:0.3,psiT:0},1,0.18,p
+ );
+ assert.equal(diagnostic.axles[0].uncertaintySource,'individual-spacing');
+ assert.equal(diagnostic.axles[2].uncertaintySource,'common-fallback');
+ near(diagnostic.axles[0].offsetUncertaintyBound,0.02,1e-12);
+ near(diagnostic.axles[2].offsetUncertaintyBound,0.04,1e-12);
+});
+
+test('missing axle-spacing tolerance is reported as unbounded instead of zero',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,
+  trailerAxleSpacing12:1.1,trailerAxleSpacing23:1.6
+ };
+ const diagnostic=physics.trailerAxleDiagnostics(
+  {x:0,y:0,psi:0.3,psiT:0},1,0.18,p
+ );
+ assert.equal(diagnostic.spacingUncertaintyStatus,'incomplete');
+ assert.equal(diagnostic.axles[0].offsetUncertaintyBound,null);
+ assert.equal(diagnostic.axles[0].lateralVelocityUncertaintyBound,null);
+ assert.equal(diagnostic.axles[0].lateralVelocityLowerBound,null);
+ assert.equal(diagnostic.axles[1].lateralVelocityUncertaintyBound,0);
+ assert.equal(diagnostic.axles[2].lateralVelocityUncertaintyBound,null);
+});
+
+test('trajectory scrub exposure integrates spacing-only uncertainty bounds and preserves missing bounds',()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,
+  trailerAxleSpacing12:1.1,trailerAxleSpacing23:1.6,
+  trailerAxleSpacing12Uncertainty:0.02,
+  trailerAxleSpacing23Uncertainty:0.05
+ };
+ const start={x:0,y:0,psi:0,psiT:0};
+ const end=physics.rk4(start,0.7,0.18,0.5/0.7,p);
+ const path=[
+  {...start,gear:1,steer:0.18,stepDistance:0},
+  {...end,gear:1,steer:0.18,stepDistance:0.5}
+ ];
+ const bounded=physics.trailerAxleScrubExposure(path,p,0.7);
+ assert.equal(bounded.spacingUncertaintyStatus,'complete');
+ assert.ok(bounded.maxAbsLateralVelocityUncertaintyBoundByAxle[0]>0);
+ assert.equal(bounded.maxAbsLateralVelocityUncertaintyBoundByAxle[1],0);
+ assert.ok(bounded.maxAbsLateralVelocityUncertaintyBoundByAxle[2]>0);
+ assert.ok(bounded.cumulativeAbsoluteLateralTravelUncertaintyBoundByAxle[0]>0);
+ assert.equal(bounded.cumulativeAbsoluteLateralTravelUncertaintyBoundByAxle[1],0);
+ assert.ok(bounded.cumulativeAbsoluteLateralTravelUncertaintyBoundByAxle[2]>0);
+
+ const unbounded={...p};
+ delete unbounded.trailerAxleSpacing12Uncertainty;
+ delete unbounded.trailerAxleSpacing23Uncertainty;
+ const incomplete=physics.trailerAxleScrubExposure(path,unbounded,0.7);
+ assert.equal(incomplete.spacingUncertaintyStatus,'incomplete');
+ assert.equal(incomplete.maxAbsLateralVelocityUncertaintyBoundByAxle[0],null);
+ assert.equal(incomplete.maxAbsLateralVelocityUncertaintyBoundByAxle[1],0);
+ assert.equal(incomplete.maxAbsLateralVelocityUncertaintyBoundByAxle[2],null);
+});
+
 
 const tirePathParams={
  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
