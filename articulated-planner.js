@@ -550,6 +550,10 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
   );
   const auxiliaryEnvelopes=Array.isArray(p.auxiliaryEnvelopes)?p.auxiliaryEnvelopes:[];
   const hardwareTrailerAxleOffsets=resolveTrailerAxleOffsets(p);
+  const axleSpacingInfo=typeof rootPhysics.trailerAxleSpacingUncertaintyInfo==='function'?
+   rootPhysics.trailerAxleSpacingUncertaintyInfo(p):null;
+  const axlePositionUncertaintyBounds=axleSpacingInfo?
+   [axleSpacingInfo.bounds[0],0,axleSpacingInfo.bounds[1]]:[null,0,null];
   const auxiliaryTrailerSweepPoints=[];
   for(const entry of auxiliaryEnvelopes){
    const margin=(entry.uncertaintyMargin??0)+footprintUncertainty;
@@ -557,9 +561,15 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    const halfWidth=entry.width/2+margin;
    const heading=(entry.headingOffsetDeg??0)*Math.PI/180;
    const c=Math.cos(heading),s=Math.sin(heading);
+   const trailerAnchor=entry.anchor.startsWith('trailer-axle-');
+   const anchorAxleIndex=trailerAnchor?Number(entry.anchor.slice(-1))-1:-1;
    const baseLongitudinal=entry.anchor==='tractor-front-axle'?wheelbase:
     (entry.anchor==='tractor-rear-axle'?0:
-     hardwareTrailerAxleOffsets[Number(entry.anchor.slice(-1))-1]);
+     hardwareTrailerAxleOffsets[anchorAxleIndex]);
+   const anchorUncertainty=trailerAnchor?axlePositionUncertaintyBounds[anchorAxleIndex]:0;
+   const anchorLongitudinals=Number.isFinite(anchorUncertainty)?
+    [baseLongitudinal-anchorUncertainty,baseLongitudinal+anchorUncertainty]:
+    [baseLongitudinal];
    for(const longitudinalSign of [-1,1]){
     for(const lateralSign of [-1,1]){
      const localLongitudinal=(entry.longitudinalOffset??0)+
@@ -569,10 +579,12 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
      if(entry.anchor.startsWith('tractor-')){
       tractorRadius=Math.max(tractorRadius,Math.hypot(baseLongitudinal+localLongitudinal,localLateral));
      }else{
-      auxiliaryTrailerSweepPoints.push({
-       longitudinal:baseLongitudinal+localLongitudinal,
-       lateral:localLateral
-      });
+      for(const anchorLongitudinal of anchorLongitudinals){
+       auxiliaryTrailerSweepPoints.push({
+        longitudinal:anchorLongitudinal+localLongitudinal,
+        lateral:localLateral
+       });
+      }
      }
     }
    }
@@ -599,8 +611,13 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
   const trailerRearFromAxle=kingpinAxles-(trailerLength-trailerKingpinToFront+footprintUncertainty);
   const trailerAxleOffsets=hardwareTrailerAxleOffsets;
   const trailerWheelHalfLength=tireLength/2+footprintUncertainty;
-  const trailerWheelLongitudinals=trailerAxleOffsets
-   .flatMap(offset=>[offset-trailerWheelHalfLength,offset+trailerWheelHalfLength]);
+  const trailerWheelLongitudinals=trailerAxleOffsets.flatMap((offset,index)=>{
+   const bound=axlePositionUncertaintyBounds[index];
+   const possibleCenters=Number.isFinite(bound)?[offset-bound,offset+bound]:[offset];
+   return possibleCenters.flatMap(center=>[
+    center-trailerWheelHalfLength,center+trailerWheelHalfLength
+   ]);
+  });
   if(q&&(!Number.isFinite(q.psi)||!Number.isFinite(q.psiT))){
    throw new Error('Articulation state is invalid for swept-clearance checking.');
   }
@@ -646,7 +663,10 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    cab:(1+cabRadiusFromRearAxle*tractorYawPerMeter)*roadSurfaceRateScale,
    trailer:trailerPointRate*roadSurfaceRateScale,
    roadSurfaceGradientBound:roadSurfaceGradient,
-   roadSurfaceRateScale
+   roadSurfaceRateScale,
+   axleSpacingUncertaintyStatus:axleSpacingInfo?
+    (axleSpacingInfo.bounds.every(Number.isFinite)?'complete':'incomplete'):'unavailable',
+   axlePositionUncertaintyBounds
   };
  }
  function sweptDisplacementPerMeter(steer,p,q=null,maxDistance=0.05){
@@ -773,8 +793,11 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
   }
   if(wheel.vehiclePart==='полуприцеп'){
    const offsets=resolveTrailerAxleOffsets(p);
-   const longitudinal=offsets[wheel.axleIndex-1];
-   if(!Number.isFinite(longitudinal))throw new Error('Trailer wheel axle index is invalid for swept-clearance analysis.');
+   const nominalLongitudinal=offsets[wheel.axleIndex-1];
+   if(!Number.isFinite(nominalLongitudinal))throw new Error('Trailer wheel axle index is invalid for swept-clearance analysis.');
+   const axleBound=wheel.axleSpacingUncertaintyBound;
+   const longitudinalCandidates=Number.isFinite(axleBound)?
+    [nominalLongitudinal-axleBound,nominalLongitudinal+axleBound]:[nominalLongitudinal];
    const tracks=typeof rootPhysics.trailerAxleTracks==='function'?
     rootPhysics.trailerAxleTracks(p):[p.trailerTrack??(p.trailerWidth+0.24),p.trailerTrack??(p.trailerWidth+0.24),p.trailerTrack??(p.trailerWidth+0.24)];
    const track=tracks[wheel.axleIndex-1];
@@ -782,13 +805,15 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    const lateral=sideSign*track/2+pairLateralOffset;
    const couplingMagnitude=p.hitchOffset*curvature;
    let maximum=0;
-   for(const sign of [-1,1]){
-    const coupling=sign*couplingMagnitude;
-    const a=1+coupling*lateral/p.kingpinAxles;
-    const b=coupling-lateral/p.kingpinAxles;
-    const c=-coupling*longitudinal/p.kingpinAxles;
-    const d=longitudinal/p.kingpinAxles;
-    maximum=Math.max(maximum,matrixSpectralNorm2x2(a,b,c,d));
+   for(const longitudinal of longitudinalCandidates){
+    for(const sign of [-1,1]){
+     const coupling=sign*couplingMagnitude;
+     const a=1+coupling*lateral/p.kingpinAxles;
+     const b=coupling-lateral/p.kingpinAxles;
+     const c=-coupling*longitudinal/p.kingpinAxles;
+     const d=longitudinal/p.kingpinAxles;
+     maximum=Math.max(maximum,matrixSpectralNorm2x2(a,b,c,d));
+    }
    }
    return maximum;
   }
@@ -817,6 +842,15 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
      (verticalRange&&verticalRange.roadSurfaceStatus||'road-surface-unverified-horizontal-only'):null};
   });
   const uncertainty=Number.isFinite(p.footprintUncertainty)?p.footprintUncertainty:0;
+  const axleSpacingInfo=typeof rootPhysics.trailerAxleSpacingUncertaintyInfo==='function'?
+   rootPhysics.trailerAxleSpacingUncertaintyInfo(p):null;
+  const axleSpacingUncertaintyStatus=axleSpacingInfo?
+   (axleSpacingInfo.bounds.every(Number.isFinite)?'complete':'incomplete'):'unavailable';
+  const axleSpacingUncertaintyByAxle=axleSpacingInfo?[
+   {axleIndex:1,bound:axleSpacingInfo.bounds[0],source:axleSpacingInfo.sources[0]},
+   {axleIndex:2,bound:0,source:'equivalent-center'},
+   {axleIndex:3,bound:axleSpacingInfo.bounds[1],source:axleSpacingInfo.sources[1]}
+  ]:[];
   const tireLength=p.tireLength??0.72,tireWidth=p.tireWidth??0.44;
   const records=new Map();
   let previousState=null,previousChecks=null,distanceAlongRoute=0;
@@ -871,7 +905,12 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    }
    const currentChecks=footprints.map(wheel=>{
     const footprintWidth=Number.isFinite(wheel.footprintWidth)?wheel.footprintWidth:tireWidth;
-    const tireRadius=Math.hypot(tireLength/2+uncertainty,footprintWidth/2+uncertainty);
+    const longitudinalPositionUncertainty=Number.isFinite(wheel.longitudinalPositionUncertaintyBound)?
+     wheel.longitudinalPositionUncertaintyBound:0;
+    const tireRadius=Math.hypot(
+     tireLength/2+uncertainty+longitudinalPositionUncertainty,
+     footprintWidth/2+uncertainty
+    );
     const envelope=wheelEnvelopePolygon(wheel.center,tireRadius);
     const wheelVerticalRange=adjustVerticalRangeToRoadSurface(wheel.verticalRange,wheel.polygon,p);
     const envelopeVerticalRange=adjustVerticalRangeToRoadSurface(wheel.verticalRange,envelope,p);
@@ -897,6 +936,8 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
      record={
       name:wheel.name,vehiclePart:wheel.vehiclePart,axleIndex:wheel.axleIndex,side:wheel.side,
       footprintWidth,footprintModel:wheel.footprintModel||'legacy-single-tire-fallback',
+      axleSpacingUncertaintyBound:wheel.axleSpacingUncertaintyBound??null,
+      axleSpacingUncertaintyStatus:wheel.axleSpacingUncertaintyStatus||'not-applicable',
       minimumSampledPolygonClearance:Infinity,minimumSampledPolygonDetail:null,
       minimumSampledEnvelopeClearance:Infinity,minimumSampledEnvelopeDetail:null,
       minimumIntermediatePolygonClearance:Infinity,minimumIntermediatePolygonDetail:null,
@@ -1069,7 +1110,12 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
        }
        for(const wheel of intermediateFootprints){
         const footprintWidth=Number.isFinite(wheel.footprintWidth)?wheel.footprintWidth:tireWidth;
-        const tireRadius=Math.hypot(tireLength/2+uncertainty,footprintWidth/2+uncertainty);
+        const longitudinalPositionUncertainty=Number.isFinite(wheel.longitudinalPositionUncertaintyBound)?
+         wheel.longitudinalPositionUncertaintyBound:0;
+        const tireRadius=Math.hypot(
+         tireLength/2+uncertainty+longitudinalPositionUncertainty,
+         footprintWidth/2+uncertainty
+        );
         const envelope=wheelEnvelopePolygon(wheel.center,tireRadius);
         const wheelVerticalRange=adjustVerticalRangeToRoadSurface(wheel.verticalRange,wheel.polygon,p);
         const envelopeVerticalRange=adjustVerticalRangeToRoadSurface(wheel.verticalRange,envelope,p);
@@ -1208,6 +1254,12 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
   return {
    statesAnalyzed:states.length,segmentsAnalyzed:Math.max(0,states.length-1),
    distanceAlongRoute,wheels,limitingWheel,verticalUnverifiedChecks,verticalEvaluatedChecks,
+   axleSpacingUncertaintyStatus,
+   axleSpacingUncertaintyByAxle,
+   minimumClearanceLowerBoundCompleteForAxleSpacing:axleSpacingUncertaintyStatus==='complete',
+   minimumClearanceLowerBoundScope:axleSpacingUncertaintyStatus==='complete'?
+    'includes entered adjacent axle-spacing bounds; other vehicle, pose, obstacle and model uncertainties remain separate':
+    'conditional on nominal outer-axle positions; missing adjacent axle-spacing bounds are not included',
    roadSurfaceStatus:prepared.some(obstacle=>obstacle.hasVerticalDefinition)?
     (prepared.some(obstacle=>obstacle.hasVerticalDefinition&&obstacle.verticalRange)?
      'configured-planar-surface-with-bounds':'road-surface-unverified-horizontal-only'):'not-used',
@@ -1226,7 +1278,7 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    intermediateSamplingMethod:'adaptive-rk4-samples-with-per-interval-circumscribed-envelope-lower-bound',
    envelope:'circumscribed-16-gon-around-rectangular-tire-footprint',
    method:'per-wheel center displacement rate bound refined by adaptive RK4 samples and half-interval envelope-distance bounds',
-   note:'Нижняя оценка использует модельную верхнюю границу скорости центра колеса на каждом интервале и минимум расстояний в его концах. Она применима только при согласованной RK4-реконструкции сегмента и корректных параметрах модели; при достижении лимита число интервалов ограничивается 64, что отражается в диагностике. События смены передачи представлены отдельно с неизвестной длительностью; это не временная модель и не сертифицированная непрерывная проверка реального автопоезда.'
+   note:'Нижняя оценка использует модельную верхнюю границу скорости центра колеса на каждом интервале и минимум расстояний в его концах. При заданных допусках шагов осей интервалы продольного положения крайних осей включены в шинные оболочки и границы скорости; если допуски отсутствуют, оценка условна для номинальных положений осей. Она применима только при согласованной RK4-реконструкции сегмента и корректных параметрах модели; при достижении лимита число интервалов ограничивается 64, что отражается в диагностике. События смены передачи представлены отдельно с неизвестной длительностью; это не временная модель и не сертифицированная непрерывная проверка реального автопоезда.'
   };
  }
 
