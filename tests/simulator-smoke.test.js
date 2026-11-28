@@ -677,6 +677,17 @@ test('ambiguous planner results preserve candidate states and simulator draws th
 });
 
 
+function verifiedPoseSensitivityForTests(){
+ return {
+  ok:true,status:'stable-across-16-corners-plus-nominal',
+  scenarioCount:17,cornerScenarioCount:16,scenariosEvaluated:17,
+  minimumClearanceLowerBound:1,clearanceFailures:0,goalFailures:0,
+  continuousBoundVerified:false,replanningIncluded:false,
+  recommendationOptimizationIncluded:false,
+  note:'synthetic worker evidence for simulator harness only'
+ };
+}
+
 function perPartClearanceWorkerResult(){
  const states=[
   {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
@@ -699,7 +710,7 @@ function perPartClearanceWorkerResult(){
   ok:false,reason:'ambiguous-start',
   candidateRoutes:[{index:0,label:'проверенный тестовый вариант',cost:1,states,
    metrics:{minimumClearanceLowerBound:0.65,sweptClearanceDetail:null},
-   trajectoryClearance,recommendation}],
+   trajectoryClearance,recommendation,initialPoseSensitivity:verifiedPoseSensitivityForTests()}],
   candidateSummaries:[{label:'проверенный тестовый вариант',cost:1,initialGear:1,firstTurn:'left',
    firstTurnGear:1,tractorYawDirection:'left'}]
  };
@@ -715,11 +726,11 @@ function conservativeSelectionWorkerResult(){
   ok:false,
   reason:'uncertainty-sensitive-start',
   conservativeCandidateRoutes:[
-   {index:0,label:'проверенный резервный кандидат',cost:22,states,metrics:{
+   {index:0,label:'проверенный резервный кандидат',cost:22,states,initialPoseSensitivity:verifiedPoseSensitivityForTests(),metrics:{
     minimumClearanceLowerBound:1.2,
     sweptClearanceDetail:null
    }},
-   {index:1,label:'второй резервный кандидат',cost:23,states:states.map(state=>({...state})),metrics:{
+   {index:1,label:'второй резервный кандидат',cost:23,states:states.map(state=>({...state})),initialPoseSensitivity:verifiedPoseSensitivityForTests(),metrics:{
     minimumClearanceLowerBound:1.1,
     sweptClearanceDetail:null
    }}
