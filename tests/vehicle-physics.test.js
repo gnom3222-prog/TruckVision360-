@@ -1681,3 +1681,47 @@ test('axle-mounted auxiliary envelopes expand in both local axes for rotated anc
  near(extent(bounded.polygon,'x')-extent(nominal.polygon,'x'),0.2,1e-9);
  near(extent(bounded.polygon,'y')-extent(nominal.polygon,'y'),0.2,1e-9);
 });
+ 
+test('vehicle parameter uncertainty bounds include tractor front overhang, rear overhang, and body width',()=>{
+ const bounds=physics.vehicleParameterBoundsFromUncertainties({
+  tractorFrontOverhang:5,tractorFrontOverhangUncertainty:0.2,
+  tractorRearOverhang:1.2,tractorRearOverhangUncertainty:0.1,
+  tractorBodyWidth:2.55,tractorBodyWidthUncertainty:0.05
+ });
+ near(bounds.tractorFrontOverhang.min,4.8);
+ near(bounds.tractorFrontOverhang.max,5.2);
+ near(bounds.tractorRearOverhang.min,1.1);
+ near(bounds.tractorRearOverhang.max,1.3);
+ near(bounds.tractorBodyWidth.min,2.5);
+ near(bounds.tractorBodyWidth.max,2.6);
+});
+
+test('zero nominal mirror projection uses a nonnegative one-sided uncertainty interval',()=>{
+ const bounds=physics.vehicleParameterBoundsFromUncertainties({
+  mirrorOutboard:0,mirrorOutboardUncertainty:0.15
+ });
+ assert.equal(bounds.mirrorOutboard.min,0);
+ near(bounds.mirrorOutboard.max,0.15);
+});
+
+test('vehicle parameter uncertainty bounds ignore an unused common axle-spacing fallback',()=>{
+ const bounds=physics.vehicleParameterBoundsFromUncertainties({
+  trailerAxleSpacing:0,
+  trailerAxleSpacingUncertainty:0.2,
+  trailerAxleSpacing12:0.8,
+  trailerAxleSpacing23:1.6
+ });
+ assert.equal(Object.prototype.hasOwnProperty.call(bounds,'trailerAxleSpacing'),false);
+});
+
+test('vehicle parameter uncertainty bounds reject invalid or unmeasured active dimensions',()=>{
+ assert.throws(()=>physics.vehicleParameterBoundsFromUncertainties({
+  tractorFrontOverhang:5,tractorFrontOverhangUncertainty:-0.1
+ }),/неотрицательным числом/);
+ assert.throws(()=>physics.vehicleParameterBoundsFromUncertainties({
+  trailerAxle1Track:0,trailerAxle1TrackUncertainty:0.1
+ }),/положительное измеренное значение/);
+ assert.throws(()=>physics.vehicleParameterBoundsFromUncertainties({
+  tractorFrontOverhang:5,tractorFrontOverhangUncertainty:5
+ }),/погрешность нельзя молча обрезать/);
+});
