@@ -475,45 +475,7 @@ function readSettings(){
    }
   }
  }
- const parameterUncertaintyMap={
-  wheelbaseUncertainty:'wheelbase',
-  hitchOffsetUncertainty:'hitchOffset',
-  kingpinAxlesUncertainty:'kingpinAxles',
-  trailerLengthUncertainty:'trailerLength',
-  trailerKingpinToFrontUncertainty:'trailerKingpinToFront',
-  trailerWidthUncertainty:'trailerWidth',
-  trailerAxleSpacingUncertainty:'trailerAxleSpacing',
-  trailerAxleSpacing12Uncertainty:'trailerAxleSpacing12',
-  trailerAxleSpacing23Uncertainty:'trailerAxleSpacing23',
-  trailerAxle1TrackUncertainty:'trailerAxle1Track',
-  trailerAxle2TrackUncertainty:'trailerAxle2Track',
-  trailerAxle3TrackUncertainty:'trailerAxle3Track',
-  tractorSteeringTrackUncertainty:'tractorSteeringTrack',
-  tractorFrontTrackUncertainty:'tractorFrontTrack',
-  tractorRearTrackUncertainty:'tractorRearTrack',
-  trailerTrackUncertainty:'trailerTrack',
-  tractorRearTireGroupWidthUncertainty:'tractorRearTireGroupWidth',
-  trailerTireGroupWidthUncertainty:'trailerTireGroupWidth',
-  trailerAxle1TireGroupWidthUncertainty:'trailerAxle1TireGroupWidth',
-  trailerAxle2TireGroupWidthUncertainty:'trailerAxle2TireGroupWidth',
-  trailerAxle3TireGroupWidthUncertainty:'trailerAxle3TireGroupWidth',
-  tractorRearTireCenterSpacingUncertainty:'tractorRearTireCenterSpacing',
-  trailerAxle1TireCenterSpacingUncertainty:'trailerAxle1TireCenterSpacing',
-  trailerAxle2TireCenterSpacingUncertainty:'trailerAxle2TireCenterSpacing',
-  trailerAxle3TireCenterSpacingUncertainty:'trailerAxle3TireCenterSpacing',
-  tireLengthUncertainty:'tireLength',
-  tireWidthUncertainty:'tireWidth',
-  cabOffsetUncertainty:'cabOffset',
-  cabFrontUncertainty:'cabFront',
-  cabRearUncertainty:'cabRear',
-  cabWidthUncertainty:'cabWidth',
-  tractorFrontOverhangUncertainty:'tractorFrontOverhang',
-  tractorRearOverhangUncertainty:'tractorRearOverhang',
-  tractorBodyWidthUncertainty:'tractorBodyWidth',
-  mirrorOutboardUncertainty:'mirrorOutboard',
-  mirrorLongitudinalUncertainty:'mirrorLongitudinal',
-  mirrorLengthUncertainty:'mirrorLength'
- };
+ const parameterUncertaintyMap=physics.VEHICLE_PARAMETER_UNCERTAINTY_MAP;
  for(const [uncertaintyKey,parameterKey] of Object.entries(parameterUncertaintyMap)){
   const uncertainty=candidate[uncertaintyKey];
   if(!Number.isFinite(uncertainty)||uncertainty<0)continue;
