@@ -40,10 +40,13 @@ function makeHarness(options={}){
    kind:'video',
    label:'Back Camera',
    readyState:'live',
+   muted:false,
    getSettings(){return {facingMode:'environment',width:640,height:480,frameRate:30};},
    addEventListener(type,handler){(listeners[type]||(listeners[type]=[])).push(handler);},
    fire(type){
     if(type==='ended')this.readyState='ended';
+    if(type==='mute')this.muted=true;
+    if(type==='unmute')this.muted=false;
     for(const handler of listeners[type]||[])handler();
     if(type==='ended')delete listeners.ended;
    },
@@ -171,4 +174,28 @@ test('camera obstacle is not added when nonlinear uncertainty validation is unav
  app.tapQuad();
  assert.equal(app.obstacleCalls,0);
  assert.match(app.elements.cameraStatus.textContent,/Нелинейная проверка неопределённости не пройдена/);
+});
+
+
+test('a muted video track invalidates the frozen frame and requires recalibration after unmute',async()=>{
+ const app=makeHarness();
+ await app.elements.cameraStart.fire('click');
+ app.elements.cameraCalibrate.fire('click');
+ app.tapQuad();
+ assert.match(app.elements.cameraStatus.textContent,/Плоскость откалибрована/i);
+ const playCallsBeforeMute=app.video.playCalls;
+
+ app.tracks[0].fire('mute');
+ assert.equal(app.video.paused,true);
+ assert.match(app.elements.cameraStatus.textContent,/временно перестала передавать кадры/i);
+ app.elements.cameraMeasureGate.fire('click');
+ assert.match(app.elements.cameraStatus.textContent,/Сначала выполните калибровку/i);
+
+ app.tracks[0].fire('unmute');
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(app.video.paused,false);
+ assert.ok(app.video.playCalls>playCallsBeforeMute);
+ assert.match(app.elements.cameraStatus.textContent,/Прежняя калибровка недействительна/i);
+ app.elements.cameraMeasureGate.fire('click');
+ assert.match(app.elements.cameraStatus.textContent,/Сначала выполните калибровку/i);
 });
