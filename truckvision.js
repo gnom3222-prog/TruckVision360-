@@ -494,7 +494,7 @@ function readSettings(){
    errors.push(uncertaintyKey+': сначала задайте индивидуальное измеренное значение '+parameterKey+'.');
    continue;
   }
-  const lower=candidate[parameterKey]-uncertainty;
+  const lower=parameterKey==='mirrorOutboard'&&candidate[parameterKey]===0?candidate[parameterKey]:candidate[parameterKey]-uncertainty;
   const upper=candidate[parameterKey]+uncertainty;
   for(const endpoint of [lower,upper]){
    const endpointErrors=physics.validateVehicleParams({...candidate,[parameterKey]:endpoint});
