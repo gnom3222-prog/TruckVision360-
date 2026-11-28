@@ -1952,6 +1952,73 @@ if(result.reason==='uncertainty-sensitive-start'){
    m.reasons.push('фиксированный маршрут повторно интегрирован для номинала и 16 угловых сценариев; проверены контуры и колёса по расширенным геометрическим границам, но это не непрерывная граница и не повторная оптимизация начального действия');
   }
   routeAssessment=m;
+  const recommendationPoseSensitivity=result.recommendationPoseSensitivity||{
+   ok:false,status:'not-assessed',stable:false,reason:'missing-worker-result',
+   note:'Сравнение первых действий по сценариям исходной позы не вернуло результат.'
+  };
+  routeAssessment.recommendationPoseSensitivity=recommendationPoseSensitivity;
+  const unstableRecommendation=!recommendationPoseSensitivity.ok||
+   ['changed','ambiguous','no-feasible-candidate-in-pose-scenario'].includes(recommendationPoseSensitivity.status);
+  if(unstableRecommendation){
+   if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: первое действие меняется или неоднозначно при проверке исходной позы.');
+   const robustCandidates=Array.isArray(result.candidateRoutes)?
+    result.candidateRoutes.filter(candidate=>
+     Array.isArray(candidate?.states)&&candidate.states.length>=2&&candidate.initialPoseSensitivity?.ok===true
+    ):[];
+   alternativeRoutes=robustCandidates;
+   plannedRoute=[];
+   routeAssessment=null;
+   const chooser=$('alternativeRouteSelect');
+   chooser.innerHTML='<option value="">Выберите вручную вариант, прошедший 17 сценариев…</option>';
+   robustCandidates.forEach((candidate,index)=>{
+    const action=candidate.recommendation||planner.recommendStart(candidate.states);
+    const gear=action?.initialGear<0?'назад':'вперёд';
+    const steering=action?.steeringWheelDirection??action?.firstTurn;
+    const turn=steering==='left'?'руль влево':steering==='right'?'руль вправо':'без значимого поворота';
+    const option=document.createElement('option');
+    option.value=String(index);
+    option.textContent=(candidate.label||'вариант '+(index+1))+' — '+gear+', '+turn+
+     '; балл '+Number(candidate.cost).toFixed(2);
+    chooser.appendChild(option);
+   });
+   chooser.style.display=robustCandidates.length?'block':'none';
+   chooser.value='';
+   const changed=(recommendationPoseSensitivity.changedScenarios||[]).slice(0,5);
+   const ambiguous=(recommendationPoseSensitivity.ambiguousScenarios||[]).slice(0,5);
+   const scenarioNames=[...new Set([
+    ...changed.map(item=>item.scenario),
+    ...ambiguous.map(item=>item.scenario)
+   ])];
+   const scenarioText=scenarioNames.length?' Сценарии: '+scenarioNames.join(', ')+
+    ((changed.length+ambiguous.length)>5?' и другие.':'.'):'';
+   const nominal=recommendationPoseSensitivity.nominalAction;
+   const actionText=action=>{
+    if(!action)return 'не определено';
+    const gear=action.initialGear<0?'назад':'вперёд';
+    const steering=action.steeringWheelDirection??action.firstTurn;
+    const turn=steering==='left'?'руль влево':steering==='right'?'руль вправо':'без значимого поворота';
+    const yaw=action.tractorYawDirection==='left'?'курс тягача влево':
+     action.tractorYawDirection==='right'?'курс тягача вправо':'курс тягача не определён';
+    return gear+', '+turn+'; '+yaw;
+   };
+   const nominalText=nominal?' Номинальный сценарий: '+actionText(nominal)+'.':'';
+   $('routeAdvice').textContent=robustCandidates.length?
+    'Единую сторону и направление начала манёвра автоматически не выбираю: сравнение фиксированных вариантов меняется или остаётся неоднозначным при изменении исходной позы.'+nominalText+scenarioText+
+    ' Выберите вручную вариант, который прошёл собственную проверку зазора и цели во всех 17 сценариях.':
+    'Маршрут и рекомендация заблокированы: ни один найденный вариант не прошёл все 17 сценариев исходной позы. Уточните измерения или исходное положение и повторите расчёт.'+scenarioText;
+   $('difficultyAdvice').textContent='Сравниваются только найденные фиксированные последовательности управления по эвристическому баллу длины, переключений, угла сочленения и зазора. Это не повторная оптимизация каждого сценария и не глобальный оптимум. Ручной выбор не означает доказанное преимущество стороны.'+
+    (recommendationPoseSensitivity.note?' '+recommendationPoseSensitivity.note:'');
+   updateRecommendationCard({
+    status:robustCandidates.length?'Рекомендация неоднозначна':'Нет подтверждённого варианта',
+    level:'Не определена',
+    start:'Сторона начала автоматически не выбрана',
+    turn:robustCandidates.length?'Выберите вариант вручную':'Ни один вариант не прошёл все сценарии',
+    reasons:(recommendationPoseSensitivity.note||'Сравнение первых действий не подтверждено')+scenarioText,
+    check:'Не выдаю единую рекомендацию. Даже ручной вариант остаётся только результатом ограниченной виртуальной проверки.'
+   });
+   draw();
+   return;
+  }
   const recommendationComparison=result.recommendationComparison||
    planner.compareStartCandidates([{states:plannedRoute,cost:result.length,label:'одиночный маршрут'}],{costTolerance:0.25});
   const recommendation=result.recommendation||
@@ -3140,6 +3207,10 @@ $('alternativeRouteSelect').onchange=()=>{
   note:'Для выбранной альтернативы отсутствует проверка исходной позы.'
  };
  routeAssessment.initialPoseSensitivity=candidatePoseSensitivity;
+ routeAssessment.recommendationPoseSensitivity=candidate.recommendationPoseSensitivity||null;
+ routeAssessment.recommendationManuallySelected=true;
+ routeAssessment.recommendationSelectionRequired=false;
+ routeAssessment.reasons.push('вариант траектории выбран вручную после неоднозначного сравнения первых действий; это не доказательство оптимальности');
  const candidatePoseRawClearance=Number(candidatePoseSensitivity.minimumClearanceLowerBound);
  if(Number.isFinite(candidatePoseRawClearance)){
   const candidatePoseEffectiveClearance=candidatePoseRawClearance-2*cfg.measurementUncertainty;
@@ -3181,7 +3252,7 @@ $('alternativeRouteSelect').onchange=()=>{
    (selectedRecommendation.steeringWheelDirection==='left'?'Руль влево':'Руль вправо')+' примерно через '+selectedRecommendation.firstTurnDistance.toFixed(1)+' м'+(selectedRecommendation.firstTurnGear<0?' задним ходом':' вперёд')+'; '+(selectedRecommendation.tractorYawDirection==='left'?'курс тягача влево':'курс тягача вправо'):
    'Значимого первого поворота руля не найдено',
   reasons:routeAssessment.reasons.slice(0,4).join('; ')+'. Пиковый угол '+routeAssessment.maxBeta.toFixed(1)+'°; эффективный зазор '+(Number.isFinite(routeAssessment.effectiveClearance)?routeAssessment.effectiveClearance.toFixed(2)+' м':'не определён')+'.',
-  check:passed?'Выбранный вариант повторно проверен; автопроезд возможен только в виртуальной модели.':'Проверка не пройдена; виртуальный автопроезд остаётся заблокирован.'
+  check:passed?'Вариант выбран вручную после сравнения неоднозначных первых действий; проверка относится только к виртуальной модели и не доказывает оптимальность.':'Проверка не пройдена; виртуальный автопроезд остаётся заблокирован.'
  });
 
  draw();
@@ -3212,6 +3283,10 @@ $('routeStart').onclick=()=>{
   !!routeAssessment.wheelClearanceError||!!routeAssessment.wheelClearanceIncomplete;
  if(wheelCheckUnverified){
   $('routeAdvice').textContent='Автопроезд не запущен: проверка отдельных колёс не завершена или не подтверждена. Исправьте входные данные и постройте маршрут заново.';
+  return;
+ }
+ if(routeAssessment.recommendationSelectionRequired&&!routeAssessment.recommendationManuallySelected){
+  $('routeAdvice').textContent='Автопроезд не запущен: первые действия неоднозначны при изменении исходной позы. Выберите вариант вручную после просмотра его отдельной проверки.';
   return;
  }
  if(!routeAssessment.initialPoseSensitivity?.ok){
