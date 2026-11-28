@@ -607,9 +607,24 @@
   }
   const clearWidth=repeatability.meanWidth;
   const clearHeight=repeatability.meanHeight;
+  const jointScreenValues=[
+   measurement.jointRmsDeviationWidth,
+   measurement.jointRmsDeviationHeight,
+   measurement.jointMaxAbsDeviationWidth,
+   measurement.jointMaxAbsDeviationHeight,
+   measurement.jointMismatchWidth,
+   measurement.jointMismatchHeight
+  ];
+  const jointScreenMetricsValid=jointScreenValues.every(value=>Number.isFinite(value)&&value>=0)&&
+   measurement.jointMaxAbsDeviationWidth+1e-9>=measurement.jointRmsDeviationWidth&&
+   measurement.jointMaxAbsDeviationHeight+1e-9>=measurement.jointRmsDeviationHeight&&
+   measurement.jointMismatchWidth<=NONLINEAR_UNCERTAINTY_WARNING_RATIO&&
+   measurement.jointMismatchHeight<=NONLINEAR_UNCERTAINTY_WARNING_RATIO;
   if(measurement.nonlinearSensitivityAvailable!==true||measurement.nonlinearWarning===true||
      measurement.jointSensitivityAvailable!==true||measurement.jointSensitivityChecks!==33||
-     measurement.jointSensitivityModel!=='32-row-pairwise-independent-±1σ-plus-all-high-stress-case'){
+     measurement.jointSensitivityFailure!==null||
+     measurement.jointSensitivityModel!=='32-row-pairwise-independent-±1σ-plus-all-high-stress-case'||
+     !jointScreenMetricsValid){
    throw new Error('Нелинейная проверка неопределённости не пройдена. Повторите калибровку с более крупным эталоном и устойчивым ракурсом; измерение нельзя переносить на карту.');
   }
   const widthUncertaintyBound=repeatability.widthEnvelopeBound;
