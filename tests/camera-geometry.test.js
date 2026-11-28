@@ -15,7 +15,7 @@ const stableUncertainty={
  nonlinearSensitivityModel:'axiswise-one-sigma-finite-perturbations+pairwise-joint-screen',
  nonlinearMismatchWidth:0,maxAxisAsymmetryRatio:0,
  jointSensitivityModel:'32-row-pairwise-independent-±1σ-plus-all-high-stress-case',
- jointSensitivityAvailable:true,jointSensitivityChecks:33,
+ jointSensitivityAvailable:true,jointSensitivityChecks:33,jointSensitivityFailure:null,
  jointRmsDeviationWidth:0.01,jointRmsDeviationHeight:0.02,
  jointMaxAbsDeviationWidth:0.02,jointMaxAbsDeviationHeight:0.04,
  jointMismatchWidth:0,jointMismatchHeight:0
@@ -342,6 +342,24 @@ test('camera uncertainty flags a one-sigma perturbation that invalidates the ref
  assert.equal(result.nonlinearWarning,true);
  assert.ok(result.nonlinearWarningReasons.includes('finite-perturbation-unavailable'));
  assert.match(result.nonlinearSensitivityFailure,/Размеры эталона|корректны/);
+});
+
+test('map registration rejects fabricated or inconsistent joint uncertainty metrics',()=>{
+ const measurement=camera.estimateUncertainty({
+  referencePoints:rectangularReference,
+  referenceWidth:4,
+  referenceHeight:2,
+  measuredPoints:[{x:20,y:10},{x:80,y:10},{x:80,y:40},{x:20,y:40}],
+  sigmaPixels:2,
+  sigmaReferenceWidth:0.002,
+  sigmaReferenceHeight:0.002
+ });
+ const repeatability=repeatabilityFor(measurement.sigmaWidth,measurement.sigmaHeight,measurement.width,measurement.height);
+ const register=value=>camera.registerGateOnMap(value,{x:12,y:0},Math.PI/2,repeatability);
+ assert.throws(()=>register({...measurement,jointMismatchWidth:0.26}),/Нелинейная проверка неопределённости/);
+ assert.throws(()=>register({...measurement,jointMaxAbsDeviationHeight:measurement.jointRmsDeviationHeight/2}),/Нелинейная проверка неопределённости/);
+ assert.throws(()=>register({...measurement,jointRmsDeviationWidth:NaN}),/Нелинейная проверка неопределённости/);
+ assert.throws(()=>register({...measurement,jointSensitivityFailure:'joint-screen-failed'}),/Нелинейная проверка неопределённости/);
 });
 
 test('gate map registration refuses measurements without a successful nonlinear sensitivity cross-check',()=>{
