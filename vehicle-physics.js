@@ -1069,7 +1069,8 @@
    const anchorPositionUncertainty=Number.isFinite(anchorPositionUncertaintyBound)?anchorPositionUncertaintyBound:0;
    const polygon=bodyCorners(center,heading,
     entry.length/2+margin+anchorPositionUncertainty,
-    -entry.length/2-margin-anchorPositionUncertainty,entry.width+2*margin);
+    -entry.length/2-margin-anchorPositionUncertainty,
+    entry.width+2*margin+2*anchorPositionUncertainty);
    const suspensionAttachment=entry.suspensionAttachment??'axle';
    const verticalRange=entry.zMin!==undefined?verticalRangeFromProfile({
     zMin:entry.zMin,zMax:entry.zMax,uncertaintyMargin:entry.verticalUncertaintyMargin
