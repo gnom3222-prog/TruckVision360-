@@ -346,6 +346,14 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 <div><label for="vehicleFootprintUncertainty">Расширение каждой грани автопоезда, м</label><input id="vehicleFootprintUncertainty" type="number" min="0" max="0.5" value="0.03" step="0.01"></div>
 </div>
 <p class="small">Это отдельные пользовательские границы, не оценка 1σ камеры: положение каждого прямоугольного препятствия расширяется по X/Y на заданную величину, его полный размер — на заданную погрешность, а все три прямоугольных контура автопоезда расширяются наружу с каждой грани. Планировщик ищет путь в этой геометрической оболочке и сравнивает начальное действие с номинальным поиском. Погрешности кинематических размеров задаются отдельно в следующем разделе; проверяются крайние значения по одному параметру за раз, а не все совместные комбинации.</p>
+<div class="section">Неопределённость исходной позы автопоезда</div>
+<div class="grid">
+<div><label for="initialPositionXUncertainty">Погрешность исходного положения X, ± м</label><input id="initialPositionXUncertainty" type="number" min="0" max="2" value="0" step="0.01"></div>
+<div><label for="initialPositionYUncertainty">Погрешность исходного положения Y, ± м</label><input id="initialPositionYUncertainty" type="number" min="0" max="2" value="0" step="0.01"></div>
+<div><label for="initialTractorHeadingUncertaintyDeg">Погрешность курса тягача, ± °</label><input id="initialTractorHeadingUncertaintyDeg" type="number" min="0" max="45" value="0" step="0.1"></div>
+<div><label for="initialTrailerHeadingUncertaintyDeg">Погрешность курса полуприцепа, ± °</label><input id="initialTrailerHeadingUncertaintyDeg" type="number" min="0" max="45" value="0" step="0.1"></div>
+</div>
+<p class="small camera-warning">Введите независимые положительные границы неопределённости начального X/Y и курсов тягача/полуприцепа по фактическому способу позиционирования. Ноль означает «не оценено», а не отсутствие ошибки; пока хотя бы одна граница равна нулю, виртуальный автопроезд блокируется. После построения маршрута планировщик повторно интегрирует ту же последовательность передач и рулевых команд для номинала и всех 16 угловых сочетаний четырёх границ. Проверяются нижняя оценка зазора и достижение цели. Это конечная сценарная проверка фиксированных команд, а не непрерывная граница, не полный анализ внутренних сочетаний и не повторная оптимизация лучшей стороны начала манёвра.</p>
 <div class="section">Внешний контур Volvo FH · калибровка</div>
 <div class="grid">
 <div><label for="tractorFrontOverhang">От задней оси до передней грани общего контура, м</label><input id="tractorFrontOverhang" type="number" min="1" max="10" value="5.00" step="0.01"></div>
@@ -549,9 +557,9 @@ main{padding:8px 8px calc(94px + env(safe-area-inset-bottom))}.cockpit{padding:8
 </main>
 
 <script src="vehicle-physics.js?v=20261128-4"></script>
-<script src="articulated-planner.js?v=20261128-2"></script>
+<script src="articulated-planner.js?v=20261128-3"></script>
 <script src="sensor-perception.js?v=20261126-2"></script>
-<script src="truckvision.js?v=20261128-4"></script>
+<script src="truckvision.js?v=20261128-5"></script>
 <script src="voice.js?v=20261123-4"></script>
 <script src="camera-geometry.js?v=20261128-7"></script>
 <script src="camera-measure.js?v=20261128-4"></script>
