@@ -977,12 +977,9 @@ test('trailer axle spacing helpers reject an implicit nominal fallback',()=>{
  assert.deepEqual(physics.trailerAxleSpacings({
   trailerAxleSpacing12:0.8,trailerAxleSpacing23:1.6
  }),[0.8,1.6]);
- assert.throws(
-  ()=>physics.trailerAxleSpacings({
-   trailerAxleSpacing:0,trailerAxleSpacing12:1.1,trailerAxleSpacing23:1.6
-  }),
-  /Невозможно определить шаги трёхосной тележки/
- );
+ assert.deepEqual(physics.trailerAxleSpacings({
+  trailerAxleSpacing:0,trailerAxleSpacing12:1.1,trailerAxleSpacing23:1.6
+ }),[1.1,1.6]);
 });
 
 
