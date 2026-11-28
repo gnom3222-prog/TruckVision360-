@@ -1935,13 +1935,21 @@ if(result.reason==='uncertainty-sensitive-start'){
    note:'Проверка неопределённости исходной позы не вернула результат.'
   };
   m.initialPoseSensitivity=poseSensitivity;
+  const poseRawClearance=Number(poseSensitivity.minimumClearanceLowerBound);
+  if(Number.isFinite(poseRawClearance)){
+   const poseEffectiveClearance=poseRawClearance-2*cfg.measurementUncertainty;
+   m.clearanceLowerBound=Math.min(Number.isFinite(m.clearanceLowerBound)?m.clearanceLowerBound:Infinity,poseRawClearance);
+   m.effectiveClearance=Math.min(Number.isFinite(m.effectiveClearance)?m.effectiveClearance:Infinity,poseEffectiveClearance);
+   m.poseScenarioEffectiveClearance=poseEffectiveClearance;
+   m.reasons.push('минимальная комбинированная нижняя оценка в сценариях исходной позы '+poseRawClearance.toFixed(2)+' м; после резерва измерения '+poseEffectiveClearance.toFixed(2)+' м; ограничивающий сценарий '+(poseSensitivity.limitingScenario||'не определён'));
+  }
   if(!poseSensitivity.ok){
    m.clearanceInsufficient=true;
    m.level='Не пройден';
    m.reasons.push('неопределённость исходной позы не подтверждена: '+
     (poseSensitivity.note||poseSensitivity.reason||poseSensitivity.status||'нет результата'));
   }else{
-   m.reasons.push('повторная RK4-проверка фиксированного маршрута пройдена для 17 сценариев исходной позы; это конечная сценарная проверка, не непрерывная граница и не повторная оптимизация начального действия');
+   m.reasons.push('фиксированный маршрут повторно интегрирован для номинала и 16 угловых сценариев; проверены контуры и колёса по расширенным геометрическим границам, но это не непрерывная граница и не повторная оптимизация начального действия');
   }
   routeAssessment=m;
   const recommendationComparison=result.recommendationComparison||
@@ -2040,7 +2048,7 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
  ' Неопределённости физических размеров не заданы (нулевые допуски означают «не оценивалось», а не доказанную точность).':
  ' Устойчивость к диапазонам физических размеров не подтверждена.';
  const poseSensitivityNote=poseSensitivity.ok?
-  ' Исходная поза повторно интегрирована для номинала и 16 угловых сочетаний X/Y и курсов тягача/полуприцепа; это конечная проверка фиксированных команд, не непрерывная граница и не повторная оптимизация стороны.':
+  ' Исходная поза повторно интегрирована для номинала и 16 угловых сочетаний X/Y и курсов тягача/полуприцепа; минимальная комбинированная нижняя оценка зазора '+(Number.isFinite(poseSensitivity.minimumClearanceLowerBound)?poseSensitivity.minimumClearanceLowerBound.toFixed(2)+' м':'не определена')+'; проверены контуры и колёса на расширенных геометрических границах. Это конечная проверка фиксированных команд, не непрерывная граница и не повторная оптимизация стороны.':
   ' Неопределённость исходной позы не оценена: задайте положительные допуски X/Y и курсов тягача/полуприцепа; до этого виртуальный автопроезд заблокирован.';
 
   const peakGearText=m.articulationPeak.gear<0?'задним ходом':'вперёд';
@@ -3132,13 +3140,21 @@ $('alternativeRouteSelect').onchange=()=>{
   note:'Для выбранной альтернативы отсутствует проверка исходной позы.'
  };
  routeAssessment.initialPoseSensitivity=candidatePoseSensitivity;
+ const candidatePoseRawClearance=Number(candidatePoseSensitivity.minimumClearanceLowerBound);
+ if(Number.isFinite(candidatePoseRawClearance)){
+  const candidatePoseEffectiveClearance=candidatePoseRawClearance-2*cfg.measurementUncertainty;
+  routeAssessment.clearanceLowerBound=Math.min(Number.isFinite(routeAssessment.clearanceLowerBound)?routeAssessment.clearanceLowerBound:Infinity,candidatePoseRawClearance);
+  routeAssessment.effectiveClearance=Math.min(Number.isFinite(routeAssessment.effectiveClearance)?routeAssessment.effectiveClearance:Infinity,candidatePoseEffectiveClearance);
+  routeAssessment.poseScenarioEffectiveClearance=candidatePoseEffectiveClearance;
+  routeAssessment.reasons.push('минимальная комбинированная нижняя оценка в сценариях исходной позы '+candidatePoseRawClearance.toFixed(2)+' м; после резерва измерения '+candidatePoseEffectiveClearance.toFixed(2)+' м');
+ }
  if(!candidatePoseSensitivity.ok){
   routeAssessment.clearanceInsufficient=true;
   routeAssessment.level='Не пройден';
   routeAssessment.reasons.push('неопределённость исходной позы для выбранной альтернативы не подтверждена: '+
    (candidatePoseSensitivity.note||candidatePoseSensitivity.reason||candidatePoseSensitivity.status));
  }else{
-  routeAssessment.reasons.push('выбранная фиксированная последовательность повторно проверена для 17 сценариев исходной позы; непрерывная граница и повторная оптимизация не подтверждены');
+  routeAssessment.reasons.push('выбранная фиксированная последовательность повторно интегрирована для 17 сценариев; проверены контуры и колёса на расширенных геометрических границах, без непрерывной гарантии и повторной оптимизации');
  }
  const passed=!routeAssessment.collision&&routeAssessment.reached&&
   !routeAssessment.articulationBlocked&&!routeAssessment.clearanceInsufficient&&
