@@ -120,7 +120,7 @@
    if(VEHICLE_PARAMETER_UNCERTAINTY_REQUIRES_MEASURED_NOMINAL.has(parameterKey)&&nominal<=0){
     throw new Error(uncertaintyKey+': сначала задайте положительное измеренное значение '+parameterKey+'.');
    }
-   const min=nominal-uncertainty;
+   const min=parameterKey==='mirrorOutboard'&&nominal===limits.min?nominal:nominal-uncertainty;
    const max=nominal+uncertainty;
    if(min<limits.min-1e-12||max>limits.max+1e-12){
     throw new Error(uncertaintyKey+': диапазон выходит за допустимые пределы '+parameterKey+' ['+limits.min+'; '+limits.max+'] м; погрешность нельзя молча обрезать.');
