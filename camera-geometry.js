@@ -607,7 +607,9 @@
   }
   const clearWidth=repeatability.meanWidth;
   const clearHeight=repeatability.meanHeight;
-  if(measurement.nonlinearSensitivityAvailable!==true||measurement.nonlinearWarning===true){
+  if(measurement.nonlinearSensitivityAvailable!==true||measurement.nonlinearWarning===true||
+     measurement.jointSensitivityAvailable!==true||measurement.jointSensitivityChecks!==33||
+     measurement.jointSensitivityModel!=='32-row-pairwise-independent-±1σ-plus-all-high-stress-case'){
    throw new Error('Нелинейная проверка неопределённости не пройдена. Повторите калибровку с более крупным эталоном и устойчивым ракурсом; измерение нельзя переносить на карту.');
   }
   const widthUncertaintyBound=repeatability.widthEnvelopeBound;
