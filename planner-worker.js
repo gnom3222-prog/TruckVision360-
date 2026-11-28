@@ -113,7 +113,10 @@ self.addEventListener('message',event=>{
    }
    if(Array.isArray(result.candidateRoutes)&&result.candidateRoutes.length){
     result.recommendationPoseSensitivity=self.TruckVisionPlanner.compareCandidateRecommendationAcrossPoseScenarios(
-     result.candidateRoutes,{costTolerance:options.costTolerance??0.25}
+     result.candidateRoutes,{
+      costTolerance:options.costTolerance??0.25,
+      firstTurnDistanceTolerance:options.firstTurnDistanceTolerance??0.25
+     }
     );
     if(result.recommendationPoseSensitivity.ok&&
        ['stable','single-candidate-unverified'].includes(result.recommendationPoseSensitivity.status)&&
