@@ -1270,7 +1270,10 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
  const finalHeadingErrorDeg=(finalErrors.headingError??0)*180/Math.PI;
  const finalArticulationDeg=finalErrors.articulation*180/Math.PI;
  const wheelClearanceIncomplete=!!wheelClearance&&wheelClearance.segmentsWithoutIntermediateKinematicSamples>0;
+ const wheelClearanceSpacingUncertaintyIncomplete=!!wheelClearance&&routeObstacles.length>0&&
+  wheelClearance.axleSpacingUncertaintyStatus!=='complete';
  const clearanceInsufficient=!!wheelClearanceError||wheelClearanceIncomplete||
+  wheelClearanceSpacingUncertaintyIncomplete||
   (Number.isFinite(effectiveClearance)&&effectiveClearance<0.35);
  const articulationWarning=maxBeta>=ARTICULATION_WARNING_DEG;
  const articulationBlocked=maxBeta>=ARTICULATION_STOP_DEMO_DEG;
@@ -1347,6 +1350,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   '; непрерывный максимум между точками не подтверждён');
  if(clearanceInsufficient)reasons.push('недостаточный зазор после резерва погрешности');
  if(wheelClearanceIncomplete)reasons.push('промежуточная кинематическая проверка колёс не завершена для '+wheelClearance.segmentsWithoutIntermediateKinematicSamples+' сегментов; виртуальный автопроезд заблокирован');
+ if(wheelClearanceSpacingUncertaintyIncomplete)reasons.push('нижняя оценка зазора по колёсам условна: отсутствует положительная погрешность расстояния между осями 1–2 и/или 2–3; для препятствий виртуальный автопроезд заблокирован до ввода обеих границ');
  if(wheelClearanceError)reasons.push('индивидуальная проверка колёс не подтверждена: '+wheelClearanceError);
  if(limitingWheelClearance&&Number.isFinite(limitingWheelClearance.minimumClearanceLowerBound)){
   const wheelDetail=limitingWheelClearance.limitingDetail||{};
@@ -1409,6 +1413,7 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   clearanceLowerBound:clearanceForAssessment,effectiveClearance,
   clearanceByPart,limitingPartClearance,trajectoryClearance,sweptClearanceDetail,
   wheelClearance,limitingWheelClearance,wheelClearanceError,intermediateWheelContact,wheelClearanceIncomplete,
+  wheelClearanceSpacingUncertaintyIncomplete,
   vehicleGeometryCalibration,
   gearTransitionEvents:Array.isArray(wheelClearance?.temporalEvents)?wheelClearance.temporalEvents:[],
   timeModelComplete:false,totalDurationSeconds:null,
@@ -1432,6 +1437,9 @@ function wheelClearanceSummaryText(metrics){
  const incomplete=wheelClearance?.segmentsWithoutIntermediateKinematicSamples>0?
   ' Промежуточная проверка не завершена на '+wheelClearance.segmentsWithoutIntermediateKinematicSamples+
   ' сегментах; виртуальный автопроезд заблокирован.':'';
+ const axleSpacingReference=!wheelClearance?'':(wheelClearance.axleSpacingUncertaintyStatus==='complete'?
+  ' Продольные интервалы крайних осей расширены по введённым допускам расстояний 1–2 и 2–3; остальные неопределённости модели остаются отдельными.':
+  ' Внимание: положительные допуски расстояний между осями 1–2 и 2–3 не заданы; численная нижняя оценка условна для номинальных положений крайних осей.');
  const surfaceReference=wheelClearance?.roadSurfaceStatus==='road-surface-unverified-horizontal-only'?
   ' Плоскость дороги не откалибрована: вертикальное разделение отключено, все вертикальные препятствия учитываются как горизонтальные 2D-оболочки.':
   wheelClearance?.roadSurfaceStatus==='configured-planar-surface-with-bounds'?
@@ -1458,7 +1466,7 @@ function wheelClearanceSummaryText(metrics){
   ).join('; ')+'.':'';
  const wheel=metrics?.limitingWheelClearance;
  if(!wheel||!Number.isFinite(wheel.minimumClearanceLowerBound)){
-  return 'Индивидуальный зазор колёс не определён.'+perWheel+adaptive+cap+incomplete+controlTransitions+surfaceReference;
+  return 'Индивидуальный зазор колёс не определён.'+perWheel+adaptive+cap+incomplete+axleSpacingReference+controlTransitions+surfaceReference;
  }
  const detail=wheel.limitingDetail||{};
  const obstacle=detail.obstacleAtReference||detail.obstacle||'не выделено';
@@ -1469,7 +1477,7 @@ function wheelClearanceSummaryText(metrics){
    ' в позе около '+Number(detail.distanceAlongRoute).toFixed(1)+' м пути':'';
  return 'Ограничивающее колесо: '+wheel.name+'; нижняя оценка по описанной оболочке '+
   wheel.minimumClearanceLowerBound.toFixed(2)+' м; препятствие «'+obstacle+'»'+location+
-  ' (консервативная геометрическая оценка).'+perWheel+adaptive+cap+incomplete+controlTransitions+surfaceReference;
+  ' (консервативная геометрическая оценка в пределах заданных параметров).'+perWheel+adaptive+cap+incomplete+axleSpacingReference+controlTransitions+surfaceReference;
 }
 
 function wheelTrackSummaryText(metrics){
@@ -1556,7 +1564,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261128-2');
+   worker=new Worker('./planner-worker.js?v=20261128-5');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);

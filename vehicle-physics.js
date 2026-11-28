@@ -75,9 +75,6 @@
   const inRange=value=>Number.isFinite(value)&&value>=0.3&&value<=5;
   const commonPresent=present('trailerAxleSpacing');
   const commonValid=inRange(source.trailerAxleSpacing);
-  if(commonPresent&&!commonValid){
-   return {valid:false,spacings:null,reason:'Общий резервный шаг задан, но находится вне диапазона 0,30–5 м.'};
-  }
   const readIndividual=key=>{
    if(!present(key)||source[key]===0)return {kind:'missing'};
    if(!inRange(source[key]))return {kind:'invalid'};
@@ -88,8 +85,12 @@
   if(first.kind==='invalid'||second.kind==='invalid'){
    return {valid:false,spacings:null,reason:'Индивидуальные расстояния между соседними осями должны быть в диапазоне 0,30–5 м; ноль означает отсутствие измерения.'};
   }
-  if((first.kind==='missing'||second.kind==='missing')&&!commonValid){
-   return {valid:false,spacings:null,reason:'Задайте положительный общий шаг как резервное значение, если не заданы оба положительных индивидуальных шага осей 1–2 и 2–3.'};
+  const usedFallback=first.kind==='missing'||second.kind==='missing';
+  if(usedFallback&&!commonValid){
+   const reason=commonPresent
+    ?'Общий резервный шаг задан, но находится вне диапазона 0,30–5 м.'
+    :'Задайте положительный общий шаг как резервное значение, если не заданы оба положительных индивидуальных шага осей 1–2 и 2–3.';
+   return {valid:false,spacings:null,reason};
   }
   return {
    valid:true,
@@ -97,7 +98,7 @@
     first.kind==='valid'?first.value:source.trailerAxleSpacing,
     second.kind==='valid'?second.value:source.trailerAxleSpacing
    ],
-   usedFallback:first.kind==='missing'||second.kind==='missing'
+   usedFallback
   };
  }
 
@@ -609,9 +610,16 @@
   check('trailerWidth','trailerWidthUncertainty','ширина полуприцепа');
   const spacing12=(params&&params.trailerAxleSpacing12)>0;
   const spacing23=(params&&params.trailerAxleSpacing23)>0;
-  check(spacing12?'trailerAxleSpacing12':'trailerAxleSpacing',
+  const checkAxleSpacing=(parameterKey,uncertaintyKey,label)=>{
+   const nominal=params&&params[parameterKey],bound=params&&params[uncertaintyKey];
+   if(!Number.isFinite(nominal)||!Number.isFinite(bound)||bound<=0||bound>2||
+      nominal-bound<0.3||nominal+bound>5){
+    missingBounds.push({parameter:parameterKey,uncertainty:uncertaintyKey,label});
+   }
+  };
+  checkAxleSpacing(spacing12?'trailerAxleSpacing12':'trailerAxleSpacing',
    spacing12?'trailerAxleSpacing12Uncertainty':'trailerAxleSpacingUncertainty','шаг осей 1–2');
-  check(spacing23?'trailerAxleSpacing23':'trailerAxleSpacing',
+  checkAxleSpacing(spacing23?'trailerAxleSpacing23':'trailerAxleSpacing',
    spacing23?'trailerAxleSpacing23Uncertainty':'trailerAxleSpacingUncertainty','шаг осей 2–3');
   if(axleSpacingResolution&&!axleSpacingResolution.valid&&
      !missingBounds.some(item=>item.parameter==='trailerAxleSpacing')){
@@ -719,6 +727,8 @@
   }
   for(const [key,limits] of Object.entries(VEHICLE_PARAMETER_LIMITS)){
    const value=params[key];
+   // Ignore an inactive common fallback when both adjacent spacings are independently valid.
+   if(key==='trailerAxleSpacing'&&axleSpacingResolution.valid&&!axleSpacingResolution.usedFallback)continue;
    if(limits.optional&&(value===undefined||value===null))continue;
    if(!Number.isFinite(value)){
     errors.push(key+': значение должно быть конечным числом.');
@@ -731,6 +741,28 @@
   // The middle axle remains the equivalent kinematic reference. The two
   // measured adjacent spacings place the outer axle centers independently.
   const axleSpacings=axleSpacingResolution.spacings||[NaN,NaN];
+  const spacing12IsIndividual=Number.isFinite(params.trailerAxleSpacing12)&&params.trailerAxleSpacing12>0;
+  const spacing23IsIndividual=Number.isFinite(params.trailerAxleSpacing23)&&params.trailerAxleSpacing23>0;
+  const activeSpacingUncertaintyKeys=[
+   spacing12IsIndividual?'trailerAxleSpacing12Uncertainty':'trailerAxleSpacingUncertainty',
+   spacing23IsIndividual?'trailerAxleSpacing23Uncertainty':'trailerAxleSpacingUncertainty'
+  ];
+  for(const key of new Set(activeSpacingUncertaintyKeys)){
+   const value=params[key];
+   if(value===undefined||value===null)continue;
+   if(!Number.isFinite(value)||value<0||value>2){
+    errors.push(key+': погрешность шага осей должна быть конечной и находиться в диапазоне 0–2 м; ноль означает «не задана».');
+   }
+  }
+  const activeSpacingUncertainty=trailerAxleSpacingUncertaintyInfo(params);
+  activeSpacingUncertainty.bounds.forEach((bound,index)=>{
+   if(bound!==null&&Number.isFinite(axleSpacings[index])&&(
+      axleSpacings[index]-bound<0.3-1e-9||axleSpacings[index]+bound>5+1e-9
+   )){
+    errors.push((index===0?'шаг осей 1–2':'шаг осей 2–3')+
+     ': весь интервал с учётом погрешности должен оставаться в диапазоне 0,30–5,00 м.');
+   }
+  });
   [
    ['trailerAxleSpacing12',params.trailerAxleSpacing12??0],
    ['trailerAxleSpacing23',params.trailerAxleSpacing23??0]
@@ -1018,7 +1050,11 @@
 
  // User-measured non-tire hardware boxes (hub, brake chamber, suspension arm, etc.).
  // Each box is anchored to an axle reference and expanded by its stated margin.
- function auxiliaryEnvelopePolygons(q,params){
+ function auxiliaryEnvelopePolygons(q,params,vehicleGeometryValidated=false){
+  if(!vehicleGeometryValidated){
+   const vehicleErrors=validateVehicleParams(params);
+   if(vehicleErrors.length)throw new Error('Некорректная геометрия дополнительных оболочек: '+vehicleErrors.join(' '));
+  }
   const envelopes=params&&params.auxiliaryEnvelopes;
   const errors=validateAuxiliaryEnvelopes(envelopes);
   if(errors.length)throw new Error('Некорректные дополнительные оболочки: '+errors.join(' '));
@@ -1034,7 +1070,15 @@
    const heading=norm(baseHeading+(entry.headingOffsetDeg??0)*Math.PI/180);
    const center=localPoint(anchor,heading,entry.longitudinalOffset??0,entry.lateralOffset??0);
    const margin=(entry.uncertaintyMargin??0)+(Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0);
-   const polygon=bodyCorners(center,heading,entry.length/2+margin,-entry.length/2-margin,entry.width+2*margin);
+   const axleIndex=isTractor?-1:Number(entry.anchor.slice(-1))-1;
+   const axleSpacingInfo=trailerAxleSpacingUncertaintyInfo(params);
+   const anchorPositionUncertaintyBound=axleIndex===0?axleSpacingInfo.bounds[0]:
+    (axleIndex===2?axleSpacingInfo.bounds[1]:(axleIndex===1?0:null));
+   const anchorPositionUncertainty=Number.isFinite(anchorPositionUncertaintyBound)?anchorPositionUncertaintyBound:0;
+   const polygon=bodyCorners(center,heading,
+    entry.length/2+margin+anchorPositionUncertainty,
+    -entry.length/2-margin-anchorPositionUncertainty,
+    entry.width+2*margin+2*anchorPositionUncertainty);
    const suspensionAttachment=entry.suspensionAttachment??'axle';
    const verticalRange=entry.zMin!==undefined?verticalRangeFromProfile({
     zMin:entry.zMin,zMax:entry.zMax,uncertaintyMargin:entry.verticalUncertaintyMargin
@@ -1049,6 +1093,9 @@
     vehiclePart:isTractor?'тягач':'полуприцеп',
     componentType:'measured-auxiliary-envelope',
     uncertaintyMargin:margin,
+    anchorPositionUncertaintyBound:isTractor?0:anchorPositionUncertaintyBound,
+    anchorPositionUncertaintyStatus:isTractor?'tractor-reference':
+     (axleIndex===1?'reference-axis':(anchorPositionUncertaintyBound===null?'missing':'bounded')),
     suspensionAttachment,
     verticalRange:attachedVerticalRange,
     polygon
@@ -1065,7 +1112,7 @@
   const bodies=vehiclePolygons(q,params);
   const mirrors=mirrorPolygons(q,params);
   const wheels=buildWheelFootprints(q,params,steer);
-  const auxiliary=auxiliaryEnvelopePolygons(q,params);
+  const auxiliary=auxiliaryEnvelopePolygons(q,params,true);
   const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
   const tractorFrontOverhang=params.tractorFrontOverhang??5.0;
   const tractorRearOverhang=params.tractorRearOverhang??1.2;
@@ -1166,28 +1213,35 @@
   const trailerGroupWidths=trailerAxleTireGroupWidths(params);
   const trailerPairSpacings=trailerAxleTireCenterSpacings(params);
   const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
+  const spacingUncertainty=trailerAxleSpacingUncertaintyInfo(params);
+  const axlePositionUncertaintyBounds=[spacingUncertainty.bounds[0],0,spacingUncertainty.bounds[1]];
+  const axlePositionUncertaintySources=[spacingUncertainty.sources[0],'equivalent-center',spacingUncertainty.sources[1]];
   const steeringAngles=frontWheelSteerAngles(steer,params);
   const wheels=[];
   const add=(vehiclePart,axleIndex,side,center,heading,name,footprintWidth=tireWidth,footprintModel='single-tire-assumption',metadata={})=>{
+   const longitudinalPositionUncertainty=Number.isFinite(metadata.longitudinalPositionUncertaintyBound)?
+    metadata.longitudinalPositionUncertaintyBound:0;
    wheels.push({
     vehiclePart,axleIndex,side,center,heading,name,
     footprintWidth,footprintModel,...metadata,
     verticalRange:wheelVerticalRange(params,vehiclePart,axleIndex),
     groupWidthConfigured:footprintModel==='configured-axle-side-group-envelope'||footprintModel==='explicit-dual-tire-pair',
     polygon:bodyCorners(center,heading,
-     tireLength/2+uncertainty,-tireLength/2-uncertainty,footprintWidth+2*uncertainty)
+     tireLength/2+uncertainty+longitudinalPositionUncertainty,
+     -tireLength/2-uncertainty-longitudinalPositionUncertainty,
+     footprintWidth+2*uncertainty)
    });
   };
-  const addDualPair=(vehiclePart,axleIndex,side,groupCenter,heading,baseName,centerSpacing)=>{
+  const addDualPair=(vehiclePart,axleIndex,side,groupCenter,heading,baseName,centerSpacing,metadata={})=>{
    const sideSign=side==='left'?1:-1;
    const outerOffset=sideSign*centerSpacing/2;
    const innerOffset=-outerOffset;
    add(vehiclePart,axleIndex,side,localPoint(groupCenter,heading,0,outerOffset),heading,
     baseName+' — наружная покрышка',tireWidth,'explicit-dual-tire-pair',
-    {pairPosition:'outer',pairLateralOffset:outerOffset,groupCenter,pairCenterSpacing:centerSpacing});
+    {pairPosition:'outer',pairLateralOffset:outerOffset,groupCenter,pairCenterSpacing:centerSpacing,...metadata});
    add(vehiclePart,axleIndex,side,localPoint(groupCenter,heading,0,innerOffset),heading,
     baseName+' — внутренняя покрышка',tireWidth,'explicit-dual-tire-pair',
-    {pairPosition:'inner',pairLateralOffset:innerOffset,groupCenter,pairCenterSpacing:centerSpacing});
+    {pairPosition:'inner',pairLateralOffset:innerOffset,groupCenter,pairCenterSpacing:centerSpacing,...metadata});
   };
   const [frontAxle,rearAxle]=tractorAxlePoints(q,params);
   for(const side of [1,-1]){
@@ -1207,6 +1261,13 @@
    }
   }
   trailerAxlePoints(q,params).forEach((axle,index)=>{
+   const axleBound=axlePositionUncertaintyBounds[index];
+   const axleUncertaintyMetadata={
+    axleSpacingUncertaintyBound:axleBound,
+    axleSpacingUncertaintySource:axlePositionUncertaintySources[index],
+    axleSpacingUncertaintyStatus:index===1?'reference-axis':(Number.isFinite(axleBound)?'bounded':'missing'),
+    longitudinalPositionUncertaintyBound:Number.isFinite(axleBound)?axleBound:null
+   };
    const trailerTrack=trailerTracks[index];
    const specific=params['trailerAxle'+(index+1)+'TireGroupWidth'];
    const specificConfigured=Number.isFinite(specific)&&specific>0;
@@ -1218,11 +1279,11 @@
     const pairSpacing=trailerPairSpacings[index];
     if(pairSpacing>0){
      addDualPair('полуприцеп',index+1,side>0?'left':'right',groupCenter,q.psiT,
-      sideName+' колесо '+(index+1)+'-й оси полуприцепа',pairSpacing);
+      sideName+' колесо '+(index+1)+'-й оси полуприцепа',pairSpacing,axleUncertaintyMetadata);
     }else{
      add('полуприцеп',index+1,side>0?'left':'right',groupCenter,q.psiT,
       sideName+' колесо '+(index+1)+'-й оси полуприцепа',groupWidth,
-      groupConfigured?'configured-axle-side-group-envelope':'single-tire-fallback');
+      groupConfigured?'configured-axle-side-group-envelope':'single-tire-fallback',axleUncertaintyMetadata);
     }
    }
   });
@@ -1246,7 +1307,7 @@
   const spacing23IsIndividual=Number.isFinite(params&&params.trailerAxleSpacing23)&&params.trailerAxleSpacing23>0;
   const readBound=key=>{
    const value=params&&params[key];
-   return Number.isFinite(value)&&value>0?value:null;
+   return Number.isFinite(value)&&value>0&&value<=2?value:null;
   };
   return {
    bounds:[
@@ -1492,8 +1553,15 @@
    integratedTravelAccumulator:0,
    integratedTravelCoveredDistance:0
   });
+  const spacingUncertainty=trailerAxleSpacingUncertaintyInfo(params);
+  const axlePositionUncertaintyBounds=[spacingUncertainty.bounds[0],0,spacingUncertainty.bounds[1]];
+  const axlePositionUncertaintySources=[spacingUncertainty.sources[0],'equivalent-center',spacingUncertainty.sources[1]];
   const axles=offsets.map((offset,index)=>({
    axleIndex:index+1,offsetFromGroupCenter:offset,
+   positionUncertaintyBound:axlePositionUncertaintyBounds[index],
+   positionUncertaintySource:axlePositionUncertaintySources[index],
+   positionUncertaintyStatus:index===1?'reference-axis':
+    (Number.isFinite(axlePositionUncertaintyBounds[index])?'bounded':'missing'),
    center:makeTrack('center'),
    left:makeTrack('left'),
    right:makeTrack('right')
@@ -1937,5 +2005,5 @@
   };
  }
 
- return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,VEHICLE_VERTICAL_PROFILE_KEYS,vehicleGeometryCalibrationStatus,validateRoadSurface,roadSurfaceElevationRange,verticalRangeOnRoadSurface,validateSuspensionTravel,suspensionTravelStatus,suspensionTravelDisplacementRange,validateVehicleParams,validateTireGroupWidthUncertainty,validateAuxiliaryEnvelopes,validateVehicleVerticalProfiles,verticalRangeFromProfile,vehicleVerticalRange,auxiliaryEnvelopePolygons,trailerAxleTireGroupWidths,trailerAxleTireCenterSpacings,trailerAxleSpacings,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,wheelTireTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
+ return Object.freeze({norm,VEHICLE_PARAMETER_LIMITS,VEHICLE_VERTICAL_PROFILE_KEYS,vehicleGeometryCalibrationStatus,validateRoadSurface,roadSurfaceElevationRange,verticalRangeOnRoadSurface,validateSuspensionTravel,suspensionTravelStatus,suspensionTravelDisplacementRange,validateVehicleParams,validateTireGroupWidthUncertainty,validateAuxiliaryEnvelopes,validateVehicleVerticalProfiles,verticalRangeFromProfile,vehicleVerticalRange,auxiliaryEnvelopePolygons,trailerAxleTireGroupWidths,trailerAxleTireCenterSpacings,trailerAxleSpacings,trailerAxleSpacingUncertaintyInfo,trailerAxleTracks,trailerAxleOffsets,derivative,rk4,hitchPoint,axlePoint,tractorAxlePoints,trailerAxlePoints,frontWheelSteerAngles,wheelFootprints,trailerAxleDiagnostics,trailerAxleScrubExposure,trailerWheelTrajectoryDiagnostics,wheelTireTrajectoryDiagnostics,vehiclePolygons,mirrorPolygons,vehicleCollisionParts});
 });

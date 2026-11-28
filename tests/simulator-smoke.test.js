@@ -909,6 +909,7 @@ test('route assessment names the individual trailer wheel that limits the swept 
  assert.match(elements.difficultyAdvice.textContent,/Ограничивающее колесо: левое колесо 1-й оси полуприцепа/);
  assert.match(elements.difficultyAdvice.textContent,/консервативная геометрическая оценка/);
  assert.match(elements.difficultyAdvice.textContent,/Автопроезд остаётся заблокирован/);
+ assert.match(elements.difficultyAdvice.textContent,/отсутствует положительная погрешность расстояния между осями/);
 });
 
 test('route assessment labels the default Volvo FH and tri-axle geometry as preliminary when bounds are zero',async()=>{
@@ -1096,6 +1097,7 @@ test('virtual playback holds at the gear boundary until the explicit confirmatio
  const p={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
   trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerAxleSpacingUncertainty:0.02,
   tractorFrontTrack:2.05,tractorSteeringTrack:2.05,tractorRearTrack:2.05,
   trailerTrack:2.79,tireLength:0.72,tireWidth:0.44
  };
@@ -1113,6 +1115,9 @@ test('virtual playback holds at the gear boundary until the explicit confirmatio
  ];
  const simulator=bootSimulator({workerResult:routeControlBoundaryWorkerResult(states)});
  const {elements,frames}=simulator;
+ elements.trailerAxleSpacingUncertainty.value='0.02';
+ elements.measurementUncertainty.value='0.05';
+ elements.apply.onclick();
  elements.goalX.value=String(reverse.x);
  elements.goalY.value=String(reverse.y);
  elements.goalHeading.value='0';
@@ -1120,7 +1125,7 @@ test('virtual playback holds at the gear boundary until the explicit confirmatio
  elements.alternativeRouteSelect.value='0';
  elements.alternativeRouteSelect.onchange();
  assert.equal(elements.routeStart.disabled,undefined);
- assert.equal(elements.difficultyAdvice.textContent.includes('Автопроезд остаётся заблокирован'),false);
+ assert.equal(elements.difficultyAdvice.textContent.includes('Автопроезд остаётся заблокирован'),false,elements.difficultyAdvice.textContent);
  elements.routeStart.onclick();
  assert.match(elements.routeAdvice.textContent,/Виртуальный автопроезд начат/);
  let timestamp=1000;

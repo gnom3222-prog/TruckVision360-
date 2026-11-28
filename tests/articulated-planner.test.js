@@ -775,7 +775,8 @@ test('swept bound uses the exact axle-centered trailer corner radius across long
  const configurations=[
   params,
   {...params,kingpinAxles:25,trailerLength:30,trailerWidth:2.55},
-  {...params,kingpinAxles:27,trailerLength:30,trailerWidth:5}
+  {...params,kingpinAxles:27,trailerLength:30,trailerWidth:5},
+  {...params,trailerAxleSpacing:0,trailerAxleSpacing12:0.8,trailerAxleSpacing23:1.6}
  ];
  const betaValues=[-2.9,-Math.PI/2,-0.3,0.2,Math.PI/2,2.9];
  const steeringValues=[-Math.PI/7,0,Math.PI/7];
@@ -789,8 +790,7 @@ test('swept bound uses the exact axle-centered trailer corner radius across long
    const trailerTrack=p.trailerTrack??(p.trailerWidth+0.24);
    const tireWidth=p.tireWidth??0.44;
    const tireHalfLength=(p.tireLength??0.72)/2;
-   const axleSpacing=p.trailerAxleSpacing??1.3;
-   const wheelLongitudinals=[axleSpacing,0,-axleSpacing]
+   const wheelLongitudinals=physics.trailerAxleOffsets(p)
     .flatMap(offset=>[offset-tireHalfLength,offset+tireHalfLength]);
    const halfWidth=Math.max(p.trailerWidth/2,(trailerTrack+tireWidth)/2);
    let trailerRate=0;
@@ -3059,4 +3059,65 @@ test('start-action evidence rejects score components that share an unreported co
  const result=planner.explainStartActionComparison(candidates,0);
  assert.equal(result.ok,false);
  assert.equal(result.reason,'score-breakdown-mismatch');
+});
+test('swept-clearance diagnostics reject incomplete trailer axle geometry instead of assuming a nominal spacing',()=>{
+ const incomplete={
+  ...params,
+  trailerAxleSpacing:undefined,
+  trailerAxleSpacing12:1.1,
+  trailerAxleSpacing23:undefined
+ };
+ assert.throws(
+  ()=>planner.sweptDisplacementRatesPerMeter(0,incomplete),
+  /Vehicle geometry is incomplete or invalid for swept-clearance checking/
+ );
+ const route=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
+  {x:0.05,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0.05}
+ ];
+ assert.throws(
+  ()=>planner.analyzeWheelTrajectoryClearance(route,[],incomplete),
+  /incomplete|invalid|шаги трёхосной тележки/i
+ );
+});
+
+
+test('per-wheel swept clearance reports axle-spacing uncertainty and uses the shared bounds',()=>{
+ const route=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
+  {x:0.05,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0.05}
+ ];
+ const incomplete=planner.analyzeWheelTrajectoryClearance(route,[],params);
+ assert.equal(incomplete.axleSpacingUncertaintyStatus,'incomplete');
+ assert.equal(incomplete.minimumClearanceLowerBoundCompleteForAxleSpacing,false);
+ assert.match(incomplete.minimumClearanceLowerBoundScope,/nominal outer-axle positions/);
+ const calibrated={
+  ...params,
+  trailerAxleSpacing:0,
+  trailerAxleSpacing12:0.8,
+  trailerAxleSpacing23:1.6,
+  trailerAxleSpacing12Uncertainty:0.02,
+  trailerAxleSpacing23Uncertainty:0.05
+ };
+ const complete=planner.analyzeWheelTrajectoryClearance(route,[],calibrated);
+ assert.equal(complete.axleSpacingUncertaintyStatus,'complete');
+ assert.equal(complete.minimumClearanceLowerBoundCompleteForAxleSpacing,true);
+ assert.deepEqual(complete.axleSpacingUncertaintyByAxle,[
+  {axleIndex:1,bound:0.02,source:'individual-spacing'},
+  {axleIndex:2,bound:0,source:'equivalent-center'},
+  {axleIndex:3,bound:0.05,source:'individual-spacing'}
+ ]);
+ const firstWheel=complete.wheels.find(wheel=>
+  wheel.vehiclePart==='полуприцеп'&&wheel.axleIndex===1
+ );
+ const thirdWheel=complete.wheels.find(wheel=>
+  wheel.vehiclePart==='полуприцеп'&&wheel.axleIndex===3
+ );
+ assert.equal(firstWheel.axleSpacingUncertaintyBound,0.02);
+ assert.equal(firstWheel.axleSpacingUncertaintyStatus,'bounded');
+ assert.equal(thirdWheel.axleSpacingUncertaintyBound,0.05);
+ assert.equal(thirdWheel.axleSpacingUncertaintyStatus,'bounded');
+ const rates=planner.sweptDisplacementRatesPerMeter(0,calibrated);
+ assert.equal(rates.axleSpacingUncertaintyStatus,'complete');
+ assert.deepEqual(rates.axlePositionUncertaintyBounds,[0.02,0,0.05]);
 });
