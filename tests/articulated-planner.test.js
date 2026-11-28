@@ -3240,6 +3240,9 @@ test('initial pose uncertainty blocks a fixed route when one of the 16 corners l
   trailerAxleSpacing12:1.3,trailerAxleSpacing23:1.3,
   trailerAxleSpacing12Uncertainty:0.02,trailerAxleSpacing23Uncertainty:0.02
  };
+ const wheelProbe=planner.analyzeWheelTrajectoryClearance(states,[obstacle],poseParams);
+ assert.equal(wheelProbe.axleSpacingUncertaintyStatus,'complete',JSON.stringify(wheelProbe));
+ assert.equal(wheelProbe.segmentsWithoutIntermediateKinematicSamples,0,JSON.stringify(wheelProbe.segmentDiagnostics));
  const result=planner.analyzeInitialPoseUncertainty(
   states,[obstacle],poseParams,
   {positionX:0.02,positionY:0.50,tractorHeadingDeg:0.1,trailerHeadingDeg:0.1},
@@ -3247,7 +3250,7 @@ test('initial pose uncertainty blocks a fixed route when one of the 16 corners l
   {minClearance:0.10}
  );
  assert.equal(result.ok,false,JSON.stringify(result));
- assert.equal(result.status,'clearance-failed-in-pose-scenario');
+ assert.equal(result.status,'clearance-failed-in-pose-scenario',JSON.stringify(result));
  assert.equal(result.wheelClearanceEvaluated,true);
  assert.ok(Number.isFinite(result.minimumWheelClearanceLowerBound));
  assert.equal(result.scenarioResults[0].clearancePassed,true,'nominal pose should preserve the requested clearance');
