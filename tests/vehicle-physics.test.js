@@ -114,10 +114,17 @@ test('vehicle geometry accepts two independent trailer axle spacings without a c
   message.startsWith('trailerAxleSpacing:')
  ));
 
- const invalidExplicitFallback={...independent,trailerAxleSpacing:0};
- assert.ok(physics.validateVehicleParams(invalidExplicitFallback).some(message=>
+ for(const invalidFallback of [0,6,NaN,Infinity]){
+  const independentWithUnusedFallback={...independent,trailerAxleSpacing:invalidFallback};
+  assert.deepEqual(physics.validateVehicleParams(independentWithUnusedFallback),[]);
+  assert.deepEqual(physics.trailerAxleSpacings(independentWithUnusedFallback),[0.8,1.6]);
+ }
+
+ const missingOneWithInvalidFallback={...missingOne,trailerAxleSpacing:0};
+ assert.ok(physics.validateVehicleParams(missingOneWithInvalidFallback).some(message=>
   message.startsWith('trailerAxleSpacing:')
  ));
+ assert.throws(()=>physics.trailerAxleSpacings(missingOneWithInvalidFallback),/общий резервный шаг/i);
 });
 
 test('vehicle geometry validation rejects missing, non-finite and implausible dimensions',()=>{
