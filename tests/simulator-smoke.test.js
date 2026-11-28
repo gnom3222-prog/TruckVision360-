@@ -406,6 +406,29 @@ test('kinematic uncertainty settings include Ackermann, axle tracks and tire dim
  assert.match(elements.routeAdvice.textContent,/Параметры модели изменены/);
 });
 
+
+ 
+test('settings reject uncertainty intervals outside model limits instead of clipping them',()=>{
+ const {elements}=bootSimulator();
+ elements.tractorFrontOverhangUncertainty.value='100';
+ elements.apply.onclick();
+ assert.match(elements.routeAdvice.textContent,/tractorFrontOverhangUncertainty/);
+ assert.match(elements.routeAdvice.textContent,/допустимый диапазон/);
+});
+
+test('unused common axle spacing and trailer track uncertainty are ignored when individual values are measured',()=>{
+ const {elements}=bootSimulator();
+ elements.trailerAxleSpacing12.value='1.2';
+ elements.trailerAxleSpacing23.value='1.4';
+ elements.trailerAxle1Track.value='2.7';
+ elements.trailerAxle2Track.value='2.8';
+ elements.trailerAxle3Track.value='2.85';
+ elements.trailerAxleSpacingUncertainty.value='100';
+ elements.trailerTrackUncertainty.value='100';
+ elements.apply.onclick();
+ assert.doesNotMatch(elements.routeAdvice.textContent,/Параметры не применены/);
+});
+
 test('camera gate registration activates a measured lintel only with explicit thickness and depth',()=>{
  const {elements,windowObject}=bootSimulator();
  elements.gateLintelEnabled.checked=true;
