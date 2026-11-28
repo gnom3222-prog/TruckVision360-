@@ -775,7 +775,8 @@ test('swept bound uses the exact axle-centered trailer corner radius across long
  const configurations=[
   params,
   {...params,kingpinAxles:25,trailerLength:30,trailerWidth:2.55},
-  {...params,kingpinAxles:27,trailerLength:30,trailerWidth:5}
+  {...params,kingpinAxles:27,trailerLength:30,trailerWidth:5},
+  {...params,trailerAxleSpacing:0,trailerAxleSpacing12:0.8,trailerAxleSpacing23:1.6}
  ];
  const betaValues=[-2.9,-Math.PI/2,-0.3,0.2,Math.PI/2,2.9];
  const steeringValues=[-Math.PI/7,0,Math.PI/7];
@@ -789,8 +790,7 @@ test('swept bound uses the exact axle-centered trailer corner radius across long
    const trailerTrack=p.trailerTrack??(p.trailerWidth+0.24);
    const tireWidth=p.tireWidth??0.44;
    const tireHalfLength=(p.tireLength??0.72)/2;
-   const axleSpacing=p.trailerAxleSpacing??1.3;
-   const wheelLongitudinals=[axleSpacing,0,-axleSpacing]
+   const wheelLongitudinals=physics.trailerAxleOffsets(p)
     .flatMap(offset=>[offset-tireHalfLength,offset+tireHalfLength]);
    const halfWidth=Math.max(p.trailerWidth/2,(trailerTrack+tireWidth)/2);
    let trailerRate=0;
