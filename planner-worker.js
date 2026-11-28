@@ -70,7 +70,7 @@ self.addEventListener('message',event=>{
   );
   const maxCandidatePoseReplayStates=options.maxCandidatePoseReplayStates??150000;
   const validReplayBudget=Number.isInteger(maxCandidatePoseReplayStates)&&
-   maxCandidatePoseReplayStates>=1000&&maxCandidatePoseReplayStates<=1000000;
+   maxCandidatePoseReplayStates>=1&&maxCandidatePoseReplayStates<=1000000;
   if(poseRoutes.length&&(!validReplayBudget||estimatedReplayStates>maxCandidatePoseReplayStates)){
    const note='Сравнение первых действий не выполнено: сценарная проверка всех найденных кандидатов потребовала бы '+
     estimatedReplayStates+' повторных состояний при лимите '+maxCandidatePoseReplayStates+
