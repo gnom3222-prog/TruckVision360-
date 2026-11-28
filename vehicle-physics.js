@@ -1086,7 +1086,8 @@
     componentType:'measured-auxiliary-envelope',
     uncertaintyMargin:margin,
     anchorPositionUncertaintyBound:isTractor?0:anchorPositionUncertaintyBound,
-    anchorPositionUncertaintyStatus:isTractor?'tractor-reference':(anchorPositionUncertaintyBound===null?'missing':'bounded'),
+    anchorPositionUncertaintyStatus:isTractor?'tractor-reference':
+     (axleIndex===1?'reference-axis':(anchorPositionUncertaintyBound===null?'missing':'bounded')),
     suspensionAttachment,
     verticalRange:attachedVerticalRange,
     polygon
