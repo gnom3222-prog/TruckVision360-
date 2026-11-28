@@ -2743,5 +2743,214 @@ function planAlternativesWithVehicleParameterBounds(options={}){
  };
 }
 
-return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,parameterEndpointVectors,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,routeSegmentDistance,articulationExposure,recommendStart,nextGearTransitionBoundary,compareStartCandidates,explainStartActionComparison,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon,inflateObstaclePoseUncertainty});
+
+function analyzeInitialPoseUncertainty(states,obstacles,params,uncertainty,integrate,options={}){
+ const base={
+  ok:false,status:'not-assessed',model:'fixed-control-rk4-replay',
+  scenarioCount:0,cornerScenarioCount:0,continuousBoundVerified:false,
+  replanningIncluded:false,kinematicParameterUncertaintyIncluded:false,
+  note:'Проверка не выполнена.'
+ };
+ if(!uncertainty||typeof uncertainty!=='object'||Array.isArray(uncertainty)){
+  return {...base,reason:'missing-bounds',missingBounds:['positionX','positionY','tractorHeadingDeg','trailerHeadingDeg']};
+ }
+ const definitions=[
+  ['positionX',0.001,2,'м'],
+  ['positionY',0.001,2,'м'],
+  ['tractorHeadingDeg',0.001,45,'°'],
+  ['trailerHeadingDeg',0.001,45,'°']
+ ];
+ const missingBounds=definitions.filter(([key])=>
+  !Number.isFinite(uncertainty[key])||uncertainty[key]===0
+ ).map(([key])=>key);
+ if(missingBounds.length){
+  return {
+   ...base,reason:'missing-bounds',missingBounds,
+   note:'Положительные границы исходной позы не заданы; ноль означает «не оценено», а не отсутствие ошибки.'
+  };
+ }
+ const invalidBounds=definitions.filter(([key,min,max])=>
+  !Number.isFinite(uncertainty[key])||uncertainty[key]<min||uncertainty[key]>max
+ ).map(([key,min,max])=>({key,value:uncertainty[key],min,max}));
+ if(invalidBounds.length){
+  return {...base,status:'invalid-input',reason:'invalid-bounds',invalidBounds,
+   note:'Каждая граница должна быть положительной и находиться в разрешённом диапазоне.'};
+ }
+ if(typeof integrate!=='function'){
+  return {...base,status:'invalid-input',reason:'missing-integrator'};
+ }
+ if(!Array.isArray(states)||states.length<2||states.length>20000){
+  return {...base,status:'invalid-route',reason:'invalid-route-length'};
+ }
+ const geometryErrors=rootPhysics&&typeof rootPhysics.validateVehicleParams==='function'?
+  rootPhysics.validateVehicleParams(params):['Vehicle geometry validation is unavailable.'];
+ if(geometryErrors.length){
+  return {...base,status:'invalid-input',reason:'invalid-vehicle-geometry',errors:geometryErrors};
+ }
+ const obstacleErrors=validateObstacles(obstacles);
+ if(obstacleErrors.length){
+  return {...base,status:'invalid-input',reason:'invalid-obstacles',errors:obstacleErrors};
+ }
+ const referenceSpeed=options.referenceSpeed??0.7;
+ const requiredClearance=options.minClearance??0.65;
+ if(!Number.isFinite(referenceSpeed)||referenceSpeed<=0||referenceSpeed>5||
+    !Number.isFinite(requiredClearance)||requiredClearance<0||requiredClearance>10){
+  return {...base,status:'invalid-input',reason:'invalid-replay-options'};
+ }
+ const goal=options.goal??null;
+ const positionTolerance=options.positionTolerance??0.9;
+ const headingTolerance=options.headingTolerance??12*Math.PI/180;
+ const maxTerminalArticulation=options.maxTerminalArticulation??12*Math.PI/180;
+ if(goal&&(!Number.isFinite(goal.x)||!Number.isFinite(goal.y)||
+    (goal.heading!==undefined&&goal.heading!==null&&!Number.isFinite(goal.heading)))){
+  return {...base,status:'invalid-input',reason:'invalid-goal'};
+ }
+ if(!Number.isFinite(positionTolerance)||positionTolerance<=0||positionTolerance>10||
+    !Number.isFinite(headingTolerance)||headingTolerance<0||headingTolerance>Math.PI||
+    !Number.isFinite(maxTerminalArticulation)||maxTerminalArticulation<0||maxTerminalArticulation>Math.PI){
+  return {...base,status:'invalid-input',reason:'invalid-goal-tolerances'};
+ }
+ const readState=(state,index)=>{
+  if(!state||![state.x,state.y,state.psi,state.psiT].every(Number.isFinite)){
+   throw new Error('Route state '+index+' has invalid pose coordinates.');
+  }
+  const gear=index===0?1:(state.gear===undefined?1:state.gear);
+  const steer=index===0?0:(state.steer===undefined?0:state.steer);
+  if(gear!==1&&gear!==-1)throw new Error('Route state '+index+' has invalid gear.');
+  if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2)throw new Error('Route state '+index+' has invalid steering.');
+  const stepDistance=state.stepDistance;
+  if(index===0){
+   if(stepDistance!==0)throw new Error('Initial route state must declare stepDistance 0.');
+  }else{
+   if(!Number.isFinite(stepDistance)||stepDistance<=0)throw new Error('Route state '+index+' is missing a positive stepDistance.');
+   const chord=Math.hypot(state.x-states[index-1].x,state.y-states[index-1].y);
+   if(chord>stepDistance+1e-6)throw new Error('Route state '+index+' chord exceeds stepDistance.');
+  }
+  return {state,gear,steer,stepDistance};
+ };
+ let controls;
+ try{controls=Array.from(states,readState);}
+ catch(error){return {...base,status:'invalid-route',reason:'invalid-route-state',error:error.message};}
+ const start=controls[0].state;
+ const headingBounds=[
+  uncertainty.positionX,
+  uncertainty.positionY,
+  uncertainty.tractorHeadingDeg*Math.PI/180,
+  uncertainty.trailerHeadingDeg*Math.PI/180
+ ];
+ const scenarioDefinitions=[{name:'nominal',signs:[0,0,0,0]}];
+ for(let mask=0;mask<16;mask++){
+  scenarioDefinitions.push({
+   name:'corner-'+String(mask+1).padStart(2,'0'),
+   signs:[0,1,2,3].map(index=>(mask&(1<<index))?1:-1)
+  });
+ }
+ const scenarioResults=[];
+ let minimumClearanceLowerBound=Infinity,limitingScenario=null;
+ let maximumArticulationDegrees=0,clearanceFailures=0,goalFailures=0;
+ let fixedControlAction=null,fixedControlActionStable=true;
+ for(const scenario of scenarioDefinitions){
+  const [sx,sy,spsi,spsiT]=scenario.signs;
+  let q={
+   ...start,
+   x:start.x+sx*headingBounds[0],
+   y:start.y+sy*headingBounds[1],
+   psi:norm(start.psi+spsi*headingBounds[2]),
+   psiT:norm(start.psiT+spsiT*headingBounds[3])
+  };
+  const replayed=[{
+   x:q.x,y:q.y,psi:q.psi,psiT:q.psiT,
+   gear:1,steer:0,stepDistance:0
+  }];
+  try{
+   for(let index=1;index<controls.length;index++){
+    const control=controls[index];
+    const next=integrate(q,control.gear*referenceSpeed,control.steer,
+     control.stepDistance/referenceSpeed,params);
+    if(!next||![next.x,next.y,next.psi,next.psiT].every(Number.isFinite)){
+     throw new Error('Integrator returned an invalid pose at route state '+index+'.');
+    }
+    const chord=Math.hypot(next.x-q.x,next.y-q.y);
+    if(chord>control.stepDistance+1e-6){
+     throw new Error('Replayed chord exceeds the declared integration distance at state '+index+'.');
+    }
+    q={x:next.x,y:next.y,psi:norm(next.psi),psiT:norm(next.psiT)};
+    replayed.push({
+     ...q,gear:control.gear,steer:control.steer,
+     stepDistance:control.stepDistance
+    });
+   }
+  }catch(error){
+   return {
+    ...base,status:'scenario-replay-failed',reason:'scenario-replay-failed',
+    scenario:scenario.name,scenariosEvaluated:scenarioResults.length,
+    scenarioResults,error:error&&error.message?error.message:String(error),
+    note:'Одна из фиксированных управляющих последовательностей не смогла быть повторно интегрирована; результат не подтверждён.'
+   };
+  }
+  let clearance;
+  try{clearance=analyzeTrajectoryClearance(replayed,obstacles,params);}
+  catch(error){
+   return {
+    ...base,status:'clearance-analysis-failed',reason:'clearance-analysis-failed',
+    scenario:scenario.name,scenariosEvaluated:scenarioResults.length,
+    scenarioResults,error:error&&error.message?error.message:String(error)
+   };
+  }
+  const lowerBound=clearance.minimumClearanceLowerBound;
+  if(Number.isNaN(lowerBound)){
+   return {...base,status:'clearance-analysis-failed',reason:'non-finite-clearance',scenario:scenario.name};
+  }
+  const clearancePassed=lowerBound>=requiredClearance-1e-9;
+  if(!clearancePassed)clearanceFailures++;
+  const finalState=replayed[replayed.length-1];
+  const terminalErrors=goal?goalErrors(finalState,goal):null;
+  const reached=goal?goalReached(finalState,goal,{
+   positionTolerance,headingTolerance,maxTerminalArticulation
+  }):null;
+  if(goal&& !reached)goalFailures++;
+  const maxBeta=Math.max(...replayed.map(state=>Math.abs(norm(state.psi-state.psiT))*180/Math.PI));
+  maximumArticulationDegrees=Math.max(maximumArticulationDegrees,maxBeta);
+  const recommendation=recommendStart(replayed);
+  const actionSignature=JSON.stringify([
+   recommendation.initialGear,recommendation.firstTurn,
+   recommendation.firstTurnGear,recommendation.tractorYawDirection
+  ]);
+  if(fixedControlAction===null)fixedControlAction=actionSignature;
+  else if(fixedControlAction!==actionSignature)fixedControlActionStable=false;
+  const summary={
+   name:scenario.name,signs:scenario.signs,
+   minimumClearanceLowerBound:lowerBound,
+   limitingPart:clearance.limitingPart,
+   clearancePassed,goalReached:reached,terminalErrors,
+   maximumArticulationDegrees:maxBeta,
+   replayedStates:replayed.length
+  };
+  scenarioResults.push(summary);
+  if(lowerBound<minimumClearanceLowerBound){
+   minimumClearanceLowerBound=lowerBound;
+   limitingScenario=scenario.name;
+  }
+ }
+ const passed=clearanceFailures===0&&goalFailures===0&&fixedControlActionStable;
+ return {
+  ok:passed,
+  status:passed?'stable-across-16-corners-plus-nominal':
+   (!fixedControlActionStable?'fixed-control-action-inconsistent':
+    (clearanceFailures?'clearance-failed-in-pose-scenario':'goal-not-reached-in-pose-scenario')),
+  model:'fixed-control-rk4-replay',
+  scenarioCount:scenarioDefinitions.length,cornerScenarioCount:16,
+  scenariosEvaluated:scenarioResults.length,scenarioResults,
+  minimumClearanceLowerBound,limitingScenario,
+  requiredClearance,clearanceFailures,goalFailures,
+  maximumArticulationDegrees,fixedControlActionStable,
+  recommendationOptimizationIncluded:false,
+  continuousBoundVerified:false,replanningIncluded:false,
+  kinematicParameterUncertaintyIncluded:false,
+  uncertaintyScope:'initial X/Y position and tractor/trailer heading bounds only; other geometry, obstacle, sensor, tyre, hitch and integration uncertainties are not included',
+  note:'Проверены номинал и все 16 угловых сочетаний четырёх заданных границ путём повторного RK4-интегрирования той же фиксированной последовательности передач и рулевых команд. Это конечная сценарная проверка, не непрерывная граница для всех промежуточных поз и не повторная оптимизация начального действия.'
+ };
+}
+
+return Object.freeze({analyzeInitialPoseUncertainty,plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,parameterEndpointVectors,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,routeSegmentDistance,articulationExposure,recommendStart,nextGearTransitionBoundary,compareStartCandidates,explainStartActionComparison,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon,inflateObstaclePoseUncertainty});
 });
