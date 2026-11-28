@@ -1264,7 +1264,7 @@
  // The optional bound propagates only the entered adjacent-spacing tolerance;
  // yaw-rate, pose, hitch/kingpin and numerical integration uncertainty are excluded.
  // This remains a geometric incompatibility proxy, not a tire-force model.
- function trailerAxleDiagnostics(q,v,delta,params){
+ function computeTrailerAxleDiagnostics(q,v,delta,params){
   const motion=derivative(q,v,delta,params);
   const offsets=trailerAxleOffsets(params);
   const spacingUncertainty=trailerAxleSpacingUncertaintyInfo(params);
@@ -1297,6 +1297,36 @@
    spacingUncertaintyStatus:spacingUncertainty.bounds.every(Number.isFinite)?'complete':'incomplete',
    uncertaintyScope:'adjacent-axle-spacing only; yaw-rate, pose, hitch/kingpin and integration uncertainty excluded'
   };
+ }
+
+ // Public diagnostic entry point: reject malformed kinematics instead of
+ // allowing NaN values to leak into route explanations. The planner's inner
+ // loop uses the validated private core after validating the full vehicle once.
+ function trailerAxleDiagnostics(q,v,delta,params){
+  if(!params||typeof params!=='object'){
+   throw new Error('Параметры кинематики полуприцепа отсутствуют.');
+  }
+  for(const key of ['wheelbase','hitchOffset','kingpinAxles']){
+   const limits=VEHICLE_PARAMETER_LIMITS[key];
+   const value=params[key];
+   if(!Number.isFinite(value)||value<limits.min||value>limits.max){
+    throw new Error(key+': кинематический параметр отсутствует или находится вне допустимого диапазона.');
+   }
+  }
+  const spacing=resolveTrailerAxleSpacings(params);
+  if(!spacing.valid){
+   throw new Error('Некорректные шаги осей полуприцепа: '+spacing.reason);
+  }
+  if(!q||![q.x,q.y,q.psi,q.psiT].every(Number.isFinite)){
+   throw new Error('Состояние автопоезда для диагностики осей должно содержать конечные x, y, psi и psiT.');
+  }
+  if(!Number.isFinite(v)||Math.abs(v)>20){
+   throw new Error('Скорость для диагностики осей должна быть конечной и не превышать 20 м/с по модулю.');
+  }
+  if(!Number.isFinite(delta)||Math.abs(delta)>=Math.PI/2){
+   throw new Error('Угол рулевого воздействия для диагностики осей должен быть конечным и меньше 90° по модулю.');
+  }
+  return computeTrailerAxleDiagnostics(q,v,delta,params);
  }
 
  // Integrates a rigid-axle-group geometric incompatibility proxy along a sampled path.
@@ -1340,7 +1370,7 @@
   const states=Array.from(path,readState);
   const evaluate=(q,steer)=>{
    // Absolute lateral speed is identical in forward and reverse for the same pose and steering angle.
-   const diagnostic=trailerAxleDiagnostics(q,nominalSpeed,steer,params);
+   const diagnostic=computeTrailerAxleDiagnostics(q,nominalSpeed,steer,params);
    return diagnostic.axles.map((axle,index)=>{
     const speed=Math.abs(axle.lateralVelocity);
     maxAbsLateralVelocityByAxle[index]=Math.max(maxAbsLateralVelocityByAxle[index],speed);
