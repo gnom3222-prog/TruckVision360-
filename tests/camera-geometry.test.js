@@ -353,6 +353,14 @@ test('gate map registration refuses measurements without a successful nonlinear 
   ()=>camera.registerGateOnMap({...measurement,nonlinearSensitivityAvailable:undefined},{x:12,y:0},Math.PI/2,repeatabilityFor(measurement.sigmaWidth,measurement.sigmaHeight,measurement.width,measurement.height)),
   /Нелинейная проверка неопределённости/
  );
+  assert.throws(
+   ()=>camera.registerGateOnMap({...measurement,jointSensitivityAvailable:undefined},{x:12,y:0},Math.PI/2,repeatabilityFor(measurement.sigmaWidth,measurement.sigmaHeight,measurement.width,measurement.height)),
+   /Нелинейная проверка неопределённости/
+  );
+  assert.throws(
+   ()=>camera.registerGateOnMap({...measurement,jointSensitivityChecks:32},{x:12,y:0},Math.PI/2,repeatabilityFor(measurement.sigmaWidth,measurement.sigmaHeight,measurement.width,measurement.height)),
+   /Нелинейная проверка неопределённости/
+  );
 });
 
 
