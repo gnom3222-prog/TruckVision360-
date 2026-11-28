@@ -324,7 +324,8 @@ test('kinematic uncertainty settings include Ackermann, axle tracks and tire dim
   'trailerTrackUncertainty','tractorRearTireGroupWidthUncertainty','trailerTireGroupWidthUncertainty',
   'tireLengthUncertainty','tireWidthUncertainty',
   'cabOffsetUncertainty','cabFrontUncertainty','cabRearUncertainty',
-  'cabWidthUncertainty','mirrorOutboardUncertainty',
+  'cabWidthUncertainty','tractorFrontOverhangUncertainty','tractorRearOverhangUncertainty',
+  'tractorBodyWidthUncertainty','mirrorOutboardUncertainty',
   'mirrorLongitudinalUncertainty','mirrorLengthUncertainty'
  ];
  for(const id of ids)assert.equal(elements[id].value,'0',id+' should start as not-varied');
@@ -354,6 +355,9 @@ test('kinematic uncertainty settings include Ackermann, axle tracks and tire dim
  elements.cabFrontUncertainty.value='0.05';
  elements.cabRearUncertainty.value='0.05';
  elements.cabWidthUncertainty.value='0.05';
+ elements.tractorFrontOverhangUncertainty.value='0.02';
+ elements.tractorRearOverhangUncertainty.value='0.02';
+ elements.tractorBodyWidthUncertainty.value='0.02';
  elements.mirrorOutboardUncertainty.value='0.15';
  elements.mirrorLongitudinalUncertainty.value='0.10';
  elements.mirrorLengthUncertainty.value='0.10';
