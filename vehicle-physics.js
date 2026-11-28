@@ -612,7 +612,8 @@
   const spacing23=(params&&params.trailerAxleSpacing23)>0;
   const checkAxleSpacing=(parameterKey,uncertaintyKey,label)=>{
    const nominal=params&&params[parameterKey],bound=params&&params[uncertaintyKey];
-   if(!Number.isFinite(nominal)||!Number.isFinite(bound)||bound<=0||bound>2||nominal-bound<0.3){
+   if(!Number.isFinite(nominal)||!Number.isFinite(bound)||bound<=0||bound>2||
+      nominal-bound<0.3||nominal+bound>5){
     missingBounds.push({parameter:parameterKey,uncertainty:uncertaintyKey,label});
    }
   };
@@ -755,8 +756,11 @@
   }
   const activeSpacingUncertainty=trailerAxleSpacingUncertaintyInfo(params);
   activeSpacingUncertainty.bounds.forEach((bound,index)=>{
-   if(bound!==null&&Number.isFinite(axleSpacings[index])&&axleSpacings[index]-bound<0.3-1e-9){
-    errors.push((index===0?'шаг осей 1–2':'шаг осей 2–3')+': нижняя граница с учётом погрешности должна оставаться не меньше 0,30 м.');
+   if(bound!==null&&Number.isFinite(axleSpacings[index])&&(
+      axleSpacings[index]-bound<0.3-1e-9||axleSpacings[index]+bound>5+1e-9
+   )){
+    errors.push((index===0?'шаг осей 1–2':'шаг осей 2–3')+
+     ': весь интервал с учётом погрешности должен оставаться в диапазоне 0,30–5,00 м.');
    }
   });
   [
