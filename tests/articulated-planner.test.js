@@ -1093,6 +1093,13 @@ test('multi-start planner searches a free route and four constrained first actio
   'the matching constrained forward-left route should be found');
  assert.ok(result.candidateSummaries.every(candidate=>Number.isFinite(candidate.cost)));
  assert.ok(result.candidateSummaries.every(candidate=>candidate.steeringWheelDirection===candidate.firstTurn));
+ assert.ok(Array.isArray(result.candidateRoutes),'all successful or ambiguous searches must retain candidate trajectories for pose screening');
+ assert.equal(result.candidateRoutes.length,result.candidatesFound);
+ assert.ok(result.candidateRoutes.every(candidate=>
+  Array.isArray(candidate.states)&&candidate.states.length>=2&&
+  Number.isFinite(candidate.metrics?.pathLength)&&Number.isFinite(candidate.metrics?.gearChanges)&&
+  candidate.recommendation
+ ));
  if(result.ok){
   assert.ok(['single-candidate','preferred'].includes(result.status));
   assert.ok(result.states.length>1);
