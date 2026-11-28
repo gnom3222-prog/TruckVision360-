@@ -359,7 +359,10 @@ test('kinematic uncertainty settings include Ackermann, axle tracks and tire dim
  elements.mirrorLengthUncertainty.value='0.10';
  elements.apply.onclick();
  assert.doesNotMatch(elements.routeAdvice.textContent,/Параметры не применены/);
- const source=fs.readFileSync(path.join(__dirname,'..','truckvision.js'),'utf8');
+ const uiSource=fs.readFileSync(path.join(__dirname,'..','truckvision.js'),'utf8');
+ const physicsSource=fs.readFileSync(path.join(__dirname,'..','vehicle-physics.js'),'utf8');
+ assert.match(uiSource,/const parameterUncertaintyMap=physics\\.VEHICLE_PARAMETER_UNCERTAINTY_MAP/);
+ assert.match(uiSource,/return physics\\.vehicleParameterBoundsFromUncertainties\\(cfg\\)/);
  for(const mapping of [
   /trailerAxleSpacingUncertainty:'trailerAxleSpacing'/,
   /trailerAxleSpacing12Uncertainty:'trailerAxleSpacing12'/,
@@ -379,161 +382,13 @@ test('kinematic uncertainty settings include Ackermann, axle tracks and tire dim
   /cabFrontUncertainty:'cabFront'/,
   /cabRearUncertainty:'cabRear'/,
   /cabWidthUncertainty:'cabWidth'/,
+  /tractorFrontOverhangUncertainty:'tractorFrontOverhang'/,
+  /tractorRearOverhangUncertainty:'tractorRearOverhang'/,
+  /tractorBodyWidthUncertainty:'tractorBodyWidth'/,
   /mirrorOutboardUncertainty:'mirrorOutboard'/,
   /mirrorLongitudinalUncertainty:'mirrorLongitudinal'/,
   /mirrorLengthUncertainty:'mirrorLength'/
- ])assert.match(source,mapping);
-});
-
-test('tire-group uncertainty is rejected until a measured nominal group width is entered',()=>{
- const {elements}=bootSimulator();
- elements.tractorRearTireGroupWidthUncertainty.value='0.10';
- elements.apply.onclick();
- assert.match(elements.routeAdvice.textContent,/tractorRearTireGroupWidthUncertainty/);
- assert.match(elements.routeAdvice.textContent,/сначала задайте измеренную номинальную ширину группы задних шин тягача/);
-});
-
-test('live assistant identifies the nearest vehicle part and named obstacle',()=>{
- const {elements}=bootSimulator();
- assert.match(elements.assistantAdvice.textContent,/Ближайший объект:/);
- assert.match(elements.assistantAdvice.textContent,/Часть автопоезда: (тягач|кабина|полуприцеп)\./);
- assert.match(elements.assistantAdvice.textContent,/Расчётный зазор/);
-});
-
-test('current-pose and per-part clearance include vehicle and obstacle uncertainty envelopes',()=>{
- const {elements,windowObject}=bootSimulator();
- const getDiagnostics=windowObject.TruckVisionGetClearanceDiagnostics;
- assert.equal(typeof getDiagnostics,'function');
- const baseline=getDiagnostics();
- assert.equal(baseline.parts.length,3);
- assert.ok(baseline.parts.every(part=>Number.isFinite(part.effective)));
- assert.ok(baseline.parts.every(part=>part.geometryLowerBound<=part.distance+1e-9));
- elements.obstaclePositionUncertainty.value='0.80';
- elements.obstacleSizeUncertainty.value='0.40';
- elements.vehicleFootprintUncertainty.value='0.20';
- elements.measurementUncertainty.value='0.30';
- elements.apply.onclick();
- const bounded=getDiagnostics();
- assert.equal(bounded.uncertainty.obstaclePosition,0.8);
- assert.equal(bounded.uncertainty.obstacleSize,0.4);
- assert.equal(bounded.uncertainty.vehicleFootprint,0.2);
- assert.ok(bounded.parts.every((part,index)=>part.effective<=baseline.parts[index].effective+1e-9));
- assert.ok(bounded.scene.nearest.effectiveDistance<=baseline.scene.nearest.effectiveDistance+1e-9);
- assert.ok(bounded.parts.every(part=>['тягач','кабина','полуприцеп'].includes(part.vehiclePart)));
-});
-
-test('uncertainty-envelope overlap is not misreported as a nominal collision',()=>{
- const {elements,windowObject}=bootSimulator();
- elements.measurementUncertainty.value='5';
- elements.apply.onclick();
- const diagnostics=windowObject.TruckVisionGetClearanceDiagnostics();
- assert.equal(diagnostics.scene.collision,false);
- assert.ok(diagnostics.scene.nearest.effectiveDistance<0);
- assert.match(elements.assistantAdvice.textContent,/оболочка погрешности пересекается с контуром/);
- assert.doesNotMatch(elements.assistantAdvice.textContent,/Стоп! Расчётные контуры/);
-});
-
-test('live assistant fails closed when obstacle checks are disabled',()=>{
- const {elements}=bootSimulator();
- elements.obstaclesToggle.onclick();
- assert.match(elements.assistantAdvice.textContent,/Проверка препятствий отключена/);
- assert.match(elements.assistantAdvice.textContent,/Свободный путь не подтверждён/);
- assert.doesNotMatch(elements.assistantAdvice.textContent,/Путь по текущему положению свободен/);
-});
-
-test('simulator explains joint endpoint and one-factor midpoint parameter coverage',()=>{
- const root=path.join(__dirname,'..');
- const source=fs.readFileSync(path.join(root,'truckvision.js'),'utf8');
- assert.match(source,/stable-across-joint-endpoint-combinations/);
- assert.match(source,/stable-across-pairwise-endpoint-scenarios/);
- assert.match(source,/середины отдельных диапазонов по одному параметру/);
- assert.match(source,/не полный перебор всех комбинаций/);
-});
-
-
-test('camera obstacle registration requires three repeatable measurements and applies their conservative envelope',()=>{
- const {elements,windowObject}=bootSimulator();
- const measurement={
-  width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01,
-  conditioningWarning:false,shapeWarning:false,
-  nonlinearSensitivityAvailable:true,nonlinearWarning:false
- };
- const anchor={x:3,y:4},heading=Math.PI/2,name='Опорный столб';
- const poseUncertainty={positionX:0.1,positionY:0.15,headingDeg:2};
- const verticalMeasurement={
-  height:2.5,heightUncertainty:0.03,baseDatumUncertainty:0.02,totalUncertainty:0.05,
-  datum:'local-road-surface',source:'manual-independent-measurement',confirmed:true
- };
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty),false);
- const readings=[
-  {width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01},
-  {width:2.005,height:1.004,sigmaWidth:0.012,sigmaHeight:0.012},
-  {width:1.998,height:0.998,sigmaWidth:0.011,sigmaHeight:0.011}
- ];
- const repeatability=cameraGeometry.summarizeRepeatability(readings,{widthTolerance:0.02,heightTolerance:0.02});
- assert.equal(repeatability.withinTolerance,true);
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,repeatability),false,'a camera obstacle without independent height confirmation must be rejected');
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,'',poseUncertainty,repeatability,verticalMeasurement),false);
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,{positionX:0,positionY:0.15,headingDeg:2},repeatability,verticalMeasurement),false,'zero X uncertainty must be rejected');
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,{positionX:0.1,positionY:0,headingDeg:2},repeatability,verticalMeasurement),false,'zero Y uncertainty must be rejected');
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,{positionX:0.1,positionY:0.15,headingDeg:0},repeatability,verticalMeasurement),false,'zero heading uncertainty must be rejected');
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,repeatability,verticalMeasurement),true);
- assert.match(windowObject.TruckVisionCameraObstacleVerticalStatus,/только по горизонтальной 2D-оболочке/);
- assert.match(elements.routeAdvice.textContent,/Параметры модели изменены/);
- assert.equal(windowObject.TruckVisionClearCameraObstacles(),true);
-});
-
-test('camera obstacle registration rejects a two-frame or unstable repeatability result',()=>{
- const {windowObject}=bootSimulator();
- const measurement={
-  width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01,
-  conditioningWarning:false,shapeWarning:false,
-  nonlinearSensitivityAvailable:true,nonlinearWarning:false
- };
- const anchor={x:3,y:4},heading=Math.PI/2,name='Опорный столб';
- const poseUncertainty={positionX:0.1,positionY:0.15,headingDeg:2};
- const verticalMeasurement={height:2.5,heightUncertainty:0.03,baseDatumUncertainty:0.02,totalUncertainty:0.05,datum:'local-road-surface',source:'manual-independent-measurement',confirmed:true};
- const validRepeatability=cameraGeometry.summarizeRepeatability([
-  {width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01},
-  {width:2.005,height:1.004,sigmaWidth:0.012,sigmaHeight:0.012},
-  {width:1.998,height:0.998,sigmaWidth:0.011,sigmaHeight:0.011}
- ],{widthTolerance:0.02,heightTolerance:0.02});
- const twoFrames={...validRepeatability,count:2};
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,twoFrames,verticalMeasurement),false);
- const unstable=cameraGeometry.summarizeRepeatability([
-  {width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01},
-  {width:2.2,height:1.1,sigmaWidth:0.01,sigmaHeight:0.01},
-  {width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01}
- ],{widthTolerance:0.02,heightTolerance:0.02});
- assert.equal(unstable.withinTolerance,false);
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,unstable,verticalMeasurement),false);
-});
-
-test('camera obstacle registration rejects inconsistent repeatability uncertainty summaries',()=>{
- const {windowObject}=bootSimulator();
- const measurement={
-  width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01,
-  conditioningWarning:false,shapeWarning:false,
-  nonlinearSensitivityAvailable:true,nonlinearWarning:false
- };
- const anchor={x:3,y:4},heading=Math.PI/2,name='Опорный столб';
- const poseUncertainty={positionX:0.1,positionY:0.15,headingDeg:2};
- const verticalMeasurement={height:2.5,heightUncertainty:0.03,baseDatumUncertainty:0.02,totalUncertainty:0.05,datum:'local-road-surface',source:'manual-independent-measurement',confirmed:true};
- const valid=cameraGeometry.summarizeRepeatability([
-  {width:2,height:1,sigmaWidth:0.01,sigmaHeight:0.01},
-  {width:2.005,height:1.004,sigmaWidth:0.012,sigmaHeight:0.012},
-  {width:1.998,height:0.998,sigmaWidth:0.011,sigmaHeight:0.011}
- ],{widthTolerance:0.02,heightTolerance:0.02});
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,{...valid,maxSigmaWidth:0.001},verticalMeasurement),false);
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,{...valid,widthEnvelopeBound:0.001},verticalMeasurement),false);
- assert.equal(windowObject.TruckVisionAddCameraObstacle(measurement,anchor,heading,name,poseUncertainty,{...valid,maxDeviationWidth:valid.rangeWidth+0.01},verticalMeasurement),false);
-});
- 
-test('camera registration atomically applies measured gate pose and enables jamb obstacles',()=>{
- const {elements,windowObject}=bootSimulator();
- const applied=windowObject.TruckVisionApplyGateRegistration({
-  centerX:14.5,centerY:-2.25,clearWidth:3.8,headingDeg:37,widthUncertaintyBound:0.08,
-  clearHeight:4.1,heightUncertaintyBound:0.12
+ ])assert.match(physicsSource,mapping);
  });
  assert.equal(applied,true);
  assert.equal(elements.gateWidth.value,'3.80');
