@@ -1211,7 +1211,7 @@
   const wheels=[];
   const add=(vehiclePart,axleIndex,side,center,heading,name,footprintWidth=tireWidth,footprintModel='single-tire-assumption',metadata={})=>{
    const longitudinalPositionUncertainty=Number.isFinite(metadata.longitudinalPositionUncertaintyBound)?
-    metadata.longitudinalPositionUncertainty:0;
+    metadata.longitudinalPositionUncertaintyBound:0;
    wheels.push({
     vehiclePart,axleIndex,side,center,heading,name,
     footprintWidth,footprintModel,...metadata,
