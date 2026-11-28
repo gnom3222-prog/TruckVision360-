@@ -3234,15 +3234,17 @@ test('initial pose uncertainty blocks a fixed route when one of the 16 corners l
   q=physics.rk4(q,0.7,0,0.05/0.7,params);
   states.push({...q,gear:1,steer:0,stepDistance:0.05});
  }
- const obstacle={x:2,y:1.55,w:0.2,h:0.2,name:'near-side pallet'};
+ const obstacle={x:2,y:1.8,w:0.2,h:0.2,name:'near-side pallet'};
  const result=planner.analyzeInitialPoseUncertainty(
   states,[obstacle],params,
-  {positionX:0.02,positionY:0.20,tractorHeadingDeg:0.1,trailerHeadingDeg:0.1},
+  {positionX:0.02,positionY:0.50,tractorHeadingDeg:0.1,trailerHeadingDeg:0.1},
   integrate,
   {minClearance:0.10}
  );
  assert.equal(result.ok,false,JSON.stringify(result));
  assert.equal(result.status,'clearance-failed-in-pose-scenario');
+ assert.equal(result.scenarioResults[0].clearancePassed,true,'nominal pose should preserve the requested clearance');
+ assert.ok(result.scenarioResults.slice(1).some(scenario=>!scenario.clearancePassed),'at least one perturbed corner should lose clearance');
  assert.ok(result.clearanceFailures>0);
  assert.ok(result.scenariosEvaluated<=17);
 });
