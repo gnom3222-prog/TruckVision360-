@@ -120,8 +120,11 @@
    if(VEHICLE_PARAMETER_UNCERTAINTY_REQUIRES_MEASURED_NOMINAL.has(parameterKey)&&nominal<=0){
     throw new Error(uncertaintyKey+': сначала задайте положительное измеренное значение '+parameterKey+'.');
    }
-   const min=Math.max(limits.min,nominal-uncertainty);
-   const max=Math.min(limits.max,nominal+uncertainty);
+   const min=nominal-uncertainty;
+   const max=nominal+uncertainty;
+   if(min<limits.min-1e-12||max>limits.max+1e-12){
+    throw new Error(uncertaintyKey+': диапазон выходит за допустимые пределы '+parameterKey+' ['+limits.min+'; '+limits.max+'] м; погрешность нельзя молча обрезать.');
+   }
    if(min>nominal+1e-12||max<nominal-1e-12||min>max){
     throw new Error(uncertaintyKey+': диапазон не содержит номинальное значение '+parameterKey+'.');
    }
