@@ -1979,7 +1979,7 @@ if(result.reason==='uncertainty-sensitive-start'){
    note:'Сравнение первых действий по сценариям исходной позы не вернуло результат.'
   };
   routeAssessment.recommendationPoseSensitivity=recommendationPoseSensitivity;
-  const unstableRecommendation=!recommendationPoseSensitivity.ok||
+  const unstableRecommendation=!recommendationPoseSensitivity.ok||!poseSensitivity.ok||
    ['changed','ambiguous','no-feasible-candidate-in-pose-scenario'].includes(recommendationPoseSensitivity.status);
   if(unstableRecommendation){
    if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: первое действие меняется или неоднозначно при проверке исходной позы.');
