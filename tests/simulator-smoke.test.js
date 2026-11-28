@@ -423,8 +423,9 @@ test('unused common axle spacing and trailer track uncertainty are ignored when 
  elements.trailerAxle1Track.value='2.7';
  elements.trailerAxle2Track.value='2.8';
  elements.trailerAxle3Track.value='2.85';
- elements.trailerAxleSpacingUncertainty.value='100';
- elements.trailerTrackUncertainty.value='100';
+ elements.trailerAxleSpacingUncertainty.value='2';
+ elements.trailerTrack.value='1.2';
+ elements.trailerTrackUncertainty.value='1.5';
  elements.apply.onclick();
  assert.doesNotMatch(elements.routeAdvice.textContent,/Параметры не применены/);
 });
