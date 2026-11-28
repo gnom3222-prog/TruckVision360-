@@ -1363,6 +1363,14 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
    '; общий интегральный proxy '+scrubExposure.totalAbsoluteLateralTravel.toFixed(2)+
    ' м. Это кинематическая несовместимость жёстких осей, не модель скольжения, сил или износа шин');
  }
+ if(scrubExposure.spacingUncertaintyStatus==='complete'){
+  const velocityBounds=scrubExposure.maxAbsLateralVelocityUncertaintyBoundByAxle.map(value=>value.toFixed(3)+' м/с').join(' / ');
+  const travelBounds=scrubExposure.cumulativeAbsoluteLateralTravelUncertaintyBoundByAxle.map(value=>value.toFixed(3)+' м').join(' / ');
+  reasons.push('границы вклада погрешности шагов осей (1-я / средняя / 3-я): до ±'+velocityBounds+
+   ' по скорости и ±'+travelBounds+' по интегральному proxy; учтены только допуски расстояний между осями, не погрешность угловой скорости, позы, шкворня, седла или интегрирования');
+ }else{
+  reasons.push('положительные границы неопределённости обоих шагов осей не заданы; боковой геометрический proxy не имеет полной численной границы по погрешности расстояний');
+ }
  if(cfg.mirrorOutboard<=0)reasons.push('геометрия зеркал не задана; зеркала не входят в проверку зазоров');
  if(!reasons.length)reasons.push('в проверенной модели препятствия не пересечены');
  return {length,turns,gearChanges,steeringChanges,initialSteeringActions,reverseDistance,reverseSegments,
@@ -1370,6 +1378,10 @@ function routeMetrics(path,minimumClearanceLowerBound=Infinity,sweptClearanceDet
   axleScrubTravelProxy:scrubExposure.totalAbsoluteLateralTravel,
   axleScrubTravelByAxle:scrubExposure.cumulativeAbsoluteLateralTravelByAxle,
   axleScrubSpeedByAxle:scrubExposure.maxAbsLateralVelocityByAxle,
+  axleScrubVelocityUncertaintyBoundByAxle:scrubExposure.maxAbsLateralVelocityUncertaintyBoundByAxle,
+  axleScrubTravelUncertaintyBoundByAxle:scrubExposure.cumulativeAbsoluteLateralTravelUncertaintyBoundByAxle,
+  axleScrubSpacingUncertaintyStatus:scrubExposure.spacingUncertaintyStatus,
+  axleScrubUncertaintyScope:scrubExposure.uncertaintyScope,
   axleScrubDistanceMethod:scrubExposure.distanceMethod,
   axleScrubSegmentsUsingStepDistance:scrubExposure.segmentsUsingStepDistance,
   axleScrubSegmentsUsingChordFallback:scrubExposure.segmentsUsingChordFallback,
@@ -1544,7 +1556,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261127-15');
+   worker=new Worker('./planner-worker.js?v=20261128-1');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);

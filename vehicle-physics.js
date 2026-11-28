@@ -1241,20 +1241,61 @@
   return buildWheelFootprints(q,params,steer);
  }
 
+ function trailerAxleSpacingUncertaintyInfo(params){
+  const spacing12IsIndividual=Number.isFinite(params&&params.trailerAxleSpacing12)&&params.trailerAxleSpacing12>0;
+  const spacing23IsIndividual=Number.isFinite(params&&params.trailerAxleSpacing23)&&params.trailerAxleSpacing23>0;
+  const readBound=key=>{
+   const value=params&&params[key];
+   return Number.isFinite(value)&&value>0?value:null;
+  };
+  return {
+   bounds:[
+    readBound(spacing12IsIndividual?'trailerAxleSpacing12Uncertainty':'trailerAxleSpacingUncertainty'),
+    readBound(spacing23IsIndividual?'trailerAxleSpacing23Uncertainty':'trailerAxleSpacingUncertainty')
+   ],
+   sources:[
+    spacing12IsIndividual?'individual-spacing':'common-fallback',
+    spacing23IsIndividual?'individual-spacing':'common-fallback'
+   ]
+  };
+ }
+
  // Rigid-body lateral velocity relative to the equivalent axle-group center.
- // This is a scrub indicator, not a tire-force or multi-body dynamics model.
+ // The optional bound propagates only the entered adjacent-spacing tolerance;
+ // yaw-rate, pose, hitch/kingpin and numerical integration uncertainty are excluded.
+ // This remains a geometric incompatibility proxy, not a tire-force model.
  function trailerAxleDiagnostics(q,v,delta,params){
   const motion=derivative(q,v,delta,params);
   const offsets=trailerAxleOffsets(params);
-  const axles=offsets.map((offset,index)=>({
-   index:index+1,
-   offsetFromGroupCenter:offset,
-   lateralVelocity:motion.psiT*offset
-  }));
+  const spacingUncertainty=trailerAxleSpacingUncertaintyInfo(params);
+  const offsetUncertaintyBounds=[spacingUncertainty.bounds[0],0,spacingUncertainty.bounds[1]];
+  const uncertaintySources=[spacingUncertainty.sources[0],'equivalent-center',spacingUncertainty.sources[1]];
+  const axles=offsets.map((offset,index)=>{
+   const lateralVelocity=motion.psiT*offset;
+   const offsetUncertaintyBound=offsetUncertaintyBounds[index];
+   const lateralVelocityUncertaintyBound=offsetUncertaintyBound===null?
+    null:Math.abs(motion.psiT)*offsetUncertaintyBound;
+   return {
+    index:index+1,
+    offsetFromGroupCenter:offset,
+    lateralVelocity,
+    offsetUncertaintyBound,
+    lateralVelocityUncertaintyBound,
+    lateralVelocityLowerBound:lateralVelocityUncertaintyBound===null?
+     null:lateralVelocity-lateralVelocityUncertaintyBound,
+    lateralVelocityUpperBound:lateralVelocityUncertaintyBound===null?
+     null:lateralVelocity+lateralVelocityUncertaintyBound,
+    uncertaintySource:uncertaintySources[index],
+    uncertaintyStatus:index===1?'reference-axis':
+     (offsetUncertaintyBound===null?'missing-spacing-bound':'spacing-only-bound')
+   };
+  });
   return {
    trailerYawRate:motion.psiT,
    axles,
-   maxAbsLateralVelocity:Math.max(...axles.map(axle=>Math.abs(axle.lateralVelocity)))
+   maxAbsLateralVelocity:Math.max(...axles.map(axle=>Math.abs(axle.lateralVelocity))),
+   spacingUncertaintyStatus:spacingUncertainty.bounds.every(Number.isFinite)?'complete':'incomplete',
+   uncertaintyScope:'adjacent-axle-spacing only; yaw-rate, pose, hitch/kingpin and integration uncertainty excluded'
   };
  }
 
@@ -1287,8 +1328,14 @@
    return {q,gear,steer};
   };
   const offsets=trailerAxleOffsets(params);
+  const spacingUncertainty=trailerAxleSpacingUncertaintyInfo(params);
+  const uncertaintyBoundAvailableByAxle=[
+   spacingUncertainty.bounds[0]!==null,true,spacingUncertainty.bounds[1]!==null
+  ];
   const axleTravel=offsets.map(()=>0);
   const maxAbsLateralVelocityByAxle=offsets.map(()=>0);
+  const cumulativeAbsoluteLateralTravelUncertaintyBoundByAxle=offsets.map(()=>0);
+  const maxAbsLateralVelocityUncertaintyBoundByAxle=offsets.map(()=>0);
   // Array.from visits sparse slots so a hole cannot masquerade as an empty, zero-exposure route.
   const states=Array.from(path,readState);
   const evaluate=(q,steer)=>{
@@ -1297,7 +1344,15 @@
    return diagnostic.axles.map((axle,index)=>{
     const speed=Math.abs(axle.lateralVelocity);
     maxAbsLateralVelocityByAxle[index]=Math.max(maxAbsLateralVelocityByAxle[index],speed);
-    return speed;
+    if(axle.lateralVelocityUncertaintyBound===null){
+     uncertaintyBoundAvailableByAxle[index]=false;
+    }else if(uncertaintyBoundAvailableByAxle[index]){
+     maxAbsLateralVelocityUncertaintyBoundByAxle[index]=Math.max(
+      maxAbsLateralVelocityUncertaintyBoundByAxle[index],
+      axle.lateralVelocityUncertaintyBound
+     );
+    }
+    return {speed,uncertaintyBound:axle.lateralVelocityUncertaintyBound};
    });
   };
   states.forEach(state=>evaluate(state.q,state.steer));
@@ -1334,9 +1389,17 @@
    // chord is only a fallback for externally supplied paths without that field.
    const elapsed=distance/nominalSpeed;
    for(let axle=0;axle<offsets.length;axle++){
-    const f0=samples[0][axle],f1=samples[1][axle],f2=samples[2][axle];
-    const f3=samples[3][axle],f4=samples[4][axle];
+    const f0=samples[0][axle].speed,f1=samples[1][axle].speed,f2=samples[2][axle].speed;
+    const f3=samples[3][axle].speed,f4=samples[4][axle].speed;
     axleTravel[axle]+=elapsed*(f0+4*f1+2*f2+4*f3+f4)/12;
+    const uncertaintySamples=samples.map(sample=>sample[axle].uncertaintyBound);
+    if(uncertaintySamples.some(value=>value===null)){
+     uncertaintyBoundAvailableByAxle[axle]=false;
+    }else if(uncertaintyBoundAvailableByAxle[axle]){
+     const [u0,u1,u2,u3,u4]=uncertaintySamples;
+     cumulativeAbsoluteLateralTravelUncertaintyBoundByAxle[axle]+=
+      elapsed*(u0+4*u1+2*u2+4*u3+u4)/12;
+    }
    }
   }
   const totalAbsoluteLateralTravel=axleTravel.reduce((sum,value)=>sum+value,0);
@@ -1345,7 +1408,16 @@
    nominalSpeed,
    maxAbsLateralVelocity,
    maxAbsLateralVelocityByAxle,
+   maxAbsLateralVelocityUncertaintyBoundByAxle:
+    maxAbsLateralVelocityUncertaintyBoundByAxle.map((value,index)=>
+     uncertaintyBoundAvailableByAxle[index]?value:null),
    cumulativeAbsoluteLateralTravelByAxle:axleTravel,
+   cumulativeAbsoluteLateralTravelUncertaintyBoundByAxle:
+    cumulativeAbsoluteLateralTravelUncertaintyBoundByAxle.map((value,index)=>
+     uncertaintyBoundAvailableByAxle[index]?value:null),
+   spacingUncertaintyStatus:uncertaintyBoundAvailableByAxle[0]&&uncertaintyBoundAvailableByAxle[2]?
+    'complete':'incomplete',
+   uncertaintyScope:'adjacent-axle-spacing only; yaw-rate, pose, hitch/kingpin and integration uncertainty excluded',
    maxAbsoluteLateralTravelByAxle:axleTravel.length?Math.max(...axleTravel):0,
    totalAbsoluteLateralTravel,
    integration:'composite-simpson-4-subintervals',
