@@ -1643,7 +1643,7 @@ test('missing axle-spacing tolerance stays explicitly unbounded and invalid acti
  assert.ok(physics.validateVehicleParams({...p,trailerAxleSpacing12Uncertainty:2.1})
   .some(message=>message.includes('trailerAxleSpacing12Uncertainty')));
  assert.ok(physics.validateVehicleParams({...p,trailerAxleSpacing12Uncertainty:0.6})
-  .some(message=>message.includes('нижняя граница')));
+  .some(message=>message.includes('весь интервал')));
  const upperInterval={...p,trailerAxleSpacing12:4.9,trailerAxleSpacing12Uncertainty:0.2};
  assert.ok(physics.validateVehicleParams(upperInterval)
   .some(message=>message.includes('весь интервал')));
