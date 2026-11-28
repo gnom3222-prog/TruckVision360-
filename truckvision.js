@@ -1437,9 +1437,9 @@ function wheelClearanceSummaryText(metrics){
  const incomplete=wheelClearance?.segmentsWithoutIntermediateKinematicSamples>0?
   ' Промежуточная проверка не завершена на '+wheelClearance.segmentsWithoutIntermediateKinematicSamples+
   ' сегментах; виртуальный автопроезд заблокирован.':'';
- const axleSpacingReference=wheelClearance?.axleSpacingUncertaintyStatus==='complete'?
+ const axleSpacingReference=!wheelClearance?'':(wheelClearance.axleSpacingUncertaintyStatus==='complete'?
   ' Продольные интервалы крайних осей расширены по введённым допускам расстояний 1–2 и 2–3; остальные неопределённости модели остаются отдельными.':
-  ' Внимание: положительные допуски расстояний между осями 1–2 и 2–3 не заданы; численная нижняя оценка условна для номинальных положений крайних осей.';
+  ' Внимание: положительные допуски расстояний между осями 1–2 и 2–3 не заданы; численная нижняя оценка условна для номинальных положений крайних осей.');
  const surfaceReference=wheelClearance?.roadSurfaceStatus==='road-surface-unverified-horizontal-only'?
   ' Плоскость дороги не откалибрована: вертикальное разделение отключено, все вертикальные препятствия учитываются как горизонтальные 2D-оболочки.':
   wheelClearance?.roadSurfaceStatus==='configured-planar-surface-with-bounds'?
