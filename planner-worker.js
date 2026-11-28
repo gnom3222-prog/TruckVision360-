@@ -82,10 +82,14 @@ self.addEventListener('message',event=>{
     // Keep the worker message compact when the comparison is resolved.
     delete result.candidateRoutes;
    }else{
-    result.candidateRoutes=result.candidateRoutes.map(candidate=>({
+    const allCandidates=result.candidateRoutes;
+    result.candidateRoutes=allCandidates.filter(candidate=>
+     candidate&&candidate.initialPoseSensitivity?.ok===true
+    ).map(candidate=>({
      ...candidate,
      recommendationPoseSensitivity:result.recommendationPoseSensitivity
     }));
+    result.rejectedCandidateCount=allCandidates.length-result.candidateRoutes.length;
    }
   }else{
    result.recommendationPoseSensitivity={
