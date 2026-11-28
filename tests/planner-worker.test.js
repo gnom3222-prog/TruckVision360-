@@ -53,3 +53,41 @@ test('planner worker reports ambiguous reverse starts instead of choosing one ar
  assert.ok(resultMessage.result.candidateSummaries.some(candidate=>candidate.initialGear===-1&&candidate.firstTurn==='left'));
  assert.ok(resultMessage.result.candidateSummaries.some(candidate=>candidate.initialGear===-1&&candidate.firstTurn==='right'));
 });
+
+
+test('planner worker fails closed when candidate pose replay exceeds its configured budget',()=>{
+ const messages=[];
+ let onMessage=null;
+ const sandbox={};
+ sandbox.self=sandbox;
+ sandbox.postMessage=message=>messages.push(message);
+ sandbox.addEventListener=(type,handler)=>{if(type==='message')onMessage=handler;};
+ const context=vm.createContext(sandbox);
+ sandbox.importScripts=(...files)=>{
+  for(const file of files){
+   const cleanFile=file.split('?')[0];
+   const source=fs.readFileSync(path.join(__dirname,'..',cleanFile),'utf8');
+   vm.runInContext(source,context,{filename:cleanFile});
+  }
+ };
+ const workerSource=fs.readFileSync(path.join(__dirname,'..','planner-worker.js'),'utf8');
+ vm.runInContext(workerSource,context,{filename:'planner-worker.js'});
+ onMessage({data:{
+  id:18,
+  options:{
+   start:{x:0,y:0,psi:0,psiT:0},
+   goal:{x:-3,y:0},
+   params:{wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3},
+   obstacles:[],
+   maxExpansions:5000,
+   minClearance:0.3,
+   measurementUncertainty:0.1,
+   maxCandidatePoseReplayStates:999
+  }
+ }});
+ const resultMessage=messages.find(m=>m.id===18&&m.type==='result');
+ assert.ok(resultMessage,'worker should return a result');
+ assert.equal(resultMessage.result.recommendationPoseSensitivity.status,'candidate-pose-screen-budget-exceeded');
+ assert.equal(resultMessage.result.candidateRoutes.length,0);
+ assert.ok(resultMessage.result.rejectedCandidateCount>=2);
+});
