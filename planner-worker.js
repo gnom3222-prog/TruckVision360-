@@ -64,7 +64,12 @@ self.addEventListener('message',event=>{
    };
   };
   const poseRouteKeys=['candidateRoutes','conservativeCandidateRoutes'];
-  const poseRoutes=poseRouteKeys.flatMap(key=>Array.isArray(result[key])?result[key]:[]);
+  const candidatePoseRoutes=poseRouteKeys.flatMap(key=>Array.isArray(result[key])?result[key]:[]);
+  const selectedRouteCovered=candidatePoseRoutes.some(candidate=>
+   candidate&&(candidate.index===result.selectedCandidate||candidate.states===result.states)
+  );
+  const poseRoutes=selectedRouteCovered||!result.ok||!Array.isArray(result.states)?
+   candidatePoseRoutes:[...candidatePoseRoutes,{states:result.states}];
   const estimatedReplayStates=poseRoutes.reduce((sum,candidate)=>
    sum+(Array.isArray(candidate?.states)?candidate.states.length*17:0),0
   );
@@ -84,7 +89,7 @@ self.addEventListener('message',event=>{
     recommendation:null,reason:'candidate-pose-screen-budget-exceeded',
     estimatedReplayStates,maxCandidatePoseReplayStates,note
    };
-   result.rejectedCandidateCount=poseRoutes.length;
+   result.rejectedCandidateCount=candidatePoseRoutes.length;
    result.candidateRoutes=[];
    result.conservativeCandidateRoutes=[];
   }else{
