@@ -1644,7 +1644,37 @@ test('missing axle-spacing tolerance stays explicitly unbounded and invalid acti
   .some(message=>message.includes('trailerAxleSpacing12Uncertainty')));
  assert.ok(physics.validateVehicleParams({...p,trailerAxleSpacing12Uncertainty:0.6})
   .some(message=>message.includes('нижняя граница')));
+ const upperInterval={...p,trailerAxleSpacing12:4.9,trailerAxleSpacing12Uncertainty:0.2};
+ assert.ok(physics.validateVehicleParams(upperInterval)
+  .some(message=>message.includes('весь интервал')));
  const inactiveFallbackTolerance={...p,trailerAxleSpacingUncertainty:NaN};
  assert.deepEqual(physics.validateVehicleParams(inactiveFallbackTolerance),[]);
  assert.deepEqual(physics.trailerAxleSpacingUncertaintyInfo(inactiveFallbackTolerance).bounds,[null,null]);
+});
+
+
+test('axle-mounted auxiliary envelopes expand in both local axes for rotated anchors',()=>{
+ const base={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerKingpinToFront:1.5,trailerLength:13.6,trailerWidth:2.55,
+  trailerAxleSpacing:0,trailerAxleSpacing12:0.8,trailerAxleSpacing23:1.6,
+  trailerAxleSpacing12Uncertainty:0.1,trailerAxleSpacing23Uncertainty:0.05,
+  footprintUncertainty:0.03,
+  auxiliaryEnvelopes:[{
+   name:'brake chamber',anchor:'trailer-axle-1',
+   length:0.6,width:0.3,longitudinalOffset:0,lateralOffset:0,
+   headingOffsetDeg:90,uncertaintyMargin:0.01
+  }]
+ };
+ const q={x:0,y:0,psi:0,psiT:0};
+ const bounded=physics.auxiliaryEnvelopePolygons(q,base)[0];
+ const nominal=physics.auxiliaryEnvelopePolygons(q,{
+  ...base,trailerAxleSpacing12Uncertainty:0,trailerAxleSpacing23Uncertainty:0
+ })[0];
+ const extent=(polygon,key)=>Math.max(...polygon.map(point=>point[key]))-
+  Math.min(...polygon.map(point=>point[key]));
+ assert.equal(bounded.anchorPositionUncertaintyBound,0.1);
+ assert.equal(bounded.anchorPositionUncertaintyStatus,'bounded');
+ near(extent(bounded.polygon,'x')-extent(nominal.polygon,'x'),0.2,1e-9);
+ near(extent(bounded.polygon,'y')-extent(nominal.polygon,'y'),0.2,1e-9);
 });
