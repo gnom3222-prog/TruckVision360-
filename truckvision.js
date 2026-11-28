@@ -1880,7 +1880,9 @@ if(result.reason==='uncertainty-sensitive-start'){
   if(result.reason==='ambiguous-start'){
    if(routePlayback.active)stopRoutePlayback('Виртуальный автопроезд остановлен: начальные варианты манёвра неоднозначны.');
    plannedRoute=[];
-   alternativeRoutes=Array.isArray(result.candidateRoutes)?result.candidateRoutes.filter(candidate=>Array.isArray(candidate.states)&&candidate.states.length>=2):[];
+   alternativeRoutes=Array.isArray(result.candidateRoutes)?result.candidateRoutes.filter(candidate=>
+    Array.isArray(candidate.states)&&candidate.states.length>=2&&candidate.initialPoseSensitivity?.ok===true
+   ):[];
    routeAssessment=null;
    const chooser=$('alternativeRouteSelect');
    chooser.innerHTML='<option value="">Выберите вариант траектории…</option>';
@@ -1891,6 +1893,19 @@ if(result.reason==='uncertainty-sensitive-start'){
     chooser.appendChild(option);
    });
    chooser.style.display=alternativeRoutes.length?'block':'none';
+   if(!alternativeRoutes.length){
+    $('routeAdvice').textContent='Номинально найдено несколько вариантов с разными первыми действиями, но ни один не прошёл собственную проверку зазора и достижения цели во всех 17 сценариях исходной позы. Сторона и направление не рекомендуются; виртуальный автопроезд заблокирован.';
+    $('difficultyAdvice').textContent='Уточните начальное положение и независимые допуски X/Y и курсов тягача/полуприцепа, затем постройте маршрут заново. Конечная сценарная проверка не является непрерывной гарантией.';
+    updateRecommendationCard({
+     status:'Нет устойчивого варианта',level:'Не определена',
+     start:'Сторона начала не выбрана',turn:'Ни один вариант не прошёл все сценарии',
+     reasons:result.recommendationPoseSensitivity?.note||'Начальные действия неоднозначны или сценарная проверка неполна',
+     check:'Виртуальный автопроезд заблокирован.'
+    });
+    draw();
+    return;
+   }
+   const poseRecommendationNote=result.recommendationPoseSensitivity?.note||'';
    const alternatives=(result.candidateSummaries||[]).map(candidate=>{
     const gear=candidate.initialGear<0?'задний ход':'вперёд';
     const steering=candidate.steeringWheelDirection??candidate.firstTurn;
@@ -1904,9 +1919,9 @@ if(result.reason==='uncertainty-sensitive-start'){
    const gateUncertainty=geometrySensitivity.gateGeometryUncertainty;
    const gateEnvelopeNote=gateUncertainty?.enabled&&geometrySensitivity.status==='nominal-ambiguous'?
     ' Совместная оболочка погрешности ворот не проверялась: номинальный поиск уже неоднозначен. Сначала нужно устранить неоднозначность стартовых действий; отсутствие проверки оболочки не трактуется как устойчивость.':'';
-   $('routeAdvice').textContent='Найдено несколько близких по эвристической стоимости вариантов с разными начальными действиями. Однозначная сторона и передача не выбраны. '+alternatives+'. Балл объединяет длину пути, переключения, пиковый угол и запас зазора; это не вероятность безопасности и не доказательство глобального оптимума.'+gateEnvelopeNote;
+   $('routeAdvice').textContent='Найдено несколько близких по эвристической стоимости вариантов с разными начальными действиями. Однозначная сторона и передача не выбраны. '+alternatives+'. Балл объединяет длину пути, переключения, пиковый угол и запас зазора; это не вероятность безопасности и не доказательство глобального оптимума. '+poseRecommendationNote+gateEnvelopeNote;
    const reserveNote=result.sensitivity?.status==='reserve-ambiguous'?' Повторный поиск с резервом неопределённости также дал неоднозначные варианты.':'';
-   $('difficultyAdvice').textContent='Показаны '+alternativeRoutes.length+' найденных траекторий разными линиями. Выбор и автопроезд пока заблокированы: сначала нужно сравнить варианты и подтвердить один маршрут. '+reserveNote+gateEnvelopeNote;
+   $('difficultyAdvice').textContent='Показаны '+alternativeRoutes.length+' траекторий, прошедших собственную 17-сценарную проверку. Выбор и автопроезд заблокированы до ручного выбора. '+reserveNote+' '+poseRecommendationNote+gateEnvelopeNote;
    updateRecommendationCard({status:'Несколько вариантов',level:'Не определена',start:'Сторона начала не выбрана: варианты близки по оценке',turn:alternatives||'Сравните варианты в списке',reasons:'Разные варианты требуют разных первых действий; автоматически выбирать сторону нельзя',check:'Выберите вариант вручную; после выбора программа повторно оценит маршрут'});
    draw();
    return;
