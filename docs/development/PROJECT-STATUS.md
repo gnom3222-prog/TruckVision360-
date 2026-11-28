@@ -133,3 +133,12 @@ PWA ресурсы обновлены до camera-geometry.js?v=20261128-6, came
 ## Согласование PWA-кэша после проверки joint-screen — 28 ноября 2026
 
 После усиления проверки регистрации обновлены версия ресурса `camera-geometry.js?v=20261128-7` в `index.html` и соответствующая запись в precache `sw.js`; Service Worker cache повышен до `truckvision360-v188`. Это обязательное согласование: новая логика проверки не должна загружаться вместе со старым cached camera-geometry.js. Чек-лист iPhone обновлён до v188. Коммиты PWA: c8cdba3d405478386dc67dfd65ad97a44fbe76ab (index), e30957f25a7cbcef096d34ca4baa77c593518b0d (cache version), ad99a234adfb3d558a00b48200b8ed09a091e8e0 (checklist), f72b6664e0eae4033b74fc2eccaa7d9a70ee7140 (precache URL). Pages Preview для HEAD ad99a23 ещё собирается; после последнего обновления sw.js требуется проверить новую сборку. Cloudflare Workers build на коммите f1a8a78 ещё был в процессе, результата для текущего HEAD пока нет. Голосовой файл не менялся.
+
+
+## Последняя проверка PR #51 — 28 ноября 2026
+
+Текущий HEAD PR #51: `1a26006e1ee584566f3c396c8b948f8b1e3836f5`, относительно `main` опережает на 21 коммит и отстаёт на 0; GitHub сообщает mergeable=true. Cloudflare Pages подтвердил успешный Preview для этого HEAD: https://b66349a0.truckvision360.pages.dev. Версия страницы использует `camera-geometry.js?v=20261128-7`, `camera-measure.js?v=20261128-4`, Service Worker `truckvision360-v188`; precache в `sw.js` согласован с URL camera-geometry v7.
+
+Отдельная сборка Cloudflare Workers для HEAD `1a26006` завершилась FAILED (build ID `8f9b97a8-a9b7-4ad4-b981-9d3ff452cde6`). Причину нельзя подтвердить: ссылка ведёт в приватную панель Cloudflare, журнал недоступен через текущий GitHub connector. Предыдущая сборка для `f1a8a78` также оставалась в процессе на момент проверки. Не считать Workers собранным или развёрнутым.
+
+На HEAD `1a26006` запущены TruckVision 360 checks №822 (run ID 46125926001) и Vehicle physics tests №1230 (run ID 46125926004). Подготовка Node.js и синтаксическая проверка приложения завершились успешно; полный unit/smoke и physics наборы ещё выполняются. Слияние PR #51 отложено до успешного завершения обоих CI и решения по ошибке Workers. Pages deployment success не заменяет проверку Workers.
