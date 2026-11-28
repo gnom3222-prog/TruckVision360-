@@ -2100,6 +2100,10 @@ if(result.reason==='uncertainty-sensitive-start'){
     ' Среди найденных вариантов нет альтернативы с другим первым действием; преимущество стороны отдельно не сравнивалось.':
    selectionEvidence?.status==='score-breakdown-unavailable'?
     ' Найдена альтернатива с другим первым действием, но разложение её эвристического балла недоступно.':'';
+  const poseRecommendationNote=recommendationPoseSensitivity.status==='stable'?
+   ' Первое действие совпало среди найденных фиксированных кандидатов во всех 17 сценариях исходной позы; это ограниченное сравнение, не повторная оптимизация и не глобальный оптимум.':
+   recommendationPoseSensitivity.status==='single-candidate-unverified'?
+   ' Найден один допустимый фиксированный кандидат; его действие прошло 17 сценариев, но устойчивость преимущества перед альтернативной стороной не подтверждена.':'';
   const sensitivity=result.sensitivity||{};
   const sensitivityNote=sensitivity.status==='stable-start-action'?
    ' При повторном поиске с дополнительным резервом '+sensitivity.measurementUncertainty.toFixed(2)+
@@ -2155,7 +2159,7 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
    ' м; переключений передачи: '+m.gearChanges+'; изменений руля: '+m.steeringChanges+
    '; задний ход: '+m.reverseDistance.toFixed(1)+' м. Заданный конечный курс '+headingDegrees.toFixed(0)+
    '°; ошибка курса '+m.finalHeadingErrorDeg.toFixed(1)+'°; угол сочленения у цели '+
-   m.finalArticulationDeg.toFixed(1)+'° (допуск '+articulationLimitDegrees.toFixed(0)+'°); '+articulationPeakText+'.'+geometryNote+parameterNote+poseSensitivityNote;
+   m.finalArticulationDeg.toFixed(1)+'° (допуск '+articulationLimitDegrees.toFixed(0)+'°); '+articulationPeakText+'.'+geometryNote+parameterNote+poseSensitivityNote+poseRecommendationNote;
 
   const closestLocationText=m.clearanceDetail?
    m.clearanceDetail.vehiclePart+(m.clearanceDetail.component?' · '+m.clearanceDetail.component:'')+
@@ -2204,7 +2208,7 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
    start:startActionText,
    turn:firstTurnText,
    reasons:m.reasons.slice(0,4).join('; ')+'. Пиковый угол сочленения '+m.maxBeta.toFixed(1)+'°. '+clearanceText+selectionEvidenceText,
-   check:confidenceText+' Это учебный расчёт виртуальной модели, не гарантия безопасности.'
+   check:confidenceText+poseRecommendationNote+' Это учебный расчёт виртуальной модели, не гарантия безопасности.'
   });
   $('difficultyAdvice').textContent=
    'Сложность: '+m.level+'. Причины: '+m.reasons.join('; ')+
@@ -2219,7 +2223,7 @@ const parameterNote=stableParameterStatuses.includes(parameterSensitivity.status
    '; после резерва погрешности: '+(Number.isFinite(m.effectiveClearance)?m.effectiveClearance.toFixed(2)+' м':'не определено')+
    '; устойчивость стартового действия: '+(sensitivity.status==='stable-start-action'?'сохранилось при повторном поиске с увеличенным требуемым зазором':sensitivity.status==='zero-reserve'?'не проверялась из-за нулевого резерва':'не подтверждена')+
    '; столкновение: '+(m.collision?'да':'не выявлено')+
-   '. Курс у цели проверен относительно заданного угла и допуска; учебный расчёт, не гарантия безопасности.'+geometryNote;
+   '. Курс у цели проверен относительно заданного угла и допуска; учебный расчёт, не гарантия безопасности.'+geometryNote+poseRecommendationNote;
   draw();
  }catch(error){
   if(token!==routeBuildToken)return;
