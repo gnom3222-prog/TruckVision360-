@@ -1162,6 +1162,47 @@ test('virtual playback holds at the gear boundary until the explicit confirmatio
 });
 
 
+test('virtual playback blocks when initial pose uncertainty is not assessed even if the selected route is otherwise valid',async()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerAxleSpacingUncertainty:0.02,
+  tractorFrontTrack:2.05,tractorSteeringTrack:2.05,tractorRearTrack:2.05,
+  trailerTrack:2.79,tireLength:0.72,tireWidth:0.44
+ };
+ const start={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,gearKnown:true,steerKnown:true,stepDistance:0};
+ const forwardStep=0.5,reverseStep=2.0;
+ const forward=physics.rk4(start,0.7,0,forwardStep/0.7,p);
+ const reverse=physics.rk4(forward,-0.7,0,reverseStep/0.7,p);
+ const states=[
+  start,
+  {...forward,gear:1,steer:0,gearKnown:true,steerKnown:true,stepDistance:forwardStep},
+  {...reverse,gear:-1,steer:0,gearKnown:true,steerKnown:true,stepDistance:reverseStep}
+ ];
+ const result=routeControlBoundaryWorkerResult(states);
+ result.conservativeCandidateRoutes=result.conservativeCandidateRoutes.map(candidate=>({
+  ...candidate,initialPoseSensitivity:{
+   ok:false,status:'not-assessed',reason:'missing-bounds',
+   note:'initial pose bounds missing in test fixture'
+  }
+ }));
+ const simulator=bootSimulator({workerResult:result});
+ const {elements}=simulator;
+ elements.trailerAxleSpacingUncertainty.value='0.02';
+ elements.measurementUncertainty.value='0.05';
+ elements.apply.onclick();
+ elements.goalX.value=String(reverse.x);
+ elements.goalY.value=String(reverse.y);
+ elements.goalHeading.value='0';
+ await elements.planRoute.onclick();
+ elements.alternativeRouteSelect.value='0';
+ elements.alternativeRouteSelect.onchange();
+ elements.routeStart.onclick();
+ assert.match(elements.routeAdvice.textContent,/исходная поза/);
+ assert.doesNotMatch(elements.routeAdvice.textContent,/Виртуальный автопроезд начат/);
+});
+
+
 test('per-axle uncertainty cannot be entered when the individual geometry field inherits a common value',()=>{
  const {elements}=bootSimulator();
  elements.trailerAxleSpacing12Uncertainty.value='0.02';
