@@ -260,14 +260,51 @@ async function start(){
    if(document.visibilityState==='hidden')say('Страница перешла в фон. Запрошенный поток остановлен; вернитесь и нажмите «Включить камеру».');
    return;
   }
-  readCameraTrackDiagnostics(acquiredStream);
+  const activeVideoTrack=readCameraTrackDiagnostics(acquiredStream);
   stream=acquiredStream;
   const activeStream=stream;
+  let trackMuted=activeVideoTrack.muted===true;
+  let cameraReady=false;
+  const invalidateMutedFrame=()=>{
+   if(stream!==activeStream)return;
+   trackMuted=true;
+   Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;
+   clearGateRepeatability(true);
+   clearObstacleRepeatability(true);
+   v.pause();
+   ctx.clearRect(0,0,c.width,c.height);
+   setStreamInfo('Параметры активной камеры: видеодорожка временно не передаёт кадры. Повторная калибровка обязательна после восстановления.');
+   say('Видеодорожка камеры временно перестала передавать кадры. Калибровка и серии повторов сброшены; измерение заблокировано до восстановления потока.');
+  };
+  const handleMuted=()=>invalidateMutedFrame();
+  const handleUnmuted=()=>{
+   if(stream!==activeStream)return;
+   trackMuted=false;
+   if(!cameraReady)return;
+   try{
+    readCameraTrackDiagnostics(activeStream);
+   }catch(error){
+    stop();
+    say('Параметры восстановившейся камеры не прошли проверку. Поток остановлен; включите камеру заново.');
+    return;
+   }
+   v.play().then(()=>{
+    if(stream!==activeStream||trackMuted)return;
+    draw();
+    say('Поток камеры возобновлён. Прежняя калибровка недействительна; выполните калибровку заново.');
+   }).catch(()=>{
+    if(stream!==activeStream)return;
+    stop();
+    say('Не удалось возобновить видеопоток. Камера остановлена; включите её заново.');
+   });
+  };
   const handleEnded=()=>{
    if(stream!==activeStream)return;
    stream=null;
    streamRequestId++;
    startPending=false;
+   cameraReady=false;
+   trackMuted=true;
    v.pause();
    v.srcObject=null;
    setStreamInfo('Параметры потока недоступны: видеопоток завершён.');
@@ -278,12 +315,29 @@ async function start(){
    say('Видеопоток камеры завершился или был прерван. Калибровка сброшена; нажмите «Включить камеру» и повторите измерение.');
   };
   for(const track of activeStream.getTracks()){
-   if(typeof track.addEventListener==='function')track.addEventListener('ended',handleEnded,{once:true});
-   else track.onended=handleEnded;
+   if(typeof track.addEventListener==='function'){
+    track.addEventListener('ended',handleEnded,{once:true});
+    if(track===activeVideoTrack){
+     track.addEventListener('mute',handleMuted);
+     track.addEventListener('unmute',handleUnmuted);
+    }
+   }else{
+    track.onended=handleEnded;
+    if(track===activeVideoTrack){
+     track.onmute=handleMuted;
+     track.onunmute=handleUnmuted;
+    }
+   }
   }
   v.srcObject=activeStream;
+  if(trackMuted){
+   invalidateMutedFrame();
+   throw new Error('Видеодорожка камеры уже находится в состоянии mute.');
+  }
   await v.play();
   if(stream!==activeStream||requestId!==streamRequestId)throw new Error('Видеопоток камеры завершился до запуска.');
+  if(trackMuted)throw new Error('Видеодорожка камеры была прервана до завершения запуска.');
+  cameraReady=true;
   Hcal=null;referencePoints=null;referenceWidth=0;referenceHeight=0;mode=null;pts=[];frameLocked=false;clearGateRepeatability(true);clearObstacleRepeatability(true);
   say('Камера включена. Установите прямоугольный эталон в ту же плоскость, что и объект. При нажатии «Калибровать» текущий кадр будет зафиксирован: отметьте эталон и объект на одном неподвижном изображении.');
   draw();
