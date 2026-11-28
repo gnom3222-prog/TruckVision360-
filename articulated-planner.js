@@ -1849,6 +1849,7 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
   delete baseOptions.alternativeMaxExpansions;
   delete baseOptions.costTolerance;
   delete baseOptions.firstActionConstraint;
+  delete baseOptions.maxCandidatePoseReplayStates;
   const candidateCount=constraints.length+1;
   const candidates=[],failures=[];
   let expanded=0;
