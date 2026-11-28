@@ -12,8 +12,13 @@ const near=(actual,expected,tolerance=1e-8)=>
 const stableUncertainty={
  sigmaWidth:0.01,sigmaHeight:0.02,
  nonlinearSensitivityAvailable:true,nonlinearWarning:false,
- nonlinearSensitivityModel:'axiswise-one-sigma-finite-perturbations',
- nonlinearMismatchWidth:0,maxAxisAsymmetryRatio:0
+ nonlinearSensitivityModel:'axiswise-one-sigma-finite-perturbations+pairwise-joint-screen',
+ nonlinearMismatchWidth:0,maxAxisAsymmetryRatio:0,
+ jointSensitivityModel:'32-row-pairwise-independent-±1σ-plus-all-high-stress-case',
+ jointSensitivityAvailable:true,jointSensitivityChecks:33,
+ jointRmsDeviationWidth:0.01,jointRmsDeviationHeight:0.02,
+ jointMaxAbsDeviationWidth:0.02,jointMaxAbsDeviationHeight:0.04,
+ jointMismatchWidth:0,jointMismatchHeight:0
 };
 const repeatabilityFor=(sigmaWidth=0.01,sigmaHeight=0.02,width=4,height=2)=>camera.summarizeRepeatability([
  {width,height,sigmaWidth,sigmaHeight},
