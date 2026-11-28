@@ -49,6 +49,87 @@
   tireWidth:{min:0.1,max:0.8,optional:true}
  });
 
+ const VEHICLE_PARAMETER_UNCERTAINTY_MAP=Object.freeze({
+  wheelbaseUncertainty:'wheelbase',
+  hitchOffsetUncertainty:'hitchOffset',
+  kingpinAxlesUncertainty:'kingpinAxles',
+  trailerLengthUncertainty:'trailerLength',
+  trailerKingpinToFrontUncertainty:'trailerKingpinToFront',
+  trailerWidthUncertainty:'trailerWidth',
+  trailerAxleSpacingUncertainty:'trailerAxleSpacing',
+  trailerAxleSpacing12Uncertainty:'trailerAxleSpacing12',
+  trailerAxleSpacing23Uncertainty:'trailerAxleSpacing23',
+  trailerAxle1TrackUncertainty:'trailerAxle1Track',
+  trailerAxle2TrackUncertainty:'trailerAxle2Track',
+  trailerAxle3TrackUncertainty:'trailerAxle3Track',
+  tractorSteeringTrackUncertainty:'tractorSteeringTrack',
+  tractorFrontTrackUncertainty:'tractorFrontTrack',
+  tractorRearTrackUncertainty:'tractorRearTrack',
+  trailerTrackUncertainty:'trailerTrack',
+  tractorRearTireGroupWidthUncertainty:'tractorRearTireGroupWidth',
+  trailerTireGroupWidthUncertainty:'trailerTireGroupWidth',
+  trailerAxle1TireGroupWidthUncertainty:'trailerAxle1TireGroupWidth',
+  trailerAxle2TireGroupWidthUncertainty:'trailerAxle2TireGroupWidth',
+  trailerAxle3TireGroupWidthUncertainty:'trailerAxle3TireGroupWidth',
+  tractorRearTireCenterSpacingUncertainty:'tractorRearTireCenterSpacing',
+  trailerAxle1TireCenterSpacingUncertainty:'trailerAxle1TireCenterSpacing',
+  trailerAxle2TireCenterSpacingUncertainty:'trailerAxle2TireCenterSpacing',
+  trailerAxle3TireCenterSpacingUncertainty:'trailerAxle3TireCenterSpacing',
+  tireLengthUncertainty:'tireLength',
+  tireWidthUncertainty:'tireWidth',
+  cabOffsetUncertainty:'cabOffset',
+  cabFrontUncertainty:'cabFront',
+  cabRearUncertainty:'cabRear',
+  cabWidthUncertainty:'cabWidth',
+  tractorFrontOverhangUncertainty:'tractorFrontOverhang',
+  tractorRearOverhangUncertainty:'tractorRearOverhang',
+  tractorBodyWidthUncertainty:'tractorBodyWidth',
+  mirrorOutboardUncertainty:'mirrorOutboard',
+  mirrorLongitudinalUncertainty:'mirrorLongitudinal',
+  mirrorLengthUncertainty:'mirrorLength'
+ });
+ const VEHICLE_PARAMETER_UNCERTAINTY_REQUIRES_MEASURED_NOMINAL=new Set([
+  'trailerAxleSpacing12','trailerAxleSpacing23',
+  'trailerAxle1Track','trailerAxle2Track','trailerAxle3Track',
+  'tractorRearTireCenterSpacing',
+  'trailerAxle1TireCenterSpacing','trailerAxle2TireCenterSpacing','trailerAxle3TireCenterSpacing',
+  'tractorRearTireGroupWidth','trailerTireGroupWidth',
+  'trailerAxle1TireGroupWidth','trailerAxle2TireGroupWidth','trailerAxle3TireGroupWidth'
+ ]);
+ function vehicleParameterBoundsFromUncertainties(params){
+  if(!params||typeof params!=='object'||Array.isArray(params)){
+   throw new Error('Для построения диапазонов неопределённости нужны параметры автопоезда.');
+  }
+  const bounds={};
+  for(const [uncertaintyKey,parameterKey] of Object.entries(VEHICLE_PARAMETER_UNCERTAINTY_MAP)){
+   const uncertainty=params[uncertaintyKey];
+   if(uncertainty===undefined||uncertainty===null)continue;
+   if(!Number.isFinite(uncertainty)||uncertainty<0){
+    throw new Error(uncertaintyKey+': погрешность должна быть конечным неотрицательным числом.');
+   }
+   if(uncertainty===0)continue;
+   if(parameterKey==='trailerAxleSpacing'&&params.trailerAxleSpacing12>0&&params.trailerAxleSpacing23>0)continue;
+   if(parameterKey==='trailerTrack'&&[1,2,3].every(index=>
+      Number.isFinite(params['trailerAxle'+index+'Track'])&&params['trailerAxle'+index+'Track']>0
+   ))continue;
+   const nominal=params[parameterKey];
+   const limits=VEHICLE_PARAMETER_LIMITS[parameterKey];
+   if(!Number.isFinite(nominal)||!limits){
+    throw new Error(uncertaintyKey+': отсутствует корректное номинальное значение '+parameterKey+'.');
+   }
+   if(VEHICLE_PARAMETER_UNCERTAINTY_REQUIRES_MEASURED_NOMINAL.has(parameterKey)&&nominal<=0){
+    throw new Error(uncertaintyKey+': сначала задайте положительное измеренное значение '+parameterKey+'.');
+   }
+   const min=Math.max(limits.min,nominal-uncertainty);
+   const max=Math.min(limits.max,nominal+uncertainty);
+   if(min>nominal+1e-12||max<nominal-1e-12||min>max){
+    throw new Error(uncertaintyKey+': диапазон не содержит номинальное значение '+parameterKey+'.');
+   }
+   bounds[parameterKey]={min,max};
+  }
+  return bounds;
+ }
+
  function trailerAxleTireCenterSpacings(params){
   return [1,2,3].map(index=>{
    const value=params&&params['trailerAxle'+index+'TireCenterSpacing'];
