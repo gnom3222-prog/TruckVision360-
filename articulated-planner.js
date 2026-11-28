@@ -1963,7 +1963,14 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    ),
    selectedCandidate:comparison.bestCandidate.index,
    candidatesFound:candidates.length,candidatesAttempted:candidateCount,
-   candidateSummaries,failures,
+   candidateSummaries,
+   candidateRoutes:candidates.map((candidate,index)=>({
+    index,label:candidate.label,cost:candidate.cost,
+    states:candidate.states,metrics:candidate.score,
+    trajectoryClearance:candidate.route.trajectoryClearance,
+    recommendation:candidate.recommendation
+   })),
+   failures,
    expanded
   };
  }
@@ -2062,6 +2069,151 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    firstTurnDistanceTolerance,clearanceEvidence
   };
  }
+ function compareCandidateRecommendationAcrossPoseScenarios(candidates,options={}){
+  const costTolerance=options.costTolerance===undefined?0.25:options.costTolerance;
+  const firstTurnDistanceTolerance=options.firstTurnDistanceTolerance===undefined?0.25:options.firstTurnDistanceTolerance;
+  const base={
+   ok:false,status:'not-assessed',stable:false,recommendation:null,
+   scenarioCount:17,candidatesCompared:Array.isArray(candidates)?candidates.length:0,
+   costTolerance,firstTurnDistanceTolerance,
+   scenarioWinners:[],changedScenarios:[],ambiguousScenarios:[]
+  };
+  if(!Array.isArray(candidates)||candidates.length===0)return {...base,reason:'no-candidates'};
+  if(!Number.isFinite(costTolerance)||costTolerance<0||
+     !Number.isFinite(firstTurnDistanceTolerance)||firstTurnDistanceTolerance<0){
+   return {...base,reason:'invalid-comparison-tolerance'};
+  }
+  const records=[];
+  for(let index=0;index<candidates.length;index++){
+   const candidate=candidates[index];
+   const sensitivity=candidate&&candidate.initialPoseSensitivity;
+   const scenarios=sensitivity&&sensitivity.scenarioResults;
+   const metrics=candidate&&(candidate.metrics||candidate.score);
+   const recommendation=candidate&&(
+    recommendationAction({ok:true,recommendation:candidate.recommendation})||
+    (Array.isArray(candidate.states)?recommendStart(candidate.states):null)
+   );
+   if(!candidate||!Array.isArray(scenarios)||scenarios.length!==17||
+      !metrics||!Number.isFinite(metrics.pathLength)||metrics.pathLength<0||
+      !Number.isFinite(metrics.gearChanges)||metrics.gearChanges<0||
+      !Number.isFinite(sensitivity.requiredClearance)||sensitivity.requiredClearance<0||
+      !recommendation||![-1,1].includes(recommendation.initialGear)){
+    return {...base,reason:'candidate-pose-evidence-incomplete',candidateIndex:index};
+   }
+   records.push({
+    index,label:typeof candidate.label==='string'&&candidate.label?candidate.label:'вариант '+(index+1),
+    metrics,requiredClearance:sensitivity.requiredClearance,
+    recommendation,scenarios
+   });
+  }
+  const scenarioNames=records[0].scenarios.map(scenario=>scenario&&scenario.name);
+  if(scenarioNames.length!==17||scenarioNames[0]!=='nominal'||
+     scenarioNames.some(name=>typeof name!=='string'||!name)){
+   return {...base,reason:'invalid-pose-scenario-sequence'};
+  }
+  for(const record of records){
+   if(record.scenarios.some((scenario,index)=>!scenario||scenario.name!==scenarioNames[index])){
+    return {...base,reason:'inconsistent-pose-scenario-sequence',candidateIndex:record.index};
+   }
+  }
+  const sameAction=(a,b)=>{
+   if(a.initialGear!==b.initialGear||
+      a.firstTurn!==b.firstTurn||
+      a.firstTurnGear!==b.firstTurnGear||
+      a.tractorYawDirection!==b.tractorYawDirection||
+      a.firstTurnAfterGearChange!==b.firstTurnAfterGearChange)return false;
+   const da=Number.isFinite(a.firstTurnDistance)?a.firstTurnDistance:null;
+   const db=Number.isFinite(b.firstTurnDistance)?b.firstTurnDistance:null;
+   return da===null||db===null?da===db:Math.abs(da-db)<=firstTurnDistanceTolerance+1e-9;
+  };
+  const scenarioWinners=[],ambiguousScenarios=[];
+  for(let scenarioIndex=0;scenarioIndex<17;scenarioIndex++){
+   const ranked=[];
+   for(const record of records){
+    const scenario=record.scenarios[scenarioIndex];
+    const wheelStatus=scenario.wheelClearanceStatus;
+    if(scenario.clearancePassed!==true||scenario.goalReached!==true||
+       (wheelStatus!=='complete'&&wheelStatus!=='skipped-no-obstacles'))continue;
+    const clearance=scenario.minimumClearanceLowerBound;
+    const articulation=scenario.maximumArticulationDegrees;
+    if((!Number.isFinite(clearance)&&clearance!==Infinity)||
+       !Number.isFinite(articulation)||articulation<0){
+     return {...base,reason:'invalid-scenario-score-evidence',candidateIndex:record.index,scenario:scenarioNames[scenarioIndex]};
+    }
+    const clearancePenalty=clearance===Infinity?0:
+     0.20/Math.max(0.05,clearance-record.requiredClearance+0.05);
+    const gearChangePenalty=record.metrics.gearChanges*0.75;
+    const articulationPenalty=Math.max(0,articulation-20)*0.02;
+    const cost=record.metrics.pathLength+gearChangePenalty+articulationPenalty+clearancePenalty;
+    if(!Number.isFinite(cost))return {...base,reason:'non-finite-scenario-score',candidateIndex:record.index,scenario:scenarioNames[scenarioIndex]};
+    ranked.push({
+     candidateIndex:record.index,label:record.label,cost,
+     action:record.recommendation,
+     minimumClearanceLowerBound:clearance,
+     maximumArticulationDegrees:articulation
+    });
+   }
+   if(!ranked.length){
+    return {
+     ...base,status:'no-feasible-candidate-in-pose-scenario',
+     reason:'no-feasible-candidate-in-pose-scenario',
+     failedScenario:scenarioNames[scenarioIndex],
+     scenarioWinners
+    };
+   }
+   ranked.sort((a,b)=>a.cost-b.cost||a.candidateIndex-b.candidateIndex);
+   const best=ranked[0];
+   const comparable=ranked.slice(1).filter(item=>item.cost-best.cost<=costTolerance+1e-12);
+   const differing=comparable.filter(item=>!sameAction(best.action,item.action));
+   if(differing.length){
+    ambiguousScenarios.push({
+     scenario:scenarioNames[scenarioIndex],best,
+     comparableAlternatives:differing
+    });
+   }
+   scenarioWinners.push({
+    scenario:scenarioNames[scenarioIndex],candidateIndex:best.candidateIndex,
+    label:best.label,cost:best.cost,action:best.action,
+    minimumClearanceLowerBound:best.minimumClearanceLowerBound,
+    maximumArticulationDegrees:best.maximumArticulationDegrees,
+    comparableDifferentActions:differing.length
+   });
+  }
+  const nominal=scenarioWinners[0];
+  const changedScenarios=scenarioWinners.slice(1).filter(item=>!sameAction(nominal.action,item.action)).map(item=>({
+   scenario:item.scenario,nominalAction:nominal.action,scenarioAction:item.action,
+   nominalCandidateIndex:nominal.candidateIndex,scenarioCandidateIndex:item.candidateIndex
+  }));
+  if(ambiguousScenarios.length){
+   return {
+    ...base,ok:true,status:'ambiguous',stable:false,recommendation:null,
+    nominalAction:nominal.action,scenarioWinners,ambiguousScenarios,changedScenarios,
+    note:'В одном или нескольких сценариях близкие по эвристическому баллу фиксированные варианты имеют разные первые действия; однозначная рекомендация не выдаётся.'
+   };
+  }
+  if(changedScenarios.length){
+   return {
+    ...base,ok:true,status:'changed',stable:false,recommendation:null,
+    nominalAction:nominal.action,scenarioWinners,changedScenarios,
+    note:'Лучшее первое действие среди проверенных фиксированных вариантов меняется между сценариями исходной позы; однозначная рекомендация не выдаётся.'
+   };
+  }
+  if(records.length===1){
+   return {
+    ...base,ok:true,status:'single-candidate-unverified',stable:null,
+    recommendation:nominal.action,nominalAction:nominal.action,
+    scenarioWinners,
+    note:'Найден только один допустимый фиксированный вариант. Его действие проходит выбранные сценарии, но сравнение с альтернативными действиями не подтверждено.'
+   };
+  }
+  return {
+   ...base,ok:true,status:'stable',stable:true,
+   recommendation:nominal.action,nominalAction:nominal.action,
+   scenarioWinners,
+   note:'Одно и то же первое действие выигрывает во всех 17 сценариях среди найденных фиксированных кандидатов. Это ограниченное сравнение эвристических баллов, не глобальная оптимальность и не повторная оптимизация.'
+  };
+ }
+
  function planAlternativesWithReserve(options={}){
   const inputErrors=validatePlanOptions(options);
   if(inputErrors.length)return {ok:false,reason:'invalid-input',errors:inputErrors,expanded:0};
@@ -2973,5 +3125,5 @@ function analyzeInitialPoseUncertainty(states,obstacles,params,uncertainty,integ
  };
 }
 
-return Object.freeze({analyzeInitialPoseUncertainty,plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,parameterEndpointVectors,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,routeSegmentDistance,articulationExposure,recommendStart,nextGearTransitionBoundary,compareStartCandidates,explainStartActionComparison,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon,inflateObstaclePoseUncertainty});
+return Object.freeze({analyzeInitialPoseUncertainty,plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,parameterEndpointVectors,compareRecommendationSensitivity,compareCandidateRecommendationAcrossPoseScenarios,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,routeSegmentDistance,articulationExposure,recommendStart,nextGearTransitionBoundary,compareStartCandidates,explainStartActionComparison,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon,inflateObstaclePoseUncertainty});
 });
