@@ -548,54 +548,7 @@ function readSettings(){
 }
 
 function vehicleParameterBoundsFromSettings(){
- const mapping={
-  wheelbaseUncertainty:'wheelbase',
-  hitchOffsetUncertainty:'hitchOffset',
-  kingpinAxlesUncertainty:'kingpinAxles',
-  trailerLengthUncertainty:'trailerLength',
-  trailerKingpinToFrontUncertainty:'trailerKingpinToFront',
-  trailerWidthUncertainty:'trailerWidth',
-  trailerAxleSpacingUncertainty:'trailerAxleSpacing',
-  trailerAxleSpacing12Uncertainty:'trailerAxleSpacing12',
-  trailerAxleSpacing23Uncertainty:'trailerAxleSpacing23',
-  trailerAxle1TrackUncertainty:'trailerAxle1Track',
-  trailerAxle2TrackUncertainty:'trailerAxle2Track',
-  trailerAxle3TrackUncertainty:'trailerAxle3Track',
-  tractorSteeringTrackUncertainty:'tractorSteeringTrack',
-  tractorFrontTrackUncertainty:'tractorFrontTrack',
-  tractorRearTrackUncertainty:'tractorRearTrack',
-  trailerTrackUncertainty:'trailerTrack',
-  tractorRearTireGroupWidthUncertainty:'tractorRearTireGroupWidth',
-  trailerTireGroupWidthUncertainty:'trailerTireGroupWidth',
-  trailerAxle1TireGroupWidthUncertainty:'trailerAxle1TireGroupWidth',
-  trailerAxle2TireGroupWidthUncertainty:'trailerAxle2TireGroupWidth',
-  trailerAxle3TireGroupWidthUncertainty:'trailerAxle3TireGroupWidth',
-  tractorRearTireCenterSpacingUncertainty:'tractorRearTireCenterSpacing',
-  trailerAxle1TireCenterSpacingUncertainty:'trailerAxle1TireCenterSpacing',
-  trailerAxle2TireCenterSpacingUncertainty:'trailerAxle2TireCenterSpacing',
-  trailerAxle3TireCenterSpacingUncertainty:'trailerAxle3TireCenterSpacing',
-  tireLengthUncertainty:'tireLength',
-  tireWidthUncertainty:'tireWidth',
-  cabOffsetUncertainty:'cabOffset',
-  cabFrontUncertainty:'cabFront',
-  cabRearUncertainty:'cabRear',
-  cabWidthUncertainty:'cabWidth',
-  mirrorOutboardUncertainty:'mirrorOutboard',
-  mirrorLongitudinalUncertainty:'mirrorLongitudinal',
-  mirrorLengthUncertainty:'mirrorLength'
- };
- const bounds={};
- for(const [uncertaintyKey,parameterKey] of Object.entries(mapping)){
-  const uncertainty=cfg[uncertaintyKey];
-  if(uncertainty>0){
-   const limits=physics.VEHICLE_PARAMETER_LIMITS[parameterKey];
-   bounds[parameterKey]={
-    min:limits?Math.max(limits.min,cfg[parameterKey]-uncertainty):cfg[parameterKey]-uncertainty,
-    max:limits?Math.min(limits.max,cfg[parameterKey]+uncertainty):cfg[parameterKey]+uncertainty
-   };
-  }
- }
- return bounds;
+ return physics.vehicleParameterBoundsFromUncertainties(cfg);
 }
 
 function invalidateRouteForSettingsChange(){
@@ -1572,7 +1525,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261128-9');
+   worker=new Worker('./planner-worker.js?v=20261128-10');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
