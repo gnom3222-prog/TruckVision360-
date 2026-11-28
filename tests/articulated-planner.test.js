@@ -3060,3 +3060,23 @@ test('start-action evidence rejects score components that share an unreported co
  assert.equal(result.ok,false);
  assert.equal(result.reason,'score-breakdown-mismatch');
 });
+test('swept-clearance diagnostics reject incomplete trailer axle geometry instead of assuming a nominal spacing',()=>{
+ const incomplete={
+  ...params,
+  trailerAxleSpacing:undefined,
+  trailerAxleSpacing12:1.1,
+  trailerAxleSpacing23:undefined
+ };
+ assert.throws(
+  ()=>planner.sweptDisplacementRatesPerMeter(0,incomplete),
+  /Vehicle geometry is incomplete or invalid for swept-clearance checking/
+ );
+ const route=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
+  {x:0.05,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0.05}
+ ];
+ assert.throws(
+  ()=>planner.analyzeWheelTrajectoryClearance(route,[],incomplete),
+  /incomplete|invalid|шаги трёхосной тележки/i
+ );
+});
