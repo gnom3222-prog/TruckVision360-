@@ -486,13 +486,16 @@ function readSettings(){
    'tractorRearTireCenterSpacing','trailerAxle1TireCenterSpacing',
    'trailerAxle2TireCenterSpacing','trailerAxle3TireCenterSpacing'
   ]);
+  if(parameterKey==='trailerAxleSpacing'&&candidate.trailerAxleSpacing12>0&&candidate.trailerAxleSpacing23>0)continue;
+  if(parameterKey==='trailerTrack'&&[1,2,3].every(index=>
+     Number.isFinite(candidate['trailerAxle'+index+'Track'])&&candidate['trailerAxle'+index+'Track']>0
+  ))continue;
   if(fallbackOnlyParameters.has(parameterKey)&&candidate[parameterKey]===0){
    errors.push(uncertaintyKey+': сначала задайте индивидуальное измеренное значение '+parameterKey+'.');
    continue;
   }
-  const dimensionLimits=physics.VEHICLE_PARAMETER_LIMITS[parameterKey];
-  const lower=dimensionLimits?Math.max(dimensionLimits.min,candidate[parameterKey]-uncertainty):candidate[parameterKey]-uncertainty;
-  const upper=dimensionLimits?Math.min(dimensionLimits.max,candidate[parameterKey]+uncertainty):candidate[parameterKey]+uncertainty;
+  const lower=candidate[parameterKey]-uncertainty;
+  const upper=candidate[parameterKey]+uncertainty;
   for(const endpoint of [lower,upper]){
    const endpointErrors=physics.validateVehicleParams({...candidate,[parameterKey]:endpoint});
    endpointErrors.forEach(message=>errors.push(uncertaintyKey+': крайнее значение '+parameterKey+'='+endpoint.toFixed(3)+' м: '+message));
@@ -1487,7 +1490,7 @@ function runPlannerWorker(options,onProgress){
   };
   const cancel=reason=>finish(new Error(reason));
   try{
-   worker=new Worker('./planner-worker.js?v=20261128-10');
+   worker=new Worker('./planner-worker.js?v=20261128-11');
    plannerWorker=worker;
    plannerReject=cancel;
    timeout=setTimeout(()=>finish(new Error('Фоновый расчёт превысил 90 секунд и был остановлен. Попробуйте более близкую конечную точку.')),90000);
