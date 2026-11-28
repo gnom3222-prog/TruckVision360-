@@ -3080,3 +3080,44 @@ test('swept-clearance diagnostics reject incomplete trailer axle geometry instea
   /incomplete|invalid|шаги трёхосной тележки/i
  );
 });
+
+
+test('per-wheel swept clearance reports axle-spacing uncertainty and uses the shared bounds',()=>{
+ const route=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
+  {x:0.05,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0.05}
+ ];
+ const incomplete=planner.analyzeWheelTrajectoryClearance(route,[],params);
+ assert.equal(incomplete.axleSpacingUncertaintyStatus,'incomplete');
+ assert.equal(incomplete.minimumClearanceLowerBoundCompleteForAxleSpacing,false);
+ assert.match(incomplete.minimumClearanceLowerBoundScope,/nominal outer-axle positions/);
+ const calibrated={
+  ...params,
+  trailerAxleSpacing:0,
+  trailerAxleSpacing12:0.8,
+  trailerAxleSpacing23:1.6,
+  trailerAxleSpacing12Uncertainty:0.02,
+  trailerAxleSpacing23Uncertainty:0.05
+ };
+ const complete=planner.analyzeWheelTrajectoryClearance(route,[],calibrated);
+ assert.equal(complete.axleSpacingUncertaintyStatus,'complete');
+ assert.equal(complete.minimumClearanceLowerBoundCompleteForAxleSpacing,true);
+ assert.deepEqual(complete.axleSpacingUncertaintyByAxle,[
+  {axleIndex:1,bound:0.02,source:'individual-spacing'},
+  {axleIndex:2,bound:0,source:'equivalent-center'},
+  {axleIndex:3,bound:0.05,source:'individual-spacing'}
+ ]);
+ const firstWheel=complete.wheels.find(wheel=>
+  wheel.vehiclePart==='полуприцеп'&&wheel.axleIndex===1
+ );
+ const thirdWheel=complete.wheels.find(wheel=>
+  wheel.vehiclePart==='полуприцеп'&&wheel.axleIndex===3
+ );
+ assert.equal(firstWheel.axleSpacingUncertaintyBound,0.02);
+ assert.equal(firstWheel.axleSpacingUncertaintyStatus,'bounded');
+ assert.equal(thirdWheel.axleSpacingUncertaintyBound,0.05);
+ assert.equal(thirdWheel.axleSpacingUncertaintyStatus,'bounded');
+ const rates=planner.sweptDisplacementRatesPerMeter(0,calibrated);
+ assert.equal(rates.axleSpacingUncertaintyStatus,'complete');
+ assert.deepEqual(rates.axlePositionUncertaintyBounds,[0.02,0,0.05]);
+});
