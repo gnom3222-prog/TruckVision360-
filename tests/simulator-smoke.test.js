@@ -362,7 +362,7 @@ test('kinematic uncertainty settings include Ackermann, axle tracks and tire dim
  const uiSource=fs.readFileSync(path.join(__dirname,'..','truckvision.js'),'utf8');
  const physicsSource=fs.readFileSync(path.join(__dirname,'..','vehicle-physics.js'),'utf8');
  assert.match(uiSource,/const parameterUncertaintyMap=physics\.VEHICLE_PARAMETER_UNCERTAINTY_MAP/);
- assert.match(uiSource,/return physics\\.vehicleParameterBoundsFromUncertainties\(cfg\)/);
+ assert.match(uiSource,/return physics\.vehicleParameterBoundsFromUncertainties\(cfg\)/);
  for(const mapping of [
   /trailerAxleSpacingUncertainty:'trailerAxleSpacing'/,
   /trailerAxleSpacing12Uncertainty:'trailerAxleSpacing12'/,
