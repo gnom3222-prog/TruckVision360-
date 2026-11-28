@@ -82,7 +82,7 @@ test('planner worker fails closed when candidate pose replay exceeds its configu
    maxExpansions:5000,
    minClearance:0.3,
    measurementUncertainty:0.1,
-   maxCandidatePoseReplayStates:1000
+   maxCandidatePoseReplayStates:1
   }
  }});
  const resultMessage=messages.find(m=>m.id===18&&m.type==='result');
