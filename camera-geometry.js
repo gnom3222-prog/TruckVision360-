@@ -359,10 +359,10 @@
    );
   }
   const sigmaWidth=Math.sqrt(varianceWidth),sigmaHeight=Math.sqrt(varianceHeight);
-  const nonlinearSensitivityAvailable=nonlinearSensitivityFailure===null&&nonlinearSensitivityChecks>0;
-  const nonlinearSigmaWidth=nonlinearSensitivityAvailable?Math.sqrt(finiteVarianceWidth):null;
-  const nonlinearSigmaHeight=nonlinearSensitivityAvailable?Math.sqrt(finiteVarianceHeight):null;
-  const maxAxisAsymmetryRatio=nonlinearSensitivityAvailable?Math.max(
+  const axiswiseSensitivityAvailable=nonlinearSensitivityFailure===null&&nonlinearSensitivityChecks>0;
+  const nonlinearSigmaWidth=axiswiseSensitivityAvailable?Math.sqrt(finiteVarianceWidth):null;
+  const nonlinearSigmaHeight=axiswiseSensitivityAvailable?Math.sqrt(finiteVarianceHeight):null;
+  const maxAxisAsymmetryRatio=axiswiseSensitivityAvailable?Math.max(
    maxAxisEvenShiftWidth/Math.max(sigmaWidth,nonlinearSigmaWidth,1e-9),
    maxAxisEvenShiftHeight/Math.max(sigmaHeight,nonlinearSigmaHeight,1e-9)
   ):null;
@@ -370,29 +370,114 @@
    if(!Number.isFinite(finite))return Infinity;
    return Math.abs(finite-linearized)/Math.max(Math.abs(finite),Math.abs(linearized),1e-9);
   };
-  const nonlinearSigmaRatioWidth=nonlinearSensitivityAvailable?
+  const nonlinearSigmaRatioWidth=axiswiseSensitivityAvailable?
    (sigmaWidth>1e-12?nonlinearSigmaWidth/sigmaWidth:(nonlinearSigmaWidth<=1e-12?1:Infinity)):null;
-  const nonlinearSigmaRatioHeight=nonlinearSensitivityAvailable?
+  const nonlinearSigmaRatioHeight=axiswiseSensitivityAvailable?
    (sigmaHeight>1e-12?nonlinearSigmaHeight/sigmaHeight:(nonlinearSigmaHeight<=1e-12?1:Infinity)):null;
-  const nonlinearMismatchWidth=nonlinearSensitivityAvailable?relativeMismatch(sigmaWidth,nonlinearSigmaWidth):null;
-  const nonlinearMismatchHeight=nonlinearSensitivityAvailable?relativeMismatch(sigmaHeight,nonlinearSigmaHeight):null;
+  const nonlinearMismatchWidth=axiswiseSensitivityAvailable?relativeMismatch(sigmaWidth,nonlinearSigmaWidth):null;
+  const nonlinearMismatchHeight=axiswiseSensitivityAvailable?relativeMismatch(sigmaHeight,nonlinearSigmaHeight):null;
+
+  // Screen interactions between independent ±1σ inputs with a deterministic
+  // pairwise covering array. The 32 rows cover all four sign combinations for
+  // every pair of the 18 input dimensions; an additional all-high row is a
+  // stress case. This is not Monte Carlo, a confidence interval, or a bound.
+  const jointInputs=[];
+  for(let i=0;i<4;i++)for(const axis of ['x','y']){
+   jointInputs.push({kind:'reference-point',index:i,axis,sigma:sigmaPixels});
+  }
+  for(let i=0;i<4;i++)for(const axis of ['x','y']){
+   jointInputs.push({kind:'measured-point',index:i,axis,sigma:sigmaPixels});
+  }
+  jointInputs.push(
+   {kind:'reference-width',sigma:sigmaReferenceWidth},
+   {kind:'reference-height',sigma:sigmaReferenceHeight}
+  );
+  const jointParity=value=>{
+   let result=0;
+   for(let n=value;n;n>>=1)result^=n&1;
+   return result;
+  };
+  const jointMasks=Array.from({length:31},(_,index)=>index+1).slice(0,jointInputs.length);
+  const jointRows=Array.from({length:32},(_,row)=>
+   jointMasks.map(mask=>jointParity(row&mask))
+  );
+  const allHigh=Array(jointInputs.length).fill(1);
+  if(!jointRows.some(row=>row.every((value,index)=>value===allHigh[index])))jointRows.push(allHigh);
+  let jointSquaredWidth=0,jointSquaredHeight=0;
+  let jointMaxAbsDeviationWidth=0,jointMaxAbsDeviationHeight=0;
+  let jointSensitivityChecks=0,jointSensitivityFailure=null;
+  for(let rowIndex=0;rowIndex<jointRows.length;rowIndex++){
+   const row=jointRows[rowIndex];
+   const perturbedReference=referencePoints.map(point=>({...point}));
+   const perturbedMeasured=measuredPoints.map(point=>({...point}));
+   let perturbedReferenceWidth=referenceWidth,perturbedReferenceHeight=referenceHeight;
+   for(let inputIndex=0;inputIndex<jointInputs.length;inputIndex++){
+    const input=jointInputs[inputIndex];
+    const delta=(row[inputIndex]?1:-1)*input.sigma;
+    if(input.kind==='reference-point')perturbedReference[input.index][input.axis]+=delta;
+    else if(input.kind==='measured-point')perturbedMeasured[input.index][input.axis]+=delta;
+    else if(input.kind==='reference-width')perturbedReferenceWidth+=delta;
+    else if(input.kind==='reference-height')perturbedReferenceHeight+=delta;
+   }
+   try{
+    const perturbed=measureQuad(
+     perturbedReference,perturbedReferenceWidth,perturbedReferenceHeight,perturbedMeasured
+    );
+    const widthDelta=perturbed.width-base.width;
+    const heightDelta=perturbed.height-base.height;
+    if(rowIndex<32){
+     jointSquaredWidth+=widthDelta*widthDelta;
+     jointSquaredHeight+=heightDelta*heightDelta;
+    }
+    jointMaxAbsDeviationWidth=Math.max(jointMaxAbsDeviationWidth,Math.abs(widthDelta));
+    jointMaxAbsDeviationHeight=Math.max(jointMaxAbsDeviationHeight,Math.abs(heightDelta));
+    jointSensitivityChecks++;
+   }catch(error){
+    jointSensitivityFailure=error&&error.message?error.message:'joint-sigma-perturbation-invalid';
+    break;
+   }
+  }
+  const jointSensitivityAvailable=jointSensitivityFailure===null&&jointSensitivityChecks===jointRows.length;
+  const jointRmsDeviationWidth=jointSensitivityAvailable?Math.sqrt(jointSquaredWidth/32):null;
+  const jointRmsDeviationHeight=jointSensitivityAvailable?Math.sqrt(jointSquaredHeight/32):null;
+  const jointMismatchWidth=jointSensitivityAvailable&&axiswiseSensitivityAvailable?
+   relativeMismatch(nonlinearSigmaWidth,jointRmsDeviationWidth):null;
+  const jointMismatchHeight=jointSensitivityAvailable&&axiswiseSensitivityAvailable?
+   relativeMismatch(nonlinearSigmaHeight,jointRmsDeviationHeight):null;
+  const nonlinearSensitivityAvailable=axiswiseSensitivityAvailable&&jointSensitivityAvailable;
   const nonlinearWarningReasons=[];
-  if(!nonlinearSensitivityAvailable)nonlinearWarningReasons.push('finite-perturbation-unavailable');
-  if(nonlinearSensitivityAvailable&&Math.max(nonlinearMismatchWidth,nonlinearMismatchHeight)>NONLINEAR_UNCERTAINTY_WARNING_RATIO){
+  if(!axiswiseSensitivityAvailable)nonlinearWarningReasons.push('finite-perturbation-unavailable');
+  if(!jointSensitivityAvailable)nonlinearWarningReasons.push('joint-sigma-perturbation-unavailable');
+  if(axiswiseSensitivityAvailable&&Math.max(nonlinearMismatchWidth,nonlinearMismatchHeight)>NONLINEAR_UNCERTAINTY_WARNING_RATIO){
    nonlinearWarningReasons.push('linearized-and-finite-sensitivity-disagree');
   }
-  if(nonlinearSensitivityAvailable&&maxAxisAsymmetryRatio>NONLINEAR_UNCERTAINTY_WARNING_RATIO){
+  if(axiswiseSensitivityAvailable&&maxAxisAsymmetryRatio>NONLINEAR_UNCERTAINTY_WARNING_RATIO){
    nonlinearWarningReasons.push('asymmetric-one-sigma-response');
+  }
+  if(jointSensitivityAvailable&&axiswiseSensitivityAvailable&&
+     Math.max(jointMismatchWidth,jointMismatchHeight)>NONLINEAR_UNCERTAINTY_WARNING_RATIO){
+   nonlinearWarningReasons.push('joint-and-axiswise-sensitivity-disagree');
   }
   return {
    ...base,
    sigmaWidth,
    sigmaHeight,
    uncertaintyModel:'linearized-independent-coordinate-errors',
-   nonlinearSensitivityModel:'axiswise-one-sigma-finite-perturbations',
+   nonlinearSensitivityModel:'axiswise-one-sigma-finite-perturbations+pairwise-joint-screen',
    nonlinearSensitivityAvailable,
    nonlinearSensitivityChecks,
    nonlinearSensitivityFailure,
+   axiswiseSensitivityAvailable,
+   jointSensitivityModel:'32-row-pairwise-independent-±1σ-plus-all-high-stress-case',
+   jointSensitivityAvailable,
+   jointSensitivityChecks,
+   jointSensitivityFailure,
+   jointRmsDeviationWidth,
+   jointRmsDeviationHeight,
+   jointMaxAbsDeviationWidth:jointSensitivityAvailable?jointMaxAbsDeviationWidth:null,
+   jointMaxAbsDeviationHeight:jointSensitivityAvailable?jointMaxAbsDeviationHeight:null,
+   jointMismatchWidth,
+   jointMismatchHeight,
    nonlinearSigmaWidth,
    nonlinearSigmaHeight,
    nonlinearSigmaRatioWidth,
@@ -522,7 +607,24 @@
   }
   const clearWidth=repeatability.meanWidth;
   const clearHeight=repeatability.meanHeight;
-  if(measurement.nonlinearSensitivityAvailable!==true||measurement.nonlinearWarning===true){
+  const jointScreenValues=[
+   measurement.jointRmsDeviationWidth,
+   measurement.jointRmsDeviationHeight,
+   measurement.jointMaxAbsDeviationWidth,
+   measurement.jointMaxAbsDeviationHeight,
+   measurement.jointMismatchWidth,
+   measurement.jointMismatchHeight
+  ];
+  const jointScreenMetricsValid=jointScreenValues.every(value=>Number.isFinite(value)&&value>=0)&&
+   measurement.jointMaxAbsDeviationWidth+1e-9>=measurement.jointRmsDeviationWidth&&
+   measurement.jointMaxAbsDeviationHeight+1e-9>=measurement.jointRmsDeviationHeight&&
+   measurement.jointMismatchWidth<=NONLINEAR_UNCERTAINTY_WARNING_RATIO&&
+   measurement.jointMismatchHeight<=NONLINEAR_UNCERTAINTY_WARNING_RATIO;
+  if(measurement.nonlinearSensitivityAvailable!==true||measurement.nonlinearWarning===true||
+     measurement.jointSensitivityAvailable!==true||measurement.jointSensitivityChecks!==33||
+     measurement.jointSensitivityFailure!==null||
+     measurement.jointSensitivityModel!=='32-row-pairwise-independent-±1σ-plus-all-high-stress-case'||
+     !jointScreenMetricsValid){
    throw new Error('Нелинейная проверка неопределённости не пройдена. Повторите калибровку с более крупным эталоном и устойчивым ракурсом; измерение нельзя переносить на карту.');
   }
   const widthUncertaintyBound=repeatability.widthEnvelopeBound;
@@ -577,6 +679,16 @@
    nonlinearSensitivityModel:measurement.nonlinearSensitivityModel,
    nonlinearMismatchWidth:measurement.nonlinearMismatchWidth,
    maxAxisAsymmetryRatio:measurement.maxAxisAsymmetryRatio,
+   jointSensitivityModel:measurement.jointSensitivityModel,
+   jointSensitivityAvailable:measurement.jointSensitivityAvailable,
+   jointSensitivityChecks:measurement.jointSensitivityChecks,
+   jointSensitivityFailure:measurement.jointSensitivityFailure,
+   jointRmsDeviationWidth:measurement.jointRmsDeviationWidth,
+   jointRmsDeviationHeight:measurement.jointRmsDeviationHeight,
+   jointMaxAbsDeviationWidth:measurement.jointMaxAbsDeviationWidth,
+   jointMaxAbsDeviationHeight:measurement.jointMaxAbsDeviationHeight,
+   jointMismatchWidth:measurement.jointMismatchWidth,
+   jointMismatchHeight:measurement.jointMismatchHeight,
    openingStart:{x:anchor.x-half*ux,y:anchor.y-half*uy},
    openingEnd:{x:anchor.x+half*ux,y:anchor.y+half*uy},
    sourceAxisLength,

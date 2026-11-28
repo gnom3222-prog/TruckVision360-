@@ -62,7 +62,7 @@ function makeHarness(options={}){
  const geometry={
   validQuad(){return true;},
   homography(){return [1,0,0,0,1,0,0,0];},
-  estimateUncertainty({measuredPoints}){return {width:4,height:2,points:measuredPoints.map(p=>({...p})),sigmaWidth:0.01,sigmaHeight:0.02,conditioningWarning:false,shapeWarning:false,nonlinearSensitivityAvailable:options.nonlinearSensitivityAvailable??true,nonlinearWarning:options.nonlinearWarning??false,nonlinearMismatchWidth:0.01,maxAxisAsymmetryRatio:0.02,shapeDiagnostics:{widthSpreadRatio:0,heightSpreadRatio:0,maxOrthogonalityErrorDeg:0,diagonalSpreadRatio:0}};},
+  estimateUncertainty({measuredPoints}){return {width:4,height:2,points:measuredPoints.map(p=>({...p})),sigmaWidth:0.01,sigmaHeight:0.02,conditioningWarning:false,shapeWarning:false,nonlinearSensitivityAvailable:options.nonlinearSensitivityAvailable??true,nonlinearWarning:options.nonlinearWarning??false,nonlinearMismatchWidth:0.01,maxAxisAsymmetryRatio:0.02,jointSensitivityAvailable:options.jointSensitivityAvailable??true,jointSensitivityChecks:options.jointSensitivityChecks??33,jointSensitivityModel:'32-row-pairwise-independent-±1σ-plus-all-high-stress-case',jointSensitivityFailure:null,jointRmsDeviationWidth:0.01,jointRmsDeviationHeight:0.02,jointMaxAbsDeviationWidth:0.02,jointMaxAbsDeviationHeight:0.04,jointMismatchWidth:0.01,jointMismatchHeight:0.01,shapeDiagnostics:{widthSpreadRatio:0,heightSpreadRatio:0,maxOrthogonalityErrorDeg:0,diagonalSpreadRatio:0}};},
   summarizeRepeatability(readings,options){
   const stats=key=>{const values=readings.map(r=>r[key]);const mean=values.reduce((a,b)=>a+b,0)/values.length;return{mean,range:Math.max(...values)-Math.min(...values),maxDeviation:Math.max(...values.map(v=>Math.abs(v-mean))),sampleStdDev:0};};
   const w=stats('width'),h=stats('height');
@@ -176,6 +176,31 @@ test('camera obstacle is not added when nonlinear uncertainty validation is unav
  assert.match(app.elements.cameraStatus.textContent,/Нелинейная проверка неопределённости не пройдена/);
 });
 
+
+test('gate measurement is not transferred when the joint uncertainty screen is unavailable',async()=>{
+ const app=makeHarness({jointSensitivityAvailable:false});
+ await app.elements.cameraStart.fire('click');
+ for(let index=0;index<3;index++){
+  if(index)app.elements.cameraReset.fire('click');
+  app.elements.cameraCalibrate.fire('click');
+  app.tapQuad();
+  app.elements.cameraMeasureGate.fire('click');
+  app.tapQuad();
+ }
+ assert.equal(app.registrationCalls,0);
+ assert.match(app.elements.gateResult.textContent,/Нелинейная проверка неопределённости не прошла/);
+});
+
+test('camera obstacle is not added when the joint uncertainty screen is incomplete',async()=>{
+ const app=makeHarness({jointSensitivityChecks:32});
+ await app.elements.cameraStart.fire('click');
+ app.elements.cameraCalibrate.fire('click');
+ app.tapQuad();
+ app.elements.cameraMeasureObstacle.fire('click');
+ app.tapQuad();
+ assert.equal(app.obstacleCalls,0);
+ assert.match(app.elements.cameraStatus.textContent,/Нелинейная проверка неопределённости не пройдена/);
+});
 
 test('a muted video track invalidates the frozen frame and requires recalibration after unmute',async()=>{
  const app=makeHarness();
