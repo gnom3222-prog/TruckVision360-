@@ -1906,14 +1906,15 @@ if(result.reason==='uncertainty-sensitive-start'){
     return;
    }
    const poseRecommendationNote=result.recommendationPoseSensitivity?.note||'';
-   const alternatives=(result.candidateSummaries||[]).map(candidate=>{
-    const gear=candidate.initialGear<0?'задний ход':'вперёд';
-    const steering=candidate.steeringWheelDirection??candidate.firstTurn;
+   const alternatives=alternativeRoutes.map(candidate=>{
+    const action=candidate.recommendation||planner.recommendStart(candidate.states);
+    const gear=action.initialGear<0?'задний ход':'вперёд';
+    const steering=action.steeringWheelDirection??action.firstTurn;
     const turn=steering==='left'?'руль влево':
      steering==='right'?'руль вправо':'без значимого поворота';
-    const yaw=candidate.tractorYawDirection==='left'?'курс тягача влево':
-     candidate.tractorYawDirection==='right'?'курс тягача вправо':'курс не определён';
-    return candidate.label+': '+gear+', '+turn+', '+yaw+', эвристический балл '+candidate.cost.toFixed(2);
+    const yaw=action.tractorYawDirection==='left'?'курс тягача влево':
+     action.tractorYawDirection==='right'?'курс тягача вправо':'курс не определён';
+    return candidate.label+': '+gear+', '+turn+', '+yaw+', эвристический балл '+Number(candidate.cost).toFixed(2);
    }).join('; ');
    const geometrySensitivity=result.geometrySensitivity||{};
    const gateUncertainty=geometrySensitivity.gateGeometryUncertainty;
