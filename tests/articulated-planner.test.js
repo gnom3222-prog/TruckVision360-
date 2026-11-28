@@ -3274,3 +3274,78 @@ test('initial pose uncertainty rejects routes without explicit integration dista
  assert.equal(result.status,'invalid-route');
  assert.equal(result.reason,'invalid-route-state');
 });
+
+
+function makePoseRecommendationCandidate(label,cost,action,scenarioMutator=()=>({})){
+ const scenarioNames=['nominal',...Array.from({length:16},(_,index)=>'corner-'+String(index+1).padStart(2,'0'))];
+ const scenarioResults=scenarioNames.map((name,index)=>({
+  name,clearancePassed:true,goalReached:true,
+  wheelClearanceStatus:'complete',
+  minimumClearanceLowerBound:1,
+  maximumArticulationDegrees:15,
+  ...scenarioMutator(name,index)
+ }));
+ return {
+  label,cost,metrics:{pathLength:cost,gearChanges:0},
+  recommendation:{
+   initialGear:1,firstTurn:action,steeringWheelDirection:action,
+   firstTurnGear:1,tractorYawDirection:action,
+   firstTurnAfterGearChange:false,firstTurnDistance:0.5
+  },
+  initialPoseSensitivity:{ok:true,requiredClearance:0.3,scenarioResults}
+ };
+}
+
+test('initial-pose recommendation comparison stays stable when the same first action wins all 17 scenarios',()=>{
+ const left=makePoseRecommendationCandidate('вперёд-влево',10,'left');
+ const right=makePoseRecommendationCandidate('вперёд-вправо',11,'right');
+ const result=planner.compareCandidateRecommendationAcrossPoseScenarios([left,right]);
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.status,'stable');
+ assert.equal(result.stable,true);
+ assert.equal(result.scenarioWinners.length,17);
+ assert.equal(result.recommendation.firstTurn,'left');
+ assert.deepEqual(result.changedScenarios,[]);
+});
+
+test('initial-pose recommendation comparison withholds a side when the best action changes at a pose corner',()=>{
+ const left=makePoseRecommendationCandidate('вперёд-влево',10,'left',(name)=>(
+  name==='corner-03'?{maximumArticulationDegrees:60}:{}
+ ));
+ const right=makePoseRecommendationCandidate('вперёд-вправо',10.5,'right');
+ const result=planner.compareCandidateRecommendationAcrossPoseScenarios([left,right]);
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.status,'changed');
+ assert.equal(result.stable,false);
+ assert.equal(result.recommendation,null);
+ assert.ok(result.changedScenarios.some(item=>item.scenario==='corner-03'));
+});
+
+test('initial-pose recommendation comparison reports near-equal opposite actions as ambiguous',()=>{
+ const left=makePoseRecommendationCandidate('вперёд-влево',10,'left');
+ const right=makePoseRecommendationCandidate('вперёд-вправо',10.1,'right');
+ const result=planner.compareCandidateRecommendationAcrossPoseScenarios([left,right],{costTolerance:0.25});
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.status,'ambiguous');
+ assert.equal(result.stable,false);
+ assert.equal(result.recommendation,null);
+ assert.equal(result.ambiguousScenarios.length,17);
+});
+
+test('initial-pose recommendation comparison labels a single feasible candidate as unverified against alternatives',()=>{
+ const only=makePoseRecommendationCandidate('единственный найденный вариант',10,'left');
+ const result=planner.compareCandidateRecommendationAcrossPoseScenarios([only]);
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.status,'single-candidate-unverified');
+ assert.equal(result.stable,null);
+ assert.equal(result.recommendation.firstTurn,'left');
+});
+
+test('initial-pose recommendation comparison fails closed when a candidate lacks one pose scenario',()=>{
+ const left=makePoseRecommendationCandidate('вперёд-влево',10,'left');
+ const right=makePoseRecommendationCandidate('вперёд-вправо',11,'right');
+ right.initialPoseSensitivity.scenarioResults.pop();
+ const result=planner.compareCandidateRecommendationAcrossPoseScenarios([left,right]);
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'candidate-pose-evidence-incomplete');
+});
