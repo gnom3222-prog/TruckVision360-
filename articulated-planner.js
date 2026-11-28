@@ -1849,6 +1849,7 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
   delete baseOptions.alternativeMaxExpansions;
   delete baseOptions.costTolerance;
   delete baseOptions.firstActionConstraint;
+  delete baseOptions.maxCandidatePoseReplayStates;
   const candidateCount=constraints.length+1;
   const candidates=[],failures=[];
   let expanded=0;
@@ -1963,7 +1964,14 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    ),
    selectedCandidate:comparison.bestCandidate.index,
    candidatesFound:candidates.length,candidatesAttempted:candidateCount,
-   candidateSummaries,failures,
+   candidateSummaries,
+   candidateRoutes:candidates.map((candidate,index)=>({
+    index,label:candidate.label,cost:candidate.cost,
+    states:candidate.states,metrics:candidate.score,
+    trajectoryClearance:candidate.route.trajectoryClearance,
+    recommendation:candidate.recommendation
+   })),
+   failures,
    expanded
   };
  }
@@ -2062,6 +2070,151 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    firstTurnDistanceTolerance,clearanceEvidence
   };
  }
+ function compareCandidateRecommendationAcrossPoseScenarios(candidates,options={}){
+  const costTolerance=options.costTolerance===undefined?0.25:options.costTolerance;
+  const firstTurnDistanceTolerance=options.firstTurnDistanceTolerance===undefined?0.25:options.firstTurnDistanceTolerance;
+  const base={
+   ok:false,status:'not-assessed',stable:false,recommendation:null,
+   scenarioCount:17,candidatesCompared:Array.isArray(candidates)?candidates.length:0,
+   costTolerance,firstTurnDistanceTolerance,
+   scenarioWinners:[],changedScenarios:[],ambiguousScenarios:[]
+  };
+  if(!Array.isArray(candidates)||candidates.length===0)return {...base,reason:'no-candidates'};
+  if(!Number.isFinite(costTolerance)||costTolerance<0||
+     !Number.isFinite(firstTurnDistanceTolerance)||firstTurnDistanceTolerance<0){
+   return {...base,reason:'invalid-comparison-tolerance'};
+  }
+  const records=[];
+  for(let index=0;index<candidates.length;index++){
+   const candidate=candidates[index];
+   const sensitivity=candidate&&candidate.initialPoseSensitivity;
+   const scenarios=sensitivity&&sensitivity.scenarioResults;
+   const metrics=candidate&&(candidate.metrics||candidate.score);
+   const recommendation=candidate&&(
+    recommendationAction({ok:true,recommendation:candidate.recommendation})||
+    (Array.isArray(candidate.states)?recommendStart(candidate.states):null)
+   );
+   if(!candidate||!Array.isArray(scenarios)||scenarios.length!==17||
+      !metrics||!Number.isFinite(metrics.pathLength)||metrics.pathLength<0||
+      !Number.isFinite(metrics.gearChanges)||metrics.gearChanges<0||
+      !Number.isFinite(sensitivity.requiredClearance)||sensitivity.requiredClearance<0||
+      !recommendation||![-1,1].includes(recommendation.initialGear)){
+    return {...base,reason:'candidate-pose-evidence-incomplete',candidateIndex:index};
+   }
+   records.push({
+    index,label:typeof candidate.label==='string'&&candidate.label?candidate.label:'вариант '+(index+1),
+    metrics,requiredClearance:sensitivity.requiredClearance,
+    recommendation,scenarios
+   });
+  }
+  const scenarioNames=records[0].scenarios.map(scenario=>scenario&&scenario.name);
+  if(scenarioNames.length!==17||scenarioNames[0]!=='nominal'||
+     scenarioNames.some(name=>typeof name!=='string'||!name)){
+   return {...base,reason:'invalid-pose-scenario-sequence'};
+  }
+  for(const record of records){
+   if(record.scenarios.some((scenario,index)=>!scenario||scenario.name!==scenarioNames[index])){
+    return {...base,reason:'inconsistent-pose-scenario-sequence',candidateIndex:record.index};
+   }
+  }
+  const sameAction=(a,b)=>{
+   if(a.initialGear!==b.initialGear||
+      a.firstTurn!==b.firstTurn||
+      a.firstTurnGear!==b.firstTurnGear||
+      a.tractorYawDirection!==b.tractorYawDirection||
+      a.firstTurnAfterGearChange!==b.firstTurnAfterGearChange)return false;
+   const da=Number.isFinite(a.firstTurnDistance)?a.firstTurnDistance:null;
+   const db=Number.isFinite(b.firstTurnDistance)?b.firstTurnDistance:null;
+   return da===null||db===null?da===db:Math.abs(da-db)<=firstTurnDistanceTolerance+1e-9;
+  };
+  const scenarioWinners=[],ambiguousScenarios=[];
+  for(let scenarioIndex=0;scenarioIndex<17;scenarioIndex++){
+   const ranked=[];
+   for(const record of records){
+    const scenario=record.scenarios[scenarioIndex];
+    const wheelStatus=scenario.wheelClearanceStatus;
+    if(scenario.clearancePassed!==true||scenario.goalReached!==true||
+       (wheelStatus!=='complete'&&wheelStatus!=='skipped-no-obstacles'))continue;
+    const clearance=scenario.minimumClearanceLowerBound;
+    const articulation=scenario.maximumArticulationDegrees;
+    if((!Number.isFinite(clearance)&&clearance!==Infinity)||
+       !Number.isFinite(articulation)||articulation<0){
+     return {...base,reason:'invalid-scenario-score-evidence',candidateIndex:record.index,scenario:scenarioNames[scenarioIndex]};
+    }
+    const clearancePenalty=clearance===Infinity?0:
+     0.20/Math.max(0.05,clearance-record.requiredClearance+0.05);
+    const gearChangePenalty=record.metrics.gearChanges*0.75;
+    const articulationPenalty=Math.max(0,articulation-20)*0.02;
+    const cost=record.metrics.pathLength+gearChangePenalty+articulationPenalty+clearancePenalty;
+    if(!Number.isFinite(cost))return {...base,reason:'non-finite-scenario-score',candidateIndex:record.index,scenario:scenarioNames[scenarioIndex]};
+    ranked.push({
+     candidateIndex:record.index,label:record.label,cost,
+     action:record.recommendation,
+     minimumClearanceLowerBound:clearance,
+     maximumArticulationDegrees:articulation
+    });
+   }
+   if(!ranked.length){
+    return {
+     ...base,status:'no-feasible-candidate-in-pose-scenario',
+     reason:'no-feasible-candidate-in-pose-scenario',
+     failedScenario:scenarioNames[scenarioIndex],
+     scenarioWinners
+    };
+   }
+   ranked.sort((a,b)=>a.cost-b.cost||a.candidateIndex-b.candidateIndex);
+   const best=ranked[0];
+   const comparable=ranked.slice(1).filter(item=>item.cost-best.cost<=costTolerance+1e-12);
+   const differing=comparable.filter(item=>!sameAction(best.action,item.action));
+   if(differing.length){
+    ambiguousScenarios.push({
+     scenario:scenarioNames[scenarioIndex],best,
+     comparableAlternatives:differing
+    });
+   }
+   scenarioWinners.push({
+    scenario:scenarioNames[scenarioIndex],candidateIndex:best.candidateIndex,
+    label:best.label,cost:best.cost,action:best.action,
+    minimumClearanceLowerBound:best.minimumClearanceLowerBound,
+    maximumArticulationDegrees:best.maximumArticulationDegrees,
+    comparableDifferentActions:differing.length
+   });
+  }
+  const nominal=scenarioWinners[0];
+  const changedScenarios=scenarioWinners.slice(1).filter(item=>!sameAction(nominal.action,item.action)).map(item=>({
+   scenario:item.scenario,nominalAction:nominal.action,scenarioAction:item.action,
+   nominalCandidateIndex:nominal.candidateIndex,scenarioCandidateIndex:item.candidateIndex
+  }));
+  if(ambiguousScenarios.length){
+   return {
+    ...base,ok:true,status:'ambiguous',stable:false,recommendation:null,
+    nominalAction:nominal.action,scenarioWinners,ambiguousScenarios,changedScenarios,
+    note:'В одном или нескольких сценариях близкие по эвристическому баллу фиксированные варианты имеют разные первые действия; однозначная рекомендация не выдаётся.'
+   };
+  }
+  if(changedScenarios.length){
+   return {
+    ...base,ok:true,status:'changed',stable:false,recommendation:null,
+    nominalAction:nominal.action,scenarioWinners,changedScenarios,
+    note:'Лучшее первое действие среди проверенных фиксированных вариантов меняется между сценариями исходной позы; однозначная рекомендация не выдаётся.'
+   };
+  }
+  if(records.length===1){
+   return {
+    ...base,ok:true,status:'single-candidate-unverified',stable:null,
+    recommendation:nominal.action,nominalAction:nominal.action,
+    scenarioWinners,
+    note:'Найден только один допустимый фиксированный вариант. Его действие проходит выбранные сценарии, но сравнение с альтернативными действиями не подтверждено.'
+   };
+  }
+  return {
+   ...base,ok:true,status:'stable',stable:true,
+   recommendation:nominal.action,nominalAction:nominal.action,
+   scenarioWinners,
+   note:'Одно и то же первое действие выигрывает во всех 17 сценариях среди найденных фиксированных кандидатов. Это ограниченное сравнение эвристических баллов, не глобальная оптимальность и не повторная оптимизация.'
+  };
+ }
+
  function planAlternativesWithReserve(options={}){
   const inputErrors=validatePlanOptions(options);
   if(inputErrors.length)return {ok:false,reason:'invalid-input',errors:inputErrors,expanded:0};
@@ -2743,5 +2896,235 @@ function planAlternativesWithVehicleParameterBounds(options={}){
  };
 }
 
-return Object.freeze({plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,parameterEndpointVectors,compareRecommendationSensitivity,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,routeSegmentDistance,articulationExposure,recommendStart,nextGearTransitionBoundary,compareStartCandidates,explainStartActionComparison,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon,inflateObstaclePoseUncertainty});
+
+function analyzeInitialPoseUncertainty(states,obstacles,params,uncertainty,integrate,options={}){
+ const base={
+  ok:false,status:'not-assessed',model:'fixed-control-rk4-replay',
+  scenarioCount:0,cornerScenarioCount:0,continuousBoundVerified:false,
+  replanningIncluded:false,kinematicParameterUncertaintyIncluded:false,
+  wheelClearanceEvaluated:false,note:'Проверка не выполнена.'
+ };
+ if(!uncertainty||typeof uncertainty!=='object'||Array.isArray(uncertainty)){
+  return {...base,reason:'missing-bounds',missingBounds:['positionX','positionY','tractorHeadingDeg','trailerHeadingDeg']};
+ }
+ const definitions=[
+  ['positionX',0.001,2,'м'],
+  ['positionY',0.001,2,'м'],
+  ['tractorHeadingDeg',0.001,45,'°'],
+  ['trailerHeadingDeg',0.001,45,'°']
+ ];
+ const missingBounds=definitions.filter(([key])=>
+  !Number.isFinite(uncertainty[key])||uncertainty[key]===0
+ ).map(([key])=>key);
+ if(missingBounds.length){
+  return {
+   ...base,reason:'missing-bounds',missingBounds,
+   note:'Положительные границы исходной позы не заданы; ноль означает «не оценено», а не отсутствие ошибки.'
+  };
+ }
+ const invalidBounds=definitions.filter(([key,min,max])=>
+  !Number.isFinite(uncertainty[key])||uncertainty[key]<min||uncertainty[key]>max
+ ).map(([key,min,max])=>({key,value:uncertainty[key],min,max}));
+ if(invalidBounds.length){
+  return {...base,status:'invalid-input',reason:'invalid-bounds',invalidBounds,
+   note:'Каждая граница должна быть положительной и находиться в разрешённом диапазоне.'};
+ }
+ if(typeof integrate!=='function')return {...base,status:'invalid-input',reason:'missing-integrator'};
+ if(!Array.isArray(states)||states.length<2||states.length>20000){
+  return {...base,status:'invalid-route',reason:'invalid-route-length'};
+ }
+ const geometryErrors=rootPhysics&&typeof rootPhysics.validateVehicleParams==='function'?
+  rootPhysics.validateVehicleParams(params):['Vehicle geometry validation is unavailable.'];
+ if(geometryErrors.length){
+  return {...base,status:'invalid-input',reason:'invalid-vehicle-geometry',errors:geometryErrors};
+ }
+ const obstacleErrors=validateObstacles(obstacles);
+ if(obstacleErrors.length){
+  return {...base,status:'invalid-input',reason:'invalid-obstacles',errors:obstacleErrors};
+ }
+ const referenceSpeed=options.referenceSpeed??0.7;
+ const requiredClearance=options.minClearance??0.65;
+ if(!Number.isFinite(referenceSpeed)||referenceSpeed<=0||referenceSpeed>5||
+    !Number.isFinite(requiredClearance)||requiredClearance<0||requiredClearance>10){
+  return {...base,status:'invalid-input',reason:'invalid-replay-options'};
+ }
+ const goal=options.goal??null;
+ const positionTolerance=options.positionTolerance??0.9;
+ const headingTolerance=options.headingTolerance??12*Math.PI/180;
+ const maxTerminalArticulation=options.maxTerminalArticulation??12*Math.PI/180;
+ if(goal&&(!Number.isFinite(goal.x)||!Number.isFinite(goal.y)||
+    (goal.heading!==undefined&&goal.heading!==null&&!Number.isFinite(goal.heading)))){
+  return {...base,status:'invalid-input',reason:'invalid-goal'};
+ }
+ if(!Number.isFinite(positionTolerance)||positionTolerance<=0||positionTolerance>10||
+    !Number.isFinite(headingTolerance)||headingTolerance<0||headingTolerance>Math.PI||
+    !Number.isFinite(maxTerminalArticulation)||maxTerminalArticulation<0||maxTerminalArticulation>Math.PI){
+  return {...base,status:'invalid-input',reason:'invalid-goal-tolerances'};
+ }
+ const readState=(state,index)=>{
+  if(!state||![state.x,state.y,state.psi,state.psiT].every(Number.isFinite)){
+   throw new Error('Route state '+index+' has invalid pose coordinates.');
+  }
+  const gear=index===0?1:(state.gear===undefined?1:state.gear);
+  const steer=index===0?0:(state.steer===undefined?0:state.steer);
+  if(gear!==1&&gear!==-1)throw new Error('Route state '+index+' has invalid gear.');
+  if(!Number.isFinite(steer)||Math.abs(steer)>=Math.PI/2)throw new Error('Route state '+index+' has invalid steering.');
+  const stepDistance=state.stepDistance;
+  if(index===0){
+   if(stepDistance!==0)throw new Error('Initial route state must declare stepDistance 0.');
+  }else{
+   if(!Number.isFinite(stepDistance)||stepDistance<=0)throw new Error('Route state '+index+' is missing a positive stepDistance.');
+   const chord=Math.hypot(state.x-states[index-1].x,state.y-states[index-1].y);
+   if(chord>stepDistance+1e-6)throw new Error('Route state '+index+' chord exceeds stepDistance.');
+  }
+  return {state,gear,steer,stepDistance};
+ };
+ let controls;
+ try{controls=Array.from(states,readState);}
+ catch(error){return {...base,status:'invalid-route',reason:'invalid-route-state',error:error.message};}
+ const start=controls[0].state;
+ const headingBounds=[
+  uncertainty.positionX,
+  uncertainty.positionY,
+  uncertainty.tractorHeadingDeg*Math.PI/180,
+  uncertainty.trailerHeadingDeg*Math.PI/180
+ ];
+ const scenarioDefinitions=[{name:'nominal',signs:[0,0,0,0]}];
+ for(let mask=0;mask<16;mask++){
+  scenarioDefinitions.push({
+   name:'corner-'+String(mask+1).padStart(2,'0'),
+   signs:[0,1,2,3].map(index=>(mask&(1<<index))?1:-1)
+  });
+ }
+ const hasObstacles=Array.isArray(obstacles)&&obstacles.length>0;
+ const scenarioResults=[];
+ let minimumBodyClearanceLowerBound=Infinity,minimumWheelClearanceLowerBound=Infinity;
+ let minimumClearanceLowerBound=Infinity,limitingScenario=null;
+ let maximumArticulationDegrees=0,clearanceFailures=0,goalFailures=0;
+ let wheelClearanceFailures=0,wheelClearanceIncompleteScenarios=0;
+ let fixedControlAction=null,fixedControlActionStable=true;
+ for(const scenario of scenarioDefinitions){
+  const [sx,sy,spsi,spsiT]=scenario.signs;
+  let q={
+   ...start,
+   x:start.x+sx*headingBounds[0],
+   y:start.y+sy*headingBounds[1],
+   psi:norm(start.psi+spsi*headingBounds[2]),
+   psiT:norm(start.psiT+spsiT*headingBounds[3])
+  };
+  const replayed=[{
+   x:q.x,y:q.y,psi:q.psi,psiT:q.psiT,
+   gear:1,steer:0,stepDistance:0
+  }];
+  try{
+   for(let index=1;index<controls.length;index++){
+    const control=controls[index];
+    const next=integrate(q,control.gear*referenceSpeed,control.steer,
+     control.stepDistance/referenceSpeed,params);
+    if(!next||![next.x,next.y,next.psi,next.psiT].every(Number.isFinite)){
+     throw new Error('Integrator returned an invalid pose at route state '+index+'.');
+    }
+    const chord=Math.hypot(next.x-q.x,next.y-q.y);
+    if(chord>control.stepDistance+1e-6){
+     throw new Error('Replayed chord exceeds the declared integration distance at state '+index+'.');
+    }
+    q={x:next.x,y:next.y,psi:norm(next.psi),psiT:norm(next.psiT)};
+    replayed.push({...q,gear:control.gear,steer:control.steer,stepDistance:control.stepDistance});
+   }
+  }catch(error){
+   return {
+    ...base,status:'scenario-replay-failed',reason:'scenario-replay-failed',
+    scenario:scenario.name,scenariosEvaluated:scenarioResults.length,
+    scenarioResults,error:error&&error.message?error.message:String(error),
+    note:'Одна из фиксированных управляющих последовательностей не смогла быть повторно интегрирована; результат не подтверждён.'
+   };
+  }
+  let clearance,wheelClearance=null;
+  try{
+   clearance=analyzeTrajectoryClearance(replayed,obstacles,params);
+   if(hasObstacles)wheelClearance=analyzeWheelTrajectoryClearance(replayed,obstacles,params);
+  }catch(error){
+   return {
+    ...base,status:'clearance-analysis-failed',reason:'clearance-analysis-failed',
+    scenario:scenario.name,scenariosEvaluated:scenarioResults.length,
+    scenarioResults,error:error&&error.message?error.message:String(error)
+   };
+  }
+  const bodyLowerBound=clearance.minimumClearanceLowerBound;
+  const wheelLowerBound=wheelClearance?wheelClearance.minimumClearanceLowerBound:Infinity;
+  if(Number.isNaN(bodyLowerBound)||Number.isNaN(wheelLowerBound)){
+   return {...base,status:'clearance-analysis-failed',reason:'non-finite-clearance',scenario:scenario.name};
+  }
+  const wheelIncomplete=!!wheelClearance&&(
+   wheelClearance.axleSpacingUncertaintyStatus!=='complete'||
+   wheelClearance.segmentsWithoutIntermediateKinematicSamples>0
+  );
+  if(wheelIncomplete)wheelClearanceIncompleteScenarios++;
+  const bodyPassed=bodyLowerBound>=requiredClearance-1e-9;
+  const wheelPassed=!wheelIncomplete&&wheelLowerBound>=requiredClearance-1e-9;
+  if(!bodyPassed||!wheelPassed)clearanceFailures++;
+  if(wheelClearance&&(!wheelPassed))wheelClearanceFailures++;
+  const combinedLowerBound=Math.min(bodyLowerBound,wheelLowerBound);
+  minimumBodyClearanceLowerBound=Math.min(minimumBodyClearanceLowerBound,bodyLowerBound);
+  minimumWheelClearanceLowerBound=Math.min(minimumWheelClearanceLowerBound,wheelLowerBound);
+  const finalState=replayed[replayed.length-1];
+  const terminalErrors=goal?goalErrors(finalState,goal):null;
+  const reached=goal?goalReached(finalState,goal,{
+   positionTolerance,headingTolerance,maxTerminalArticulation
+  }):null;
+  if(goal&&!reached)goalFailures++;
+  const maxBeta=Math.max(...replayed.map(state=>Math.abs(norm(state.psi-state.psiT))*180/Math.PI));
+  maximumArticulationDegrees=Math.max(maximumArticulationDegrees,maxBeta);
+  const recommendation=recommendStart(replayed);
+  const actionSignature=JSON.stringify([
+   recommendation.initialGear,recommendation.firstTurn,
+   recommendation.firstTurnGear,recommendation.tractorYawDirection
+  ]);
+  if(fixedControlAction===null)fixedControlAction=actionSignature;
+  else if(fixedControlAction!==actionSignature)fixedControlActionStable=false;
+  const summary={
+   name:scenario.name,signs:scenario.signs,
+   minimumBodyClearanceLowerBound:bodyLowerBound,
+   minimumWheelClearanceLowerBound:wheelClearance?wheelLowerBound:null,
+   minimumClearanceLowerBound:combinedLowerBound,
+   limitingPart:combinedLowerBound===wheelLowerBound&&wheelClearance?
+    (wheelClearance.limitingWheel?.name||'колесо'):clearance.limitingPart,
+   bodyClearancePassed:bodyPassed,wheelClearancePassed:wheelPassed,
+   wheelClearanceStatus:wheelClearance?
+    (wheelIncomplete?'incomplete':'complete'):'skipped-no-obstacles',
+   wheelSegmentsWithoutIntermediateKinematicSamples:wheelClearance?.segmentsWithoutIntermediateKinematicSamples??0,
+   clearancePassed:bodyPassed&&wheelPassed,
+   goalReached:reached,terminalErrors,
+   maximumArticulationDegrees:maxBeta,replayedStates:replayed.length
+  };
+  scenarioResults.push(summary);
+  if(combinedLowerBound<minimumClearanceLowerBound){
+   minimumClearanceLowerBound=combinedLowerBound;
+   limitingScenario=scenario.name;
+  }
+ }
+ const passed=clearanceFailures===0&&wheelClearanceIncompleteScenarios===0&&
+  goalFailures===0&&fixedControlActionStable;
+ const status=passed?'stable-across-16-corners-plus-nominal':
+  (wheelClearanceIncompleteScenarios?'wheel-clearance-incomplete-in-pose-scenario':
+   (!fixedControlActionStable?'fixed-control-action-inconsistent':
+    (clearanceFailures?'clearance-failed-in-pose-scenario':'goal-not-reached-in-pose-scenario')));
+ return {
+  ok:passed,status,model:'fixed-control-rk4-replay',
+  scenarioCount:scenarioDefinitions.length,cornerScenarioCount:16,
+  scenariosEvaluated:scenarioResults.length,scenarioResults,
+  minimumBodyClearanceLowerBound,minimumWheelClearanceLowerBound,
+  minimumClearanceLowerBound,limitingScenario,
+  requiredClearance,clearanceFailures,wheelClearanceFailures,
+  wheelClearanceIncompleteScenarios,wheelClearanceEvaluated:hasObstacles,
+  goalFailures,maximumArticulationDegrees,fixedControlActionStable,
+  recommendationOptimizationIncluded:false,
+  continuousBoundVerified:false,replanningIncluded:false,
+  kinematicParameterUncertaintyIncluded:false,
+  uncertaintyScope:'initial X/Y position and tractor/trailer heading bounds only; supplied obstacle and vehicle footprint envelopes are used, but parameter, tyre, hitch, suspension, sensor and integration uncertainties are not fully propagated',
+  note:'Проверены номинал и все 16 угловых сочетаний четырёх заданных границ повторным RK4-интегрированием фиксированных передач и рулевых команд. Для каждого сценария проверяются контуры тягача/кабины/полуприцепа и отдельные колёса при наличии препятствий. Это конечная сценарная проверка, не непрерывная граница для всех промежуточных поз и не повторная оптимизация начального действия.'
+ };
+}
+
+return Object.freeze({analyzeInitialPoseUncertainty,plan,planAlternatives,planAlternativesWithReserve,planAlternativesWithGeometryUncertainty,planAlternativesWithVehicleParameterBounds,parameterEndpointVectors,compareRecommendationSensitivity,compareCandidateRecommendationAcrossPoseScenarios,clearance,createClearanceChecker,sweptDisplacementPerMeter,sweptDisplacementRatesPerMeter,analyzeTrajectoryClearance,analyzeWheelTrajectoryClearance,polygons,goalErrors,goalReached,routeSegmentDistance,articulationExposure,recommendStart,nextGearTransitionBoundary,compareStartCandidates,explainStartActionComparison,validatePlanOptions,validateObstacles,createGateObstacles,inflateConvexPolygon,inflateObstaclePoseUncertainty});
 });

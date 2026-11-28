@@ -677,6 +677,17 @@ test('ambiguous planner results preserve candidate states and simulator draws th
 });
 
 
+function verifiedPoseSensitivityForTests(){
+ return {
+  ok:true,status:'stable-across-16-corners-plus-nominal',
+  scenarioCount:17,cornerScenarioCount:16,scenariosEvaluated:17,
+  minimumClearanceLowerBound:1,clearanceFailures:0,goalFailures:0,
+  continuousBoundVerified:false,replanningIncluded:false,
+  recommendationOptimizationIncluded:false,
+  note:'synthetic worker evidence for simulator harness only'
+ };
+}
+
 function perPartClearanceWorkerResult(){
  const states=[
   {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
@@ -699,7 +710,7 @@ function perPartClearanceWorkerResult(){
   ok:false,reason:'ambiguous-start',
   candidateRoutes:[{index:0,label:'проверенный тестовый вариант',cost:1,states,
    metrics:{minimumClearanceLowerBound:0.65,sweptClearanceDetail:null},
-   trajectoryClearance,recommendation}],
+   trajectoryClearance,recommendation,initialPoseSensitivity:verifiedPoseSensitivityForTests()}],
   candidateSummaries:[{label:'проверенный тестовый вариант',cost:1,initialGear:1,firstTurn:'left',
    firstTurnGear:1,tractorYawDirection:'left'}]
  };
@@ -715,11 +726,11 @@ function conservativeSelectionWorkerResult(){
   ok:false,
   reason:'uncertainty-sensitive-start',
   conservativeCandidateRoutes:[
-   {index:0,label:'проверенный резервный кандидат',cost:22,states,metrics:{
+   {index:0,label:'проверенный резервный кандидат',cost:22,states,initialPoseSensitivity:verifiedPoseSensitivityForTests(),metrics:{
     minimumClearanceLowerBound:1.2,
     sweptClearanceDetail:null
    }},
-   {index:1,label:'второй резервный кандидат',cost:23,states:states.map(state=>({...state})),metrics:{
+   {index:1,label:'второй резервный кандидат',cost:23,states:states.map(state=>({...state})),initialPoseSensitivity:verifiedPoseSensitivityForTests(),metrics:{
     minimumClearanceLowerBound:1.1,
     sweptClearanceDetail:null
    }}
@@ -1148,6 +1159,47 @@ test('virtual playback holds at the gear boundary until the explicit confirmatio
  assert.equal(elements.routeConfirmGear.hidden,true);
  assert.equal(elements.routeConfirmGear.disabled,true);
  assert.match(elements.routeAdvice.textContent,/Виртуальное переключение подтверждено для симуляции/);
+});
+
+
+test('virtual playback blocks when initial pose uncertainty is not assessed even if the selected route is otherwise valid',async()=>{
+ const p={
+  wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerAxleSpacingUncertainty:0.02,
+  tractorFrontTrack:2.05,tractorSteeringTrack:2.05,tractorRearTrack:2.05,
+  trailerTrack:2.79,tireLength:0.72,tireWidth:0.44
+ };
+ const start={x:0,y:0,psi:0,psiT:0,gear:1,steer:0,gearKnown:true,steerKnown:true,stepDistance:0};
+ const forwardStep=0.5,reverseStep=2.0;
+ const forward=physics.rk4(start,0.7,0,forwardStep/0.7,p);
+ const reverse=physics.rk4(forward,-0.7,0,reverseStep/0.7,p);
+ const states=[
+  start,
+  {...forward,gear:1,steer:0,gearKnown:true,steerKnown:true,stepDistance:forwardStep},
+  {...reverse,gear:-1,steer:0,gearKnown:true,steerKnown:true,stepDistance:reverseStep}
+ ];
+ const result=routeControlBoundaryWorkerResult(states);
+ result.conservativeCandidateRoutes=result.conservativeCandidateRoutes.map(candidate=>({
+  ...candidate,initialPoseSensitivity:{
+   ok:false,status:'not-assessed',reason:'missing-bounds',
+   note:'initial pose bounds missing in test fixture'
+  }
+ }));
+ const simulator=bootSimulator({workerResult:result});
+ const {elements}=simulator;
+ elements.trailerAxleSpacingUncertainty.value='0.02';
+ elements.measurementUncertainty.value='0.05';
+ elements.apply.onclick();
+ elements.goalX.value=String(reverse.x);
+ elements.goalY.value=String(reverse.y);
+ elements.goalHeading.value='0';
+ await elements.planRoute.onclick();
+ elements.alternativeRouteSelect.value='0';
+ elements.alternativeRouteSelect.onchange();
+ elements.routeStart.onclick();
+ assert.match(elements.routeAdvice.textContent,/исходная поза/);
+ assert.doesNotMatch(elements.routeAdvice.textContent,/Виртуальный автопроезд начат/);
 });
 
 

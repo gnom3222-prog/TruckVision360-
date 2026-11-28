@@ -1093,6 +1093,13 @@ test('multi-start planner searches a free route and four constrained first actio
   'the matching constrained forward-left route should be found');
  assert.ok(result.candidateSummaries.every(candidate=>Number.isFinite(candidate.cost)));
  assert.ok(result.candidateSummaries.every(candidate=>candidate.steeringWheelDirection===candidate.firstTurn));
+ assert.ok(Array.isArray(result.candidateRoutes),'all successful or ambiguous searches must retain candidate trajectories for pose screening');
+ assert.equal(result.candidateRoutes.length,result.candidatesFound);
+ assert.ok(result.candidateRoutes.every(candidate=>
+  Array.isArray(candidate.states)&&candidate.states.length>=2&&
+  Number.isFinite(candidate.metrics?.pathLength)&&Number.isFinite(candidate.metrics?.gearChanges)&&
+  candidate.recommendation
+ ));
  if(result.ok){
   assert.ok(['single-candidate','preferred'].includes(result.status));
   assert.ok(result.states.length>1);
@@ -3184,4 +3191,168 @@ test('trailer swept-rate spectral bound dominates sampled exact no-slip point sp
   assert.ok(rateBound+1e-10>=sampledMaximum,
    'spectral bound '+rateBound+' must dominate sampled point speed '+sampledMaximum+' at steer '+steer);
  }
+});
+
+test('initial pose uncertainty replays the fixed route at nominal and all 16 independent bound corners',()=>{
+ const states=[{x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0}];
+ let q={x:0,y:0,psi:0,psiT:0};
+ for(let index=0;index<20;index++){
+  q=physics.rk4(q,0.7,0,0.05/0.7,params);
+  states.push({...q,gear:1,steer:0,stepDistance:0.05});
+ }
+ const result=planner.analyzeInitialPoseUncertainty(
+  states,[],params,
+  {positionX:0.05,positionY:0.04,tractorHeadingDeg:0.5,trailerHeadingDeg:0.75},
+  integrate,
+  {goal:{x:1,y:0,heading:0},minClearance:0.3,positionTolerance:0.9,
+   headingTolerance:5*Math.PI/180,maxTerminalArticulation:5*Math.PI/180}
+ );
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.scenarioCount,17);
+ assert.equal(result.cornerScenarioCount,16);
+ assert.equal(result.scenariosEvaluated,17);
+ assert.equal(result.continuousBoundVerified,false);
+ assert.equal(result.replanningIncluded,false);
+ assert.equal(result.recommendationOptimizationIncluded,false);
+ assert.equal(result.clearanceFailures,0);
+ assert.equal(result.goalFailures,0);
+});
+
+test('initial pose uncertainty is not assessed when any required positive bound is missing',()=>{
+ const states=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
+  {x:0.05,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0.05}
+ ];
+ const result=planner.analyzeInitialPoseUncertainty(
+  states,[],params,
+  {positionX:0.05,positionY:0.04,tractorHeadingDeg:0.5,trailerHeadingDeg:0},
+  integrate
+ );
+ assert.equal(result.ok,false);
+ assert.equal(result.status,'not-assessed');
+ assert.deepEqual(result.missingBounds,['trailerHeadingDeg']);
+ assert.equal(result.scenarioCount,0);
+});
+
+test('initial pose uncertainty blocks a fixed route when one of the 16 corners loses the required clearance',()=>{
+ const states=[{x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0}];
+ let q={x:0,y:0,psi:0,psiT:0};
+ for(let index=0;index<4;index++){
+  q=physics.rk4(q,0.7,0,0.05/0.7,params);
+  states.push({...q,gear:1,steer:0,stepDistance:0.05});
+ }
+ const obstacle={x:2,y:1.8,w:0.2,h:0.2,name:'near-side pallet'};
+ const poseParams={
+  ...params,
+  trailerAxleSpacing12:1.3,trailerAxleSpacing23:1.3,
+  trailerAxleSpacing12Uncertainty:0.02,trailerAxleSpacing23Uncertainty:0.02
+ };
+ const wheelProbe=planner.analyzeWheelTrajectoryClearance(states,[obstacle],poseParams);
+ assert.equal(wheelProbe.axleSpacingUncertaintyStatus,'complete',JSON.stringify(wheelProbe));
+ assert.equal(wheelProbe.segmentsWithoutIntermediateKinematicSamples,0,JSON.stringify(wheelProbe.segmentDiagnostics));
+ const result=planner.analyzeInitialPoseUncertainty(
+  states,[obstacle],poseParams,
+  {positionX:0.02,positionY:0.50,tractorHeadingDeg:0.1,trailerHeadingDeg:0.1},
+  integrate,
+  {minClearance:0.10}
+ );
+ assert.equal(result.ok,false,JSON.stringify(result));
+ assert.equal(result.status,'clearance-failed-in-pose-scenario',JSON.stringify(result));
+ assert.equal(result.wheelClearanceEvaluated,true);
+ assert.ok(Number.isFinite(result.minimumWheelClearanceLowerBound));
+ assert.equal(result.scenarioResults[0].clearancePassed,true,'nominal pose should preserve the requested clearance');
+ assert.equal(result.scenarioResults[0].wheelClearancePassed,true,'nominal wheel envelopes should preserve the requested clearance');
+ assert.ok(result.scenarioResults.slice(1).some(scenario=>!scenario.clearancePassed),'at least one perturbed corner should lose clearance');
+ assert.ok(result.clearanceFailures>0);
+ assert.ok(result.scenariosEvaluated<=17);
+});
+
+test('initial pose uncertainty rejects routes without explicit integration distances',()=>{
+ const states=[
+  {x:0,y:0,psi:0,psiT:0,gear:1,steer:0,stepDistance:0},
+  {x:0.05,y:0,psi:0,psiT:0,gear:1,steer:0}
+ ];
+ const result=planner.analyzeInitialPoseUncertainty(
+  states,[],params,
+  {positionX:0.05,positionY:0.05,tractorHeadingDeg:0.5,trailerHeadingDeg:0.5},
+  integrate
+ );
+ assert.equal(result.ok,false);
+ assert.equal(result.status,'invalid-route');
+ assert.equal(result.reason,'invalid-route-state');
+});
+
+
+function makePoseRecommendationCandidate(label,cost,action,scenarioMutator=()=>({})){
+ const scenarioNames=['nominal',...Array.from({length:16},(_,index)=>'corner-'+String(index+1).padStart(2,'0'))];
+ const scenarioResults=scenarioNames.map((name,index)=>({
+  name,clearancePassed:true,goalReached:true,
+  wheelClearanceStatus:'complete',
+  minimumClearanceLowerBound:1,
+  maximumArticulationDegrees:15,
+  ...scenarioMutator(name,index)
+ }));
+ return {
+  label,cost,metrics:{pathLength:cost,gearChanges:0},
+  recommendation:{
+   initialGear:1,firstTurn:action,steeringWheelDirection:action,
+   firstTurnGear:1,tractorYawDirection:action,
+   firstTurnAfterGearChange:false,firstTurnDistance:0.5
+  },
+  initialPoseSensitivity:{ok:true,requiredClearance:0.3,scenarioResults}
+ };
+}
+
+test('initial-pose recommendation comparison stays stable when the same first action wins all 17 scenarios',()=>{
+ const left=makePoseRecommendationCandidate('вперёд-влево',10,'left');
+ const right=makePoseRecommendationCandidate('вперёд-вправо',11,'right');
+ const result=planner.compareCandidateRecommendationAcrossPoseScenarios([left,right]);
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.status,'stable');
+ assert.equal(result.stable,true);
+ assert.equal(result.scenarioWinners.length,17);
+ assert.equal(result.recommendation.firstTurn,'left');
+ assert.deepEqual(result.changedScenarios,[]);
+});
+
+test('initial-pose recommendation comparison withholds a side when the best action changes at a pose corner',()=>{
+ const left=makePoseRecommendationCandidate('вперёд-влево',10,'left',(name)=>(
+  name==='corner-03'?{maximumArticulationDegrees:60}:{}
+ ));
+ const right=makePoseRecommendationCandidate('вперёд-вправо',10.5,'right');
+ const result=planner.compareCandidateRecommendationAcrossPoseScenarios([left,right]);
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.status,'changed');
+ assert.equal(result.stable,false);
+ assert.equal(result.recommendation,null);
+ assert.ok(result.changedScenarios.some(item=>item.scenario==='corner-03'));
+});
+
+test('initial-pose recommendation comparison reports near-equal opposite actions as ambiguous',()=>{
+ const left=makePoseRecommendationCandidate('вперёд-влево',10,'left');
+ const right=makePoseRecommendationCandidate('вперёд-вправо',10.1,'right');
+ const result=planner.compareCandidateRecommendationAcrossPoseScenarios([left,right],{costTolerance:0.25});
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.status,'ambiguous');
+ assert.equal(result.stable,false);
+ assert.equal(result.recommendation,null);
+ assert.equal(result.ambiguousScenarios.length,17);
+});
+
+test('initial-pose recommendation comparison labels a single feasible candidate as unverified against alternatives',()=>{
+ const only=makePoseRecommendationCandidate('единственный найденный вариант',10,'left');
+ const result=planner.compareCandidateRecommendationAcrossPoseScenarios([only]);
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.equal(result.status,'single-candidate-unverified');
+ assert.equal(result.stable,null);
+ assert.equal(result.recommendation.firstTurn,'left');
+});
+
+test('initial-pose recommendation comparison fails closed when a candidate lacks one pose scenario',()=>{
+ const left=makePoseRecommendationCandidate('вперёд-влево',10,'left');
+ const right=makePoseRecommendationCandidate('вперёд-вправо',11,'right');
+ right.initialPoseSensitivity.scenarioResults.pop();
+ const result=planner.compareCandidateRecommendationAcrossPoseScenarios([left,right]);
+ assert.equal(result.ok,false);
+ assert.equal(result.reason,'candidate-pose-evidence-incomplete');
 });
