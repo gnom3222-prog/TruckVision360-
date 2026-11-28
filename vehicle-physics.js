@@ -1112,7 +1112,7 @@
   const bodies=vehiclePolygons(q,params);
   const mirrors=mirrorPolygons(q,params);
   const wheels=buildWheelFootprints(q,params,steer);
-  const auxiliary=auxiliaryEnvelopePolygons(q,params);
+  const auxiliary=auxiliaryEnvelopePolygons(q,params,true);
   const uncertainty=Number.isFinite(params.footprintUncertainty)?params.footprintUncertainty:0;
   const tractorFrontOverhang=params.tractorFrontOverhang??5.0;
   const tractorRearOverhang=params.tractorRearOverhang??1.2;
