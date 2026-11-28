@@ -72,6 +72,28 @@ self.addEventListener('message',event=>{
      {...candidate,initialPoseSensitivity:assessPose(candidate.states)}:candidate);
    }
   }
+  if(Array.isArray(result.candidateRoutes)&&result.candidateRoutes.length){
+   result.recommendationPoseSensitivity=self.TruckVisionPlanner.compareCandidateRecommendationAcrossPoseScenarios(
+    result.candidateRoutes,{costTolerance:options.costTolerance??0.25}
+   );
+   if(result.recommendationPoseSensitivity.ok&&
+      ['stable','single-candidate-unverified'].includes(result.recommendationPoseSensitivity.status)&&
+      result.reason!=='ambiguous-start'){
+    // Keep the worker message compact when the comparison is resolved.
+    delete result.candidateRoutes;
+   }else{
+    result.candidateRoutes=result.candidateRoutes.map(candidate=>({
+     ...candidate,
+     recommendationPoseSensitivity:result.recommendationPoseSensitivity
+    }));
+   }
+  }else{
+   result.recommendationPoseSensitivity={
+    ok:false,status:'not-assessed',stable:false,recommendation:null,
+    reason:'candidate-routes-unavailable',
+    note:'Сравнение первых действий по альтернативным траекториям не выполнено.'
+   };
+  }
   self.postMessage({id,type:'result',result});
  }catch(error){
   self.postMessage({id,type:'error',message:error&&error.message?error.message:String(error)});
