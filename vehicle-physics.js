@@ -1050,9 +1050,11 @@
 
  // User-measured non-tire hardware boxes (hub, brake chamber, suspension arm, etc.).
  // Each box is anchored to an axle reference and expanded by its stated margin.
- function auxiliaryEnvelopePolygons(q,params){
-  const vehicleErrors=validateVehicleParams(params);
-  if(vehicleErrors.length)throw new Error('Некорректная геометрия дополнительных оболочек: '+vehicleErrors.join(' '));
+ function auxiliaryEnvelopePolygons(q,params,vehicleGeometryValidated=false){
+  if(!vehicleGeometryValidated){
+   const vehicleErrors=validateVehicleParams(params);
+   if(vehicleErrors.length)throw new Error('Некорректная геометрия дополнительных оболочек: '+vehicleErrors.join(' '));
+  }
   const envelopes=params&&params.auxiliaryEnvelopes;
   const errors=validateAuxiliaryEnvelopes(envelopes);
   if(errors.length)throw new Error('Некорректные дополнительные оболочки: '+errors.join(' '));
