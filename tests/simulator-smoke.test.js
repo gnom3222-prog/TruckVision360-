@@ -1096,6 +1096,7 @@ test('virtual playback holds at the gear boundary until the explicit confirmatio
  const p={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
   trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
+  trailerAxleSpacingUncertainty:0.02,
   tractorFrontTrack:2.05,tractorSteeringTrack:2.05,tractorRearTrack:2.05,
   trailerTrack:2.79,tireLength:0.72,tireWidth:0.44
  };
