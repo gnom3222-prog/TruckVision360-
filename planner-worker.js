@@ -13,17 +13,56 @@ self.addEventListener('message',event=>{
    integrate,
    onProgress:progress=>self.postMessage({id,type:'progress',progress})
   });
+  let poseObstacles=Array.isArray(options.obstacles)?options.obstacles.slice():[];
+  if(options.gateGeometry!==undefined&&options.gateGeometry!==null){
+   const boundedGatePosts=self.TruckVisionPlanner.createGateObstacles(options.gateGeometry);
+   poseObstacles=[
+    ...poseObstacles.filter(obstacle=>obstacle?.kind!=='gate-jamb'),
+    ...boundedGatePosts
+   ];
+  }
+  const obstaclePositionUncertainty=options.obstaclePositionUncertainty??0;
+  const obstacleSizeUncertainty=options.obstacleSizeUncertainty??0;
+  const obstacleExpansionPerSide=obstaclePositionUncertainty+obstacleSizeUncertainty/2;
+  poseObstacles=poseObstacles.map(obstacle=>{
+   if(Array.isArray(obstacle?.polygon)){
+    return {...obstacle,polygon:self.TruckVisionPlanner.inflateConvexPolygon(
+     obstacle.polygon,Math.SQRT2*obstacleExpansionPerSide
+    )};
+   }
+   return {...obstacle,w:obstacle.w+2*obstacleExpansionPerSide,
+    h:obstacle.h+2*obstacleExpansionPerSide};
+  });
+  const baseFootprint=options.params.footprintUncertainty??0;
+  const vehicleFootprintUncertainty=options.vehicleFootprintUncertainty??0;
+  const poseParams={
+   ...options.params,
+   footprintUncertainty:baseFootprint+vehicleFootprintUncertainty
+  };
+  const measurementReserve=2*(options.measurementUncertainty??0);
+  const requiredClearance=(options.minClearance??0.3)+measurementReserve;
   const poseOptions={
    goal:options.goal,
-   minClearance:options.minClearance,
+   minClearance:requiredClearance,
    positionTolerance:options.positionTolerance,
    headingTolerance:options.headingTolerance,
    maxTerminalArticulation:options.maxTerminalArticulation
   };
-  const assessPose=states=>self.TruckVisionPlanner.analyzeInitialPoseUncertainty(
-   states,options.obstacles,options.params,options.initialPoseUncertainty,
-   integrate,poseOptions
-  );
+  const assessPose=states=>{
+   const analysis=self.TruckVisionPlanner.analyzeInitialPoseUncertainty(
+    states,poseObstacles,poseParams,options.initialPoseUncertainty,
+    integrate,poseOptions
+   );
+   return {
+    ...analysis,
+    geometryEnvelopeApplied:true,
+    expandedObstacleCount:poseObstacles.length,
+    obstacleExpansionPerSide,
+    expandedFootprintUncertainty:poseParams.footprintUncertainty,
+    measurementReserve,
+    gateGeometryIncluded:options.gateGeometry!==undefined&&options.gateGeometry!==null
+   };
+  };
   if(result.ok&&Array.isArray(result.states)){
    result.initialPoseSensitivity=assessPose(result.states);
   }
