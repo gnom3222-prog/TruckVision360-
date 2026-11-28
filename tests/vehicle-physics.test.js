@@ -1696,6 +1696,14 @@ test('vehicle parameter uncertainty bounds include tractor front overhang, rear 
  near(bounds.tractorBodyWidth.max,2.6);
 });
 
+test('zero nominal mirror projection uses a nonnegative one-sided uncertainty interval',()=>{
+ const bounds=physics.vehicleParameterBoundsFromUncertainties({
+  mirrorOutboard:0,mirrorOutboardUncertainty:0.15
+ });
+ assert.equal(bounds.mirrorOutboard.min,0);
+ near(bounds.mirrorOutboard.max,0.15);
+});
+
 test('vehicle parameter uncertainty bounds ignore an unused common axle-spacing fallback',()=>{
  const bounds=physics.vehicleParameterBoundsFromUncertainties({
   trailerAxleSpacing:0,
