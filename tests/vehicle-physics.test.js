@@ -72,7 +72,7 @@ test('three-axle lateral scrub proxy is zero straight and symmetric in forward a
  const q={x:0,y:0,psi:0.31,psiT:-0.12};
  const aligned={x:0,y:0,psi:0.31,psiT:0.31};
  for(const v of [3,-3]){
-  const straight=physics.trailerAxleDiagnostics(aligned,v,0,params);
+  const straight=physics.trailerAxleDiagnostics(aligned,v,0,{...params,trailerAxleSpacing:1.3});
   near(straight.maxAbsLateralVelocity,0);
   const turning=physics.trailerAxleDiagnostics(q,v,0.18,{...params,trailerAxleSpacing:1.3});
   assert.equal(turning.axles.length,3);
@@ -126,7 +126,7 @@ test('vehicle geometry validation rejects missing, non-finite and implausible di
   wheelbase:0,hitchOffset:-0.1,kingpinAxles:NaN,
   trailerLength:31,trailerWidth:0.5,trailerAxleSpacing:8
  });
- assert.equal(errors.length,6);
+ assert.equal(errors.length,7);
  assert.ok(errors.some(message=>message.startsWith('wheelbase:')));
  assert.ok(errors.some(message=>message.startsWith('kingpinAxles:')));
 });
@@ -414,7 +414,7 @@ test('optional mirror envelopes are symmetric and grouped with cab collision geo
  const q={x:0,y:0,psi:0,psiT:0};
  const p={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
-  trailerLength:13.6,trailerWidth:2.55,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
   cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25,
   mirrorOutboard:0.45,mirrorLongitudinal:3.0,mirrorLength:0.8
  };
@@ -444,7 +444,7 @@ test('optional mirror envelopes are symmetric and grouped with cab collision geo
 
 test('mirror collision geometry is explicitly disabled when no outward projection is configured',()=>{
  const q={x:0,y:0,psi:0,psiT:0};
- const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55};
+ const p={wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3};
  const parts=physics.vehicleCollisionParts(q,p);
  assert.equal(parts[1].components.length,1);
  assert.equal(parts[1].components[0].name,'кабина');
@@ -957,6 +957,27 @@ test('zero per-axle values inherit common spacing and track settings',()=>{
  assert.deepEqual(physics.trailerAxleTracks(p),[2.85,2.85,2.85]);
 });
 
+test('trailer axle spacing helpers reject an implicit nominal fallback',()=>{
+ assert.throws(
+  ()=>physics.trailerAxleSpacings({trailerAxleSpacing12:1.1}),
+  /Невозможно определить шаги трёхосной тележки/
+ );
+ assert.throws(
+  ()=>physics.trailerAxleOffsets({trailerAxleSpacing12:1.1}),
+  /Невозможно определить шаги трёхосной тележки/
+ );
+ assert.deepEqual(physics.trailerAxleSpacings({trailerAxleSpacing:1.3}),[1.3,1.3]);
+ assert.deepEqual(physics.trailerAxleSpacings({
+  trailerAxleSpacing12:0.8,trailerAxleSpacing23:1.6
+ }),[0.8,1.6]);
+ assert.throws(
+  ()=>physics.trailerAxleSpacings({
+   trailerAxleSpacing:0,trailerAxleSpacing12:1.1,trailerAxleSpacing23:1.6
+  }),
+  /Невозможно определить шаги трёхосной тележки/
+ );
+});
+
 
 test('asymmetric axle spacings produce asymmetric rigid-group scrub diagnostics',()=>{
  const p={
@@ -1165,6 +1186,15 @@ test('suspension travel requires every axle side and explicit compression, rebou
   .some(error=>error.includes('wheelbaseUncertainty')));
 });
 
+test('suspension travel reports missing axle spacing fallback without throwing',()=>{
+ const incomplete={...suspensionGeometryParams};
+ delete incomplete.trailerAxleSpacing;
+ const errors=physics.validateSuspensionTravel(makeSuspensionTravelConfig(),incomplete);
+ assert.ok(errors.some(error=>
+  error.startsWith('suspensionTravel.trailer:')&&error.includes('общий шаг как резервное значение')
+ ));
+});
+
 test('bounded rigid-plane suspension envelope includes heave pitch and roll over tractor body corners',()=>{
  const q={x:0,y:0,psi:0,psiT:0};
  const polygon=physics.vehiclePolygons(q,suspensionGeometryParams)[0];
@@ -1352,6 +1382,13 @@ test('vehicle geometry calibration status accepts explicit bounds and checks ena
  params.auxiliaryEnvelopes=[{...measuredEnvelope,zMin:0.5,zMax:1.0,verticalUncertaintyMargin:0.02}];
  status=physics.vehicleGeometryCalibrationStatus(params);
  assert.equal(status.status,'positive-bounds-present');
+
+ const invalidIndividualSpacing={...params,trailerAxleSpacing12:0.1};
+ status=physics.vehicleGeometryCalibrationStatus(invalidIndividualSpacing);
+ assert.equal(status.status,'preliminary');
+ assert.ok(status.missingBounds.some(item=>
+  item.parameter==='trailerAxleSpacing12/23'
+ ));
 });
 
 
@@ -1395,7 +1432,7 @@ test('tractor outer envelope is used to classify wheels and auxiliary parts outs
  const q={x:0,y:0,psi:0,psiT:0};
  const p={
   wheelbase:3.8,hitchOffset:0.575,kingpinAxles:8,
-  trailerLength:13.6,trailerWidth:2.55,
+  trailerLength:13.6,trailerWidth:2.55,trailerAxleSpacing:1.3,
   tractorFrontOverhang:4.0,tractorRearOverhang:1.0,tractorBodyWidth:2.3,
   cabOffset:2.1,cabFront:1.35,cabRear:0.9,cabWidth:2.25
  };
