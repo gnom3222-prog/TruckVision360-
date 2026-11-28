@@ -3235,8 +3235,13 @@ test('initial pose uncertainty blocks a fixed route when one of the 16 corners l
   states.push({...q,gear:1,steer:0,stepDistance:0.05});
  }
  const obstacle={x:2,y:1.8,w:0.2,h:0.2,name:'near-side pallet'};
+ const poseParams={
+  ...params,
+  trailerAxleSpacing12:1.3,trailerAxleSpacing23:1.3,
+  trailerAxleSpacing12Uncertainty:0.02,trailerAxleSpacing23Uncertainty:0.02
+ };
  const result=planner.analyzeInitialPoseUncertainty(
-  states,[obstacle],params,
+  states,[obstacle],poseParams,
   {positionX:0.02,positionY:0.50,tractorHeadingDeg:0.1,trailerHeadingDeg:0.1},
   integrate,
   {minClearance:0.10}
