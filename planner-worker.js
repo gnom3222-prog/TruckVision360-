@@ -112,7 +112,7 @@ self.addEventListener('message',event=>{
     );
     if(result.recommendationPoseSensitivity.ok&&
        ['stable','single-candidate-unverified'].includes(result.recommendationPoseSensitivity.status)&&
-       result.reason!=='ambiguous-start'){
+       result.reason!=='ambiguous-start'&&result.initialPoseSensitivity?.ok===true){
      // Keep the worker message compact when the comparison is resolved.
      delete result.candidateRoutes;
     }else{
