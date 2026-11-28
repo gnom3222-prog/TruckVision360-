@@ -3192,12 +3192,16 @@ $('routeStart').onclick=()=>{
   return;
  }
  const clearance=routeAssessment.effectiveClearance;
+ const wheelCheckUnverified=!routeAssessment.wheelClearance||
+  !!routeAssessment.wheelClearanceError||!!routeAssessment.wheelClearanceIncomplete;
+ if(wheelCheckUnverified){
+  $('routeAdvice').textContent='Автопроезд не запущен: проверка отдельных колёс не завершена или не подтверждена. Исправьте входные данные и постройте маршрут заново.';
+  return;
+ }
  if(!routeAssessment.initialPoseSensitivity?.ok){
   $('routeAdvice').textContent='Автопроезд не запущен: исходная поза тягача и полуприцепа не прошла сценарную проверку. Введите положительные допуски X/Y и обоих курсов, затем перестройте маршрут. Даже успешная проверка покрывает только 16 угловых сценариев и не является непрерывной гарантией.';
   return;
  }
- const wheelCheckUnverified=!routeAssessment.wheelClearance||
-  !!routeAssessment.wheelClearanceError||!!routeAssessment.wheelClearanceIncomplete;
  if(routeAssessment.collision||!routeAssessment.reached||routeAssessment.clearanceInsufficient||
     wheelCheckUnverified||routeAssessment.maxBeta>=ARTICULATION_STOP_DEMO_DEG||
     (Number.isFinite(clearance)&&clearance<0.35)){
