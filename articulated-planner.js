@@ -29,6 +29,17 @@
   if(!rootPhysics||typeof rootPhysics.vehiclePolygons!=='function')throw new Error('Shared vehicle geometry is unavailable.');
   return rootPhysics.vehiclePolygons(q,p);
  }
+ function resolveTrailerAxleOffsets(params){
+  if(!rootPhysics||typeof rootPhysics.trailerAxleOffsets!=='function'){
+   throw new Error('Shared trailer axle geometry is unavailable; refusing to assume default axle spacing.');
+  }
+  const offsets=rootPhysics.trailerAxleOffsets(params);
+  if(!Array.isArray(offsets)||offsets.length!==3||!offsets.every(Number.isFinite)||
+   offsets[0]<=0||offsets[1]!==0||offsets[2]>=0){
+   throw new Error('Shared trailer axle geometry returned invalid offsets; refusing to assume axle positions.');
+  }
+  return offsets;
+ }
  function polygonSignedArea(poly){
   let area=0;
   for(let i=0;i<poly.length;i++){
@@ -538,8 +549,7 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    Math.hypot(0,tractorRearTrack/2)+tractorWheelCornerRadius
   );
   const auxiliaryEnvelopes=Array.isArray(p.auxiliaryEnvelopes)?p.auxiliaryEnvelopes:[];
-  const hardwareTrailerAxleOffsets=typeof rootPhysics.trailerAxleOffsets==='function'?
-   rootPhysics.trailerAxleOffsets(p):[(p.trailerAxleSpacing??1.3),0,-(p.trailerAxleSpacing??1.3)];
+  const hardwareTrailerAxleOffsets=resolveTrailerAxleOffsets(p);
   const auxiliaryTrailerSweepPoints=[];
   for(const entry of auxiliaryEnvelopes){
    const margin=(entry.uncertaintyMargin??0)+footprintUncertainty;
@@ -587,8 +597,7 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
   const trailerKingpinToFront=p.trailerKingpinToFront??1.5;
   const trailerFrontFromAxle=kingpinAxles+trailerKingpinToFront+footprintUncertainty;
   const trailerRearFromAxle=kingpinAxles-(trailerLength-trailerKingpinToFront+footprintUncertainty);
-  const trailerAxleOffsets=typeof rootPhysics.trailerAxleOffsets==='function'?
-   rootPhysics.trailerAxleOffsets(p):[(p.trailerAxleSpacing??1.3),0,-(p.trailerAxleSpacing??1.3)];
+  const trailerAxleOffsets=hardwareTrailerAxleOffsets;
   const trailerWheelHalfLength=tireLength/2+footprintUncertainty;
   const trailerWheelLongitudinals=trailerAxleOffsets
    .flatMap(offset=>[offset-trailerWheelHalfLength,offset+trailerWheelHalfLength]);
@@ -763,8 +772,7 @@ function createGateObstaclesInternal(gate,allowNominalZeroUncertainty=false){
    return Math.hypot(1+lateral*curvature,longitudinal*curvature);
   }
   if(wheel.vehiclePart==='полуприцеп'){
-   const offsets=typeof rootPhysics.trailerAxleOffsets==='function'?
-    rootPhysics.trailerAxleOffsets(p):[(p.trailerAxleSpacing??1.3),0,-(p.trailerAxleSpacing??1.3)];
+   const offsets=resolveTrailerAxleOffsets(p);
    const longitudinal=offsets[wheel.axleIndex-1];
    if(!Number.isFinite(longitudinal))throw new Error('Trailer wheel axle index is invalid for swept-clearance analysis.');
    const tracks=typeof rootPhysics.trailerAxleTracks==='function'?
