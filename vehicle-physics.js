@@ -75,9 +75,6 @@
   const inRange=value=>Number.isFinite(value)&&value>=0.3&&value<=5;
   const commonPresent=present('trailerAxleSpacing');
   const commonValid=inRange(source.trailerAxleSpacing);
-  if(commonPresent&&!commonValid){
-   return {valid:false,spacings:null,reason:'Общий резервный шаг задан, но находится вне диапазона 0,30–5 м.'};
-  }
   const readIndividual=key=>{
    if(!present(key)||source[key]===0)return {kind:'missing'};
    if(!inRange(source[key]))return {kind:'invalid'};
@@ -88,8 +85,12 @@
   if(first.kind==='invalid'||second.kind==='invalid'){
    return {valid:false,spacings:null,reason:'Индивидуальные расстояния между соседними осями должны быть в диапазоне 0,30–5 м; ноль означает отсутствие измерения.'};
   }
-  if((first.kind==='missing'||second.kind==='missing')&&!commonValid){
-   return {valid:false,spacings:null,reason:'Задайте положительный общий шаг как резервное значение, если не заданы оба положительных индивидуальных шага осей 1–2 и 2–3.'};
+  const usedFallback=first.kind==='missing'||second.kind==='missing';
+  if(usedFallback&&!commonValid){
+   const reason=commonPresent
+    ?'Общий резервный шаг задан, но находится вне диапазона 0,30–5 м.'
+    :'Задайте положительный общий шаг как резервное значение, если не заданы оба положительных индивидуальных шага осей 1–2 и 2–3.';
+   return {valid:false,spacings:null,reason};
   }
   return {
    valid:true,
@@ -97,7 +98,7 @@
     first.kind==='valid'?first.value:source.trailerAxleSpacing,
     second.kind==='valid'?second.value:source.trailerAxleSpacing
    ],
-   usedFallback:first.kind==='missing'||second.kind==='missing'
+   usedFallback
   };
  }
 
@@ -719,6 +720,8 @@
   }
   for(const [key,limits] of Object.entries(VEHICLE_PARAMETER_LIMITS)){
    const value=params[key];
+   // Ignore an inactive common fallback when both adjacent spacings are independently valid.
+   if(key==='trailerAxleSpacing'&&axleSpacingResolution.valid&&!axleSpacingResolution.usedFallback)continue;
    if(limits.optional&&(value===undefined||value===null))continue;
    if(!Number.isFinite(value)){
     errors.push(key+': значение должно быть конечным числом.');
