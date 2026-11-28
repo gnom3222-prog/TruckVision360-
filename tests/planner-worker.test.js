@@ -47,6 +47,8 @@ test('planner worker reports ambiguous reverse starts instead of choosing one ar
  assert.equal(resultMessage.result.comparison.recommendation,null,'ambiguous candidates must not produce a single start recommendation');
  assert.equal(resultMessage.result.recommendationPoseSensitivity.ok,false,'missing initial-pose bounds must not produce a stable start-action comparison');
  assert.equal(resultMessage.result.recommendationPoseSensitivity.reason,'candidate-pose-evidence-incomplete');
+ assert.equal(resultMessage.result.candidateRoutes.length,0,'routes without a complete pose screen must not be offered for manual selection');
+ assert.ok(resultMessage.result.rejectedCandidateCount>=2);
  assert.equal(resultMessage.result.parameterSensitivity.status,'not-varied','zero physical dimension tolerances must be reported as not assessed');
  assert.ok(resultMessage.result.candidateSummaries.some(candidate=>candidate.initialGear===-1&&candidate.firstTurn==='left'));
  assert.ok(resultMessage.result.candidateSummaries.some(candidate=>candidate.initialGear===-1&&candidate.firstTurn==='right'));
