@@ -1675,6 +1675,9 @@ test('axle-mounted auxiliary envelopes expand in both local axes for rotated anc
   Math.min(...polygon.map(point=>point[key]));
  assert.equal(bounded.anchorPositionUncertaintyBound,0.1);
  assert.equal(bounded.anchorPositionUncertaintyStatus,'bounded');
+ assert.throws(()=>physics.auxiliaryEnvelopePolygons(q,{
+  ...base,trailerAxleSpacing12Uncertainty:2.1
+ }),/Некорректная геометрия дополнительных оболочек/);
  near(extent(bounded.polygon,'x')-extent(nominal.polygon,'x'),0.2,1e-9);
  near(extent(bounded.polygon,'y')-extent(nominal.polygon,'y'),0.2,1e-9);
 });
