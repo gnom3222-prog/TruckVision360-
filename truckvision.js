@@ -1655,6 +1655,7 @@ async function buildRoute(){
    gateGeometry:gateGeometryForPlanner(),
    maxExpansions:mobile?4500:12000,
    alternativeMaxExpansions:mobile?2200:4500,
+   maxCandidatePoseReplayStates:mobile?120000:300000,
    costTolerance:0.25,
    minClearance:0.65,
    measurementUncertainty:cfg.measurementUncertainty,
