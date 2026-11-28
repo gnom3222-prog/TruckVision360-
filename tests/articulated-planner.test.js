@@ -3121,3 +3121,67 @@ test('per-wheel swept clearance reports axle-spacing uncertainty and uses the sh
  assert.equal(rates.axleSpacingUncertaintyStatus,'complete');
  assert.deepEqual(rates.axlePositionUncertaintyBounds,[0.02,0,0.05]);
 });
+
+
+test('trailer swept-rate spectral bound dominates sampled exact no-slip point speeds across articulation angles',()=>{
+ const p={
+  ...params,
+  trailerAxleSpacing:0,
+  trailerAxleSpacing12:0.8,
+  trailerAxleSpacing23:1.6,
+  trailerAxleSpacing12Uncertainty:0.05,
+  trailerAxleSpacing23Uncertainty:0.08,
+  trailerAxle1Track:2.15,
+  trailerAxle2Track:2.20,
+  trailerAxle3Track:2.25,
+  trailerAxle1TireGroupWidth:0.72,
+  trailerAxle2TireGroupWidth:0.75,
+  trailerAxle3TireGroupWidth:0.80,
+  footprintUncertainty:0.03,
+  trailerKingpinToFront:1.8
+ };
+ const offsets=physics.trailerAxleOffsets(p);
+ const spacingInfo=physics.trailerAxleSpacingUncertaintyInfo(p);
+ const tracks=physics.trailerAxleTracks(p);
+ const groupWidths=physics.trailerAxleTireGroupWidths(p);
+ const footprintUncertainty=p.footprintUncertainty;
+ const maxOuterWidth=Math.max(...tracks.map((track,index)=>track+groupWidths[index]))+
+  2*footprintUncertainty;
+ const frontFromAxle=p.kingpinAxles+p.trailerKingpinToFront+footprintUncertainty;
+ const rearFromAxle=p.kingpinAxles-(p.trailerLength-p.trailerKingpinToFront+footprintUncertainty);
+ const wheelLongitudinals=offsets.flatMap((offset,index)=>{
+  const bound=spacingInfo.bounds[index];
+  const possibleCenters=Number.isFinite(bound)?[offset-bound,offset+bound]:[offset];
+  return possibleCenters.flatMap(center=>[
+   center-p.tireLength/2-footprintUncertainty,
+   center+p.tireLength/2+footprintUncertainty
+  ]);
+ });
+ const longitudinalPoints=[frontFromAxle,rearFromAxle,...wheelLongitudinals];
+ const lateralPoints=[-maxOuterWidth/2,maxOuterWidth/2];
+ const steeringAngles=[-0.4,-0.2,0.15,0.35];
+ const articulationSamples=1440;
+ for(const steer of steeringAngles){
+  const rateBound=planner.sweptDisplacementRatesPerMeter(steer,p).trailer;
+  const curvature=Math.abs(Math.tan(steer)/p.wheelbase);
+  let sampledMaximum=0;
+  for(const longitudinal of longitudinalPoints){
+   for(const lateral of lateralPoints){
+    for(const gearSign of [-1,1]){
+     const coupling=gearSign*p.hitchOffset*curvature;
+     for(let sample=0;sample<articulationSamples;sample++){
+      const beta=-Math.PI+2*Math.PI*sample/articulationSamples;
+      const c=Math.cos(beta),s=Math.sin(beta);
+      const longitudinalRate=c*(1+coupling*lateral/p.kingpinAxles)+
+       s*(coupling-lateral/p.kingpinAxles);
+      const lateralRate=c*(-coupling*longitudinal/p.kingpinAxles)+
+       s*(longitudinal/p.kingpinAxles);
+      sampledMaximum=Math.max(sampledMaximum,Math.hypot(longitudinalRate,lateralRate));
+     }
+    }
+   }
+  }
+  assert.ok(rateBound+1e-10>=sampledMaximum,
+   'spectral bound '+rateBound+' must dominate sampled point speed '+sampledMaximum+' at steer '+steer);
+ }
+});
