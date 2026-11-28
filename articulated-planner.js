@@ -2749,7 +2749,7 @@ function analyzeInitialPoseUncertainty(states,obstacles,params,uncertainty,integ
   ok:false,status:'not-assessed',model:'fixed-control-rk4-replay',
   scenarioCount:0,cornerScenarioCount:0,continuousBoundVerified:false,
   replanningIncluded:false,kinematicParameterUncertaintyIncluded:false,
-  note:'Проверка не выполнена.'
+  wheelClearanceEvaluated:false,note:'Проверка не выполнена.'
  };
  if(!uncertainty||typeof uncertainty!=='object'||Array.isArray(uncertainty)){
   return {...base,reason:'missing-bounds',missingBounds:['positionX','positionY','tractorHeadingDeg','trailerHeadingDeg']};
@@ -2776,9 +2776,7 @@ function analyzeInitialPoseUncertainty(states,obstacles,params,uncertainty,integ
   return {...base,status:'invalid-input',reason:'invalid-bounds',invalidBounds,
    note:'Каждая граница должна быть положительной и находиться в разрешённом диапазоне.'};
  }
- if(typeof integrate!=='function'){
-  return {...base,status:'invalid-input',reason:'missing-integrator'};
- }
+ if(typeof integrate!=='function')return {...base,status:'invalid-input',reason:'missing-integrator'};
  if(!Array.isArray(states)||states.length<2||states.length>20000){
   return {...base,status:'invalid-route',reason:'invalid-route-length'};
  }
@@ -2845,9 +2843,12 @@ function analyzeInitialPoseUncertainty(states,obstacles,params,uncertainty,integ
    signs:[0,1,2,3].map(index=>(mask&(1<<index))?1:-1)
   });
  }
+ const hasObstacles=Array.isArray(obstacles)&&obstacles.length>0;
  const scenarioResults=[];
+ let minimumBodyClearanceLowerBound=Infinity,minimumWheelClearanceLowerBound=Infinity;
  let minimumClearanceLowerBound=Infinity,limitingScenario=null;
  let maximumArticulationDegrees=0,clearanceFailures=0,goalFailures=0;
+ let wheelClearanceFailures=0,wheelClearanceIncompleteScenarios=0;
  let fixedControlAction=null,fixedControlActionStable=true;
  for(const scenario of scenarioDefinitions){
   const [sx,sy,spsi,spsiT]=scenario.signs;
@@ -2875,10 +2876,7 @@ function analyzeInitialPoseUncertainty(states,obstacles,params,uncertainty,integ
      throw new Error('Replayed chord exceeds the declared integration distance at state '+index+'.');
     }
     q={x:next.x,y:next.y,psi:norm(next.psi),psiT:norm(next.psiT)};
-    replayed.push({
-     ...q,gear:control.gear,steer:control.steer,
-     stepDistance:control.stepDistance
-    });
+    replayed.push({...q,gear:control.gear,steer:control.steer,stepDistance:control.stepDistance});
    }
   }catch(error){
    return {
@@ -2888,27 +2886,40 @@ function analyzeInitialPoseUncertainty(states,obstacles,params,uncertainty,integ
     note:'Одна из фиксированных управляющих последовательностей не смогла быть повторно интегрирована; результат не подтверждён.'
    };
   }
-  let clearance;
-  try{clearance=analyzeTrajectoryClearance(replayed,obstacles,params);}
-  catch(error){
+  let clearance,wheelClearance=null;
+  try{
+   clearance=analyzeTrajectoryClearance(replayed,obstacles,params);
+   if(hasObstacles)wheelClearance=analyzeWheelTrajectoryClearance(replayed,obstacles,params);
+  }catch(error){
    return {
     ...base,status:'clearance-analysis-failed',reason:'clearance-analysis-failed',
     scenario:scenario.name,scenariosEvaluated:scenarioResults.length,
     scenarioResults,error:error&&error.message?error.message:String(error)
    };
   }
-  const lowerBound=clearance.minimumClearanceLowerBound;
-  if(Number.isNaN(lowerBound)){
+  const bodyLowerBound=clearance.minimumClearanceLowerBound;
+  const wheelLowerBound=wheelClearance?wheelClearance.minimumClearanceLowerBound:Infinity;
+  if(Number.isNaN(bodyLowerBound)||Number.isNaN(wheelLowerBound)){
    return {...base,status:'clearance-analysis-failed',reason:'non-finite-clearance',scenario:scenario.name};
   }
-  const clearancePassed=lowerBound>=requiredClearance-1e-9;
-  if(!clearancePassed)clearanceFailures++;
+  const wheelIncomplete=!!wheelClearance&&(
+   wheelClearance.axleSpacingUncertaintyStatus!=='complete'||
+   wheelClearance.segmentsWithoutIntermediateKinematicSamples>0
+  );
+  if(wheelIncomplete)wheelClearanceIncompleteScenarios++;
+  const bodyPassed=bodyLowerBound>=requiredClearance-1e-9;
+  const wheelPassed=!wheelIncomplete&&wheelLowerBound>=requiredClearance-1e-9;
+  if(!bodyPassed||!wheelPassed)clearanceFailures++;
+  if(wheelClearance&&(!wheelPassed))wheelClearanceFailures++;
+  const combinedLowerBound=Math.min(bodyLowerBound,wheelLowerBound);
+  minimumBodyClearanceLowerBound=Math.min(minimumBodyClearanceLowerBound,bodyLowerBound);
+  minimumWheelClearanceLowerBound=Math.min(minimumWheelClearanceLowerBound,wheelLowerBound);
   const finalState=replayed[replayed.length-1];
   const terminalErrors=goal?goalErrors(finalState,goal):null;
   const reached=goal?goalReached(finalState,goal,{
    positionTolerance,headingTolerance,maxTerminalArticulation
   }):null;
-  if(goal&& !reached)goalFailures++;
+  if(goal&&!reached)goalFailures++;
   const maxBeta=Math.max(...replayed.map(state=>Math.abs(norm(state.psi-state.psiT))*180/Math.PI));
   maximumArticulationDegrees=Math.max(maximumArticulationDegrees,maxBeta);
   const recommendation=recommendStart(replayed);
@@ -2920,35 +2931,45 @@ function analyzeInitialPoseUncertainty(states,obstacles,params,uncertainty,integ
   else if(fixedControlAction!==actionSignature)fixedControlActionStable=false;
   const summary={
    name:scenario.name,signs:scenario.signs,
-   minimumClearanceLowerBound:lowerBound,
-   limitingPart:clearance.limitingPart,
-   clearancePassed,goalReached:reached,terminalErrors,
-   maximumArticulationDegrees:maxBeta,
-   replayedStates:replayed.length
+   minimumBodyClearanceLowerBound:bodyLowerBound,
+   minimumWheelClearanceLowerBound:wheelClearance?wheelLowerBound:null,
+   minimumClearanceLowerBound:combinedLowerBound,
+   limitingPart:combinedLowerBound===wheelLowerBound&&wheelClearance?
+    (wheelClearance.limitingWheel?.name||'колесо'):clearance.limitingPart,
+   bodyClearancePassed:bodyPassed,wheelClearancePassed:wheelPassed,
+   wheelClearanceStatus:wheelClearance?
+    (wheelIncomplete?'incomplete':'complete'):'skipped-no-obstacles',
+   wheelSegmentsWithoutIntermediateKinematicSamples:wheelClearance?.segmentsWithoutIntermediateKinematicSamples??0,
+   clearancePassed:bodyPassed&&wheelPassed,
+   goalReached:reached,terminalErrors,
+   maximumArticulationDegrees:maxBeta,replayedStates:replayed.length
   };
   scenarioResults.push(summary);
-  if(lowerBound<minimumClearanceLowerBound){
-   minimumClearanceLowerBound=lowerBound;
+  if(combinedLowerBound<minimumClearanceLowerBound){
+   minimumClearanceLowerBound=combinedLowerBound;
    limitingScenario=scenario.name;
   }
  }
- const passed=clearanceFailures===0&&goalFailures===0&&fixedControlActionStable;
- return {
-  ok:passed,
-  status:passed?'stable-across-16-corners-plus-nominal':
+ const passed=clearanceFailures===0&&wheelClearanceIncompleteScenarios===0&&
+  goalFailures===0&&fixedControlActionStable;
+ const status=passed?'stable-across-16-corners-plus-nominal':
+  (wheelClearanceIncompleteScenarios?'wheel-clearance-incomplete-in-pose-scenario':
    (!fixedControlActionStable?'fixed-control-action-inconsistent':
-    (clearanceFailures?'clearance-failed-in-pose-scenario':'goal-not-reached-in-pose-scenario')),
-  model:'fixed-control-rk4-replay',
+    (clearanceFailures?'clearance-failed-in-pose-scenario':'goal-not-reached-in-pose-scenario')));
+ return {
+  ok:passed,status,model:'fixed-control-rk4-replay',
   scenarioCount:scenarioDefinitions.length,cornerScenarioCount:16,
   scenariosEvaluated:scenarioResults.length,scenarioResults,
+  minimumBodyClearanceLowerBound,minimumWheelClearanceLowerBound,
   minimumClearanceLowerBound,limitingScenario,
-  requiredClearance,clearanceFailures,goalFailures,
-  maximumArticulationDegrees,fixedControlActionStable,
+  requiredClearance,clearanceFailures,wheelClearanceFailures,
+  wheelClearanceIncompleteScenarios,wheelClearanceEvaluated:hasObstacles,
+  goalFailures,maximumArticulationDegrees,fixedControlActionStable,
   recommendationOptimizationIncluded:false,
   continuousBoundVerified:false,replanningIncluded:false,
   kinematicParameterUncertaintyIncluded:false,
-  uncertaintyScope:'initial X/Y position and tractor/trailer heading bounds only; other geometry, obstacle, sensor, tyre, hitch and integration uncertainties are not included',
-  note:'Проверены номинал и все 16 угловых сочетаний четырёх заданных границ путём повторного RK4-интегрирования той же фиксированной последовательности передач и рулевых команд. Это конечная сценарная проверка, не непрерывная граница для всех промежуточных поз и не повторная оптимизация начального действия.'
+  uncertaintyScope:'initial X/Y position and tractor/trailer heading bounds only; supplied obstacle and vehicle footprint envelopes are used, but parameter, tyre, hitch, suspension, sensor and integration uncertainties are not fully propagated',
+  note:'Проверены номинал и все 16 угловых сочетаний четырёх заданных границ повторным RK4-интегрированием фиксированных передач и рулевых команд. Для каждого сценария проверяются контуры тягача/кабины/полуприцепа и отдельные колёса при наличии препятствий. Это конечная сценарная проверка, не непрерывная граница для всех промежуточных поз и не повторная оптимизация начального действия.'
  };
 }
 
