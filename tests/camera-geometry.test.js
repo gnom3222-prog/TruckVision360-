@@ -310,7 +310,16 @@ test('camera uncertainty cross-check agrees with finite one-sigma perturbations 
  });
  assert.equal(result.nonlinearSensitivityAvailable,true);
  assert.equal(result.nonlinearSensitivityChecks,18);
- assert.equal(result.nonlinearSensitivityModel,'axiswise-one-sigma-finite-perturbations');
+ assert.equal(result.nonlinearSensitivityModel,'axiswise-one-sigma-finite-perturbations+pairwise-joint-screen');
+ assert.equal(result.axiswiseSensitivityAvailable,true);
+ assert.equal(result.jointSensitivityAvailable,true);
+ assert.equal(result.jointSensitivityChecks,33);
+ assert.equal(result.jointSensitivityModel,'32-row-pairwise-independent-±1σ-plus-all-high-stress-case');
+ assert.ok(result.jointRmsDeviationWidth>0&&result.jointRmsDeviationHeight>0);
+ assert.ok(result.jointMismatchWidth<0.05);
+ assert.ok(result.jointMismatchHeight<0.05);
+ assert.ok(result.jointMaxAbsDeviationWidth>=result.jointRmsDeviationWidth);
+ assert.ok(result.jointMaxAbsDeviationHeight>=result.jointRmsDeviationHeight);
  assert.equal(camera.NONLINEAR_UNCERTAINTY_WARNING_RATIO,0.25);
  assert.ok(result.nonlinearSigmaWidth>0&&result.nonlinearSigmaHeight>0);
  assert.ok(result.nonlinearMismatchWidth<0.05);
